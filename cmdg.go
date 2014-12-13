@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	gmail "code.google.com/p/google-api-go-client/gmail/v1"
 	"github.com/ThomasHabets/drive-du/lib"
@@ -357,11 +356,9 @@ func main() {
 			log.Fatalf("Bind %v: %v", key, err)
 		}
 	}
-	go func() {
-		time.Sleep(time.Second)
-		ui.SetCurrentView("messages")
-		run(g)
-	}()
+	ui.Flush()
+	ui.SetCurrentView("messages")
+	run(g)
 	err = ui.MainLoop()
 	if err != nil && err != gocui.ErrorQuit {
 		log.Panicln(err)
