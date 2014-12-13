@@ -65,6 +65,7 @@ func (p *parallel) run() {
 
 type messageList struct {
 	current     int
+	marked      map[int]bool
 	showDetails bool
 	messages    []*gmail.Message
 }
@@ -82,7 +83,9 @@ func list(g *gmail.Service) *messageList {
 	}
 	fmt.Fprintf(messagesView, "Total size: %d\n", res.ResultSizeEstimate)
 	p := parallel{}
-	ret := &messageList{}
+	ret := &messageList{
+		marked: make(map[int]bool),
+	}
 	for _, m := range res.Messages {
 		m2 := m
 		p.add(func(ch chan<- func()) {
@@ -103,14 +106,20 @@ func (l *messageList) draw() {
 	messagesView.Clear()
 	fromMax := 10
 	for n, m := range l.messages {
-		s := fmt.Sprintf("%.*s | %s", fromMax, getHeader(m, "From")[:fromMax], getHeader(m, "Subject"))
-		if n == l.current {
-			fmt.Fprintf(messagesView, "* %s", s)
-			if l.showDetails {
-				fmt.Fprintf(messagesView, "    %s", m.Snippet)
-			}
+		s := fmt.Sprintf(" %.*s | %s", fromMax, getHeader(m, "From")[:fromMax], getHeader(m, "Subject"))
+		if l.marked[n] {
+			s = "X" + s
 		} else {
-			fmt.Fprintf(messagesView, "  %s", s)
+			s = " " + s
+		}
+		if n == l.current {
+			s = "*" + s
+		} else {
+			s = " " + s
+		}
+		fmt.Fprint(messagesView, s)
+		if n == l.current && l.showDetails {
+			fmt.Fprintf(messagesView, "    %s", m.Snippet)
 		}
 	}
 	ui.Flush()
@@ -173,6 +182,16 @@ func messagesCmdOpen(g *gocui.Gui, v *gocui.View) error {
 	openMessageScrollY = 0
 	openMessageDraw(g, v)
 	return nil
+}
+
+func messagesCmdMark(g *gocui.Gui, v *gocui.View) error {
+	messages.marked[messages.current] = !messages.marked[messages.current]
+	return next(g, v)
+}
+
+func openMessageCmdMark(g *gocui.Gui, v *gocui.View) error {
+	messages.marked[messages.current] = !messages.marked[messages.current]
+	return openMessageCmdNext(g, v)
 }
 
 func openMessageDraw(g *gocui.Gui, v *gocui.View) {
@@ -341,6 +360,7 @@ func main() {
 		gocui.KeyTab:   details,
 		'p':            prev,
 		'n':            next,
+		'x':            messagesCmdMark,
 		'\n':           messagesCmdOpen,
 		'\r':           messagesCmdOpen,
 		gocui.KeyCtrlM: messagesCmdOpen,
@@ -354,10 +374,10 @@ func main() {
 
 	// Open message read.
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
-		'a':                 openMessageCmdClose,
 		'<':                 openMessageCmdClose,
 		'p':                 openMessageCmdScrollUp,
 		'n':                 openMessageCmdScrollDown,
+		'x':                 openMessageCmdMark,
 		gocui.KeyCtrlP:      openMessageCmdPrev,
 		gocui.KeyCtrlN:      openMessageCmdNext,
 		gocui.KeySpace:      openMessageCmdPageDown,
