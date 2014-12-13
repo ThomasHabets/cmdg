@@ -13,15 +13,18 @@
 //     when there are network issues.
 //   * GPG integration.
 //   * Forwarding
-//   * Composing
 //   * ReplyAll
 //   * Label management
 //   * Label navigation
 //   * Refresh list
 //   * Mailbox pagination
+//   * Abort sending while in emacs mode.
+//   * Delayed sending.
+//   * Drafts
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -45,6 +48,7 @@ var (
 	editor      = flag.String("editor", "/usr/bin/emacs", "Default editor to use if EDITOR is not set.")
 	replyRegex  = flag.String("reply_regexp", `^(Re|Sv|Aw|AW): `, "If subject matches, there's no need to add a Re: prefix.")
 	replyPrefix = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
+	signature   = flag.String("signature", "Best regards", "End of all emails.")
 
 	messagesView    *gocui.View
 	openMessageView *gocui.View
@@ -57,7 +61,8 @@ var (
 	labels             = make(map[string]string) // From name to ID.
 	openMessage        *gmail.Message
 
-	replyRE *regexp.Regexp
+	replyRE      *regexp.Regexp
+	sendHeaderRE = regexp.MustCompile(`(?:^|\n)Mode: (\w+)(?:$|\n)`)
 )
 
 const (
@@ -346,11 +351,7 @@ func openMessageCmdMark(g *gocui.Gui, v *gocui.View) error {
 }
 
 func getReply() (string, error) {
-	f, err := ioutil.TempFile("", "cmdg-")
-	if err != nil {
-		log.Fatalf("Failed to create tempfile for reply: %v", err)
-	}
-	defer os.Remove(f.Name())
+	f := &bytes.Buffer{}
 	fmt.Fprintf(f, "On %s, %s said:\n", getHeader(openMessage, "Date"), getHeader(openMessage, "From"))
 	for _, line := range strings.Split(getBody(openMessage), "\n") {
 		line = strings.TrimRight(line, spaces)
@@ -366,14 +367,30 @@ func getReply() (string, error) {
 			fmt.Fprintf(f, "> %s\n", line)
 		}
 	}
-	f.Close()
+	return runEditor(f.String())
+}
 
+func runEditor(input string) (string, error) {
+	f, err := ioutil.TempFile("", "cmdg-")
+	if err != nil {
+		return "", fmt.Errorf("creating tempfile: %v", err)
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+
+	if err := ioutil.WriteFile(f.Name(), []byte(input), 0600); err != nil {
+		return "", err
+	}
+
+	// Restore terminal for editors use.
 	termbox.Close()
 	defer func() {
 		if err := termbox.Init(); err != nil {
-			log.Fatalf("Termbox failed to re-init: %v", err)
+			log.Fatalf("termbox failed to re-init: %v", err)
 		}
 	}()
+
+	// Run editor.
 	bin := *editor
 	if e := os.Getenv("EDITOR"); len(e) > 0 {
 		bin = e
@@ -383,15 +400,76 @@ func getReply() (string, error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("Failed to open editor %q: %v", bin, err)
+		return "", fmt.Errorf("failed to open editor %q: %v", bin, err)
 	}
 
+	// Read back reply.
 	data, err := ioutil.ReadFile(f.Name())
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("reading back editor output: %v", err)
 	}
 	return string(data), nil
 }
+
+func runEditorMode(input string) (string, string, error) {
+	var s, mode string
+	for {
+		var err error
+		s, err = runEditor(input)
+		if err != nil {
+			status("Running editor failed: %v", err)
+			return "", "", err
+		}
+		s2 := strings.SplitN(s, "\n\n", 2)
+		if len(s2) != 2 {
+			status("Malformed email, reopening editor")
+			input = s
+			continue
+		}
+		m := sendHeaderRE.FindStringSubmatch(s2[0])
+		if len(m) != 2 {
+			status("Sending mode not present in %q, trying again", s2[0])
+			input = s
+			continue
+		}
+		mode = strings.ToLower(m[1])
+		switch mode {
+		case "send":
+		case "draft":
+		case "abort":
+			status("Sending aborted")
+			return mode, s, nil
+		default:
+			input = s
+			continue
+		}
+		break
+	}
+	return mode, s, nil
+}
+
+func messagesCmdCompose(g *gocui.Gui, v *gocui.View) error {
+	status("Running editor")
+	input := "To: \nSubject: \nMode: Send\n\n" + *signature
+	mode, s, err := runEditorMode(input)
+	if err != nil {
+		status("Running editor: %v", err)
+		return nil
+	}
+
+	switch mode {
+	case "send":
+		if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{Raw: mimeEncode(s)}).Do(); err != nil {
+			status("Error sending: %v", err)
+			return nil
+		}
+		status("Successfully sent")
+	case "draft":
+		// TODO
+	}
+	return nil
+}
+
 func openMessageCmdReply(g *gocui.Gui, v *gocui.View) error {
 	status("Composing reply")
 	body, err := getReply()
@@ -616,6 +694,7 @@ func main() {
 		'd':            messagesCmdDelete,
 		'a':            messagesCmdArchive,
 		'e':            messagesCmdArchive,
+		'c':            messagesCmdCompose,
 	} {
 		if err := ui.SetKeybinding(vnMessages, key, 0, cb); err != nil {
 			log.Fatalf("Bind %v: %v", key, err)
