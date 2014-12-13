@@ -1,3 +1,24 @@
+// cmdg is a command line client to Gmail.
+//
+// The major reason for its existence is that the Gmail web UI is not
+// friendly to proper quoting.
+//
+// Main benefits over Gmail web:
+//   * Really fast. No browser, CSS or javascript getting in the way.
+//   * Low bandwidth.
+//   * Uses your EDITOR for composing (emacs keys, yay!)
+//
+// TODO features:
+//   * Send all email asynchronously, with a local journal file for
+//     when there are network issues.
+//   * GPG integration.
+//   * Forwarding
+//   * Composing
+//   * ReplyAll
+//   * Label management
+//   * Label navigation
+//   * Refresh list
+//   * Mailbox pagination
 package main
 
 import (
@@ -18,9 +39,12 @@ import (
 )
 
 var (
-	config    = flag.String("config", "", "Config file.")
-	configure = flag.Bool("configure", false, "Configure oauth.")
-	readonly  = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
+	config      = flag.String("config", "", "Config file.")
+	configure   = flag.Bool("configure", false, "Configure OAuth.")
+	readonly    = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
+	editor      = flag.String("editor", "/usr/bin/emacs", "Default editor to use if EDITOR is not set.")
+	replyRegex  = flag.String("reply_regexp", `^(Re|Sv|Aw|AW): `, "If subject matches, there's no need to add a Re: prefix.")
+	replyPrefix = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
 
 	messagesView    *gocui.View
 	openMessageView *gocui.View
@@ -33,7 +57,7 @@ var (
 	labels             = make(map[string]string) // From name to ID.
 	openMessage        *gmail.Message
 
-	replyRE = regexp.MustCompile(`^(Re|Sv|Aw|AW): `)
+	replyRE *regexp.Regexp
 )
 
 const (
@@ -350,7 +374,10 @@ func getReply() (string, error) {
 			log.Fatalf("Termbox failed to re-init: %v", err)
 		}
 	}()
-	bin := "/usr/bin/emacs"
+	bin := *editor
+	if e := os.Getenv("EDITOR"); len(e) > 0 {
+		bin = e
+	}
 	cmd := exec.Command(bin, f.Name())
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -376,7 +403,7 @@ func openMessageCmdReply(g *gocui.Gui, v *gocui.View) error {
 
 	subject := getHeader(openMessage, "Subject")
 	if !replyRE.MatchString(subject) {
-		subject = "Re: " + subject
+		subject = *replyPrefix + subject
 	}
 
 	if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
@@ -524,6 +551,11 @@ func layout(g *gocui.Gui) error {
 }
 func main() {
 	flag.Parse()
+
+	var err error
+	if replyRE, err = regexp.Compile(*replyRegex); err != nil {
+		log.Fatalf("-reply_regexp %q is not a valid regex: %v", *replyRegex, err)
+	}
 	if *config == "" {
 		log.Fatalf("-config required")
 	}
@@ -550,7 +582,7 @@ func main() {
 	}
 	g, err := gmail.New(t.Client())
 	if err != nil {
-		log.Fatal("Failed to create gmail client: %v", err)
+		log.Fatalf("Failed to create gmail client: %v", err)
 	}
 
 	ui = gocui.NewGui()
