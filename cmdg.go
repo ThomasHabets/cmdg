@@ -15,6 +15,7 @@ import (
 var (
 	config    = flag.String("config", "", "Config file.")
 	configure = flag.Bool("configure", false, "Configure oauth.")
+	readonly  = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
 
 	messagesView    *gocui.View
 	openMessageView *gocui.View
@@ -28,9 +29,10 @@ var (
 )
 
 const (
-	scope      = "https://www.googleapis.com/auth/gmail.readonly"
-	accessType = "offline"
-	email      = "me"
+	scopeReadonly = "https://www.googleapis.com/auth/gmail.readonly"
+	scopeModify   = "https://www.googleapis.com/auth/gmail.modify"
+	accessType    = "offline"
+	email         = "me"
 
 	vnMessages    = "messages"
 	vnOpenMessage = "openMessage"
@@ -65,7 +67,7 @@ func (p *parallel) run() {
 
 type messageList struct {
 	current     int
-	marked      map[int]bool
+	marked      map[string]bool
 	showDetails bool
 	messages    []*gmail.Message
 }
@@ -84,7 +86,7 @@ func list(g *gmail.Service) *messageList {
 	fmt.Fprintf(messagesView, "Total size: %d\n", res.ResultSizeEstimate)
 	p := parallel{}
 	ret := &messageList{
-		marked: make(map[int]bool),
+		marked: make(map[string]bool),
 	}
 	for _, m := range res.Messages {
 		m2 := m
@@ -107,7 +109,7 @@ func (l *messageList) draw() {
 	fromMax := 10
 	for n, m := range l.messages {
 		s := fmt.Sprintf(" %.*s | %s", fromMax, getHeader(m, "From")[:fromMax], getHeader(m, "Subject"))
-		if l.marked[n] {
+		if l.marked[m.Id] {
 			s = "X" + s
 		} else {
 			s = " " + s
@@ -135,12 +137,31 @@ func (l *messageList) prev() {
 		l.current--
 	}
 }
+func (l *messageList) fixCurrent() {
+	if l.current >= len(l.messages) {
+		l.current = len(l.messages) - 1
+	}
+	if l.current < 0 {
+		l.current = 0
+	}
+}
 func (l *messageList) details() {
 	l.showDetails = !l.showDetails
 }
 
 func run(g *gmail.Service) {
+	marked := make(map[string]bool)
+	current := 0
+	if messages != nil {
+		current = messages.current
+		marked = messages.marked
+	}
 	messages = list(g)
+	if marked != nil {
+		messages.current = current
+		messages.marked = marked
+		messages.fixCurrent()
+	}
 	messages.draw()
 }
 func quit(g *gocui.Gui, v *gocui.View) error {
@@ -185,12 +206,53 @@ func messagesCmdOpen(g *gocui.Gui, v *gocui.View) error {
 }
 
 func messagesCmdMark(g *gocui.Gui, v *gocui.View) error {
-	messages.marked[messages.current] = !messages.marked[messages.current]
+	messages.marked[messages.messages[messages.current].Id] = !messages.marked[messages.messages[messages.current].Id]
 	return next(g, v)
 }
 
+var gmailService *gmail.Service
+
+func messagesCmdDelete(g *gocui.Gui, v *gocui.View) error {
+	bottomView.Clear()
+	fmt.Fprintf(bottomView, "Trashing emails, please wait...")
+	ui.Flush()
+	p := parallel{}
+	var errstr string
+	var ok, fail int
+	for _, m := range messages.messages {
+		id := m.Id
+		if !messages.marked[id] {
+			continue
+		}
+		p.add(func(ch chan<- func()) {
+			_, err := gmailService.Users.Messages.Trash(email, id).Do()
+			if err != nil {
+				ch <- func() {
+					errstr = fmt.Sprintf("Error trashing %q: %v", id, err)
+					fail++
+				}
+			} else {
+				ch <- func() {
+					ok++
+				}
+			}
+		})
+	}
+	p.run()
+	bottomView.Clear()
+	if fail > 0 {
+		fmt.Fprintf(bottomView, "%d trashed OK, %d failed: %s", ok, fail, errstr)
+	} else {
+		messages.marked = make(map[string]bool)
+		fmt.Fprintf(bottomView, "OK, deleted %d messages", ok)
+	}
+	run(gmailService)
+	messages.draw()
+	return nil
+}
+
 func openMessageCmdMark(g *gocui.Gui, v *gocui.View) error {
-	messages.marked[messages.current] = !messages.marked[messages.current]
+	messages.marked[messages.messages[messages.current].Id] = !messages.marked[messages.messages[messages.current].Id]
 	return openMessageCmdNext(g, v)
 }
 
@@ -317,6 +379,10 @@ func main() {
 		log.Fatalf("-config required")
 	}
 
+	scope := scopeModify
+	if *readonly {
+		scope = scopeReadonly
+	}
 	if *configure {
 		if err := lib.ConfigureWrite(scope, accessType, *config); err != nil {
 			log.Fatalf("Failed to config: %v", err)
@@ -366,6 +432,7 @@ func main() {
 		gocui.KeyCtrlM: messagesCmdOpen,
 		gocui.KeyCtrlJ: messagesCmdOpen,
 		'>':            messagesCmdOpen,
+		'd':            messagesCmdDelete,
 	} {
 		if err := ui.SetKeybinding(vnMessages, key, 0, cb); err != nil {
 			log.Fatalf("Bind %v: %v", key, err)
@@ -393,6 +460,7 @@ func main() {
 	ui.Flush()
 	ui.SetCurrentView(vnMessages)
 	run(g)
+	gmailService = g
 	err = ui.MainLoop()
 	if err != nil && err != gocui.ErrorQuit {
 		log.Panicln(err)
