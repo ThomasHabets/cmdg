@@ -302,7 +302,19 @@ func openMessageCmdMark(g *gocui.Gui, v *gocui.View) error {
 
 func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 	openMessage = messages.messages[messages.current]
-	// TODO: remove label unread.
+	go func() {
+		if !hasLabel(openMessage.LabelIds, unread) {
+			return
+		}
+		id := openMessage.Id
+		_, err := gmailService.Users.Messages.Modify(email, id, &gmail.ModifyMessageRequest{
+			RemoveLabelIds: []string{unread},
+		}).Do()
+		if err != nil {
+			// TODO: log to file or something.
+		}
+	}()
+
 	g.Flush()
 	openMessageView.Clear()
 	w, h := openMessageView.Size()
