@@ -9,7 +9,6 @@ import (
 
 	gmail "code.google.com/p/google-api-go-client/gmail/v1"
 	"github.com/ThomasHabets/drive-du/lib"
-	//"github.com/jhillyerd/go.enmime"
 	"github.com/jroimartin/gocui"
 )
 
@@ -32,6 +31,10 @@ const (
 	scope      = "https://www.googleapis.com/auth/gmail.readonly"
 	accessType = "offline"
 	email      = "me"
+
+	vnMessages    = "messages"
+	vnOpenMessage = "openMessage"
+	vnBottom      = "bottom"
 )
 
 func getHeader(m *gmail.Message, header string) string {
@@ -199,7 +202,7 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 	for _, p := range openMessage.Payload.Parts {
 		fmt.Fprintf(openMessageView, "%+v", *p)
 	}
-	g.SetCurrentView("openMessage")
+	g.SetCurrentView(vnOpenMessage)
 }
 
 func openMessageCmdPrev(g *gocui.Gui, v *gocui.View) error {
@@ -239,7 +242,7 @@ func openMessageCmdScrollUp(g *gocui.Gui, v *gocui.View) error {
 
 func openMessageCmdClose(g *gocui.Gui, v *gocui.View) error {
 	openMessage = nil
-	g.SetCurrentView("messages")
+	g.SetCurrentView(vnMessages)
 	messages.draw()
 	return nil
 }
@@ -263,22 +266,22 @@ func layout(g *gocui.Gui) error {
 	if messagesView == nil {
 		create = true
 	}
-	messagesView, err = g.SetView("messages", -1, -1, maxX, maxY-2)
+	messagesView, err = g.SetView(vnMessages, -1, -1, maxX, maxY-2)
 	if err != nil {
 		if create != (err == gocui.ErrorUnkView) {
 			return err
 		}
 	}
-	bottomView, err = g.SetView("bottom", -1, maxY-2, maxX, maxY)
+	bottomView, err = g.SetView(vnBottom, -1, maxY-2, maxX, maxY)
 	if err != nil {
 		if create != (err == gocui.ErrorUnkView) {
 			return err
 		}
 	}
 	if openMessage == nil {
-		ui.DeleteView("openMessage")
+		ui.DeleteView(vnOpenMessage)
 	} else {
-		openMessageView, err = ui.SetView("openMessage", -1, -1, maxX, maxY-2)
+		openMessageView, err = ui.SetView(vnOpenMessage, -1, -1, maxX, maxY-2)
 		if err != nil {
 			return err
 		}
@@ -322,42 +325,53 @@ func main() {
 	}
 	defer ui.Close()
 	ui.SetLayout(layout)
-	if err := ui.SetKeybinding("", gocui.KeyCtrlC, 0, quit); err != nil {
-		log.Panicln(err)
-	}
-	if err := ui.SetKeybinding("messages", gocui.KeyTab, 0, details); err != nil {
-		log.Fatalf("Bind Q: %v", err)
-	}
-	if err := ui.SetKeybinding("", 'q', 0, quit); err != nil {
-		log.Fatalf("Bind Q: %v", err)
-	}
-	if err := ui.SetKeybinding("messages", 'p', 0, prev); err != nil {
-		log.Fatalf("Bind P: %v", err)
-	}
-	if err := ui.SetKeybinding("messages", 'n', 0, next); err != nil {
-		log.Fatalf("Bind N: %v", err)
-	}
-	if err := ui.SetKeybinding("messages", 'a', 0, messagesCmdOpen); err != nil {
-		log.Fatalf("Bind enter: %v", err)
+
+	// Global keys.
+	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
+		gocui.KeyCtrlC: quit,
+		'q':            quit,
+	} {
+		if err := ui.SetKeybinding("", key, 0, cb); err != nil {
+			log.Fatalf("Bind %v: %v", key, err)
+		}
 	}
 
+	// Message list keys.
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
-		'a':                openMessageCmdClose,
-		'p':                openMessageCmdScrollUp,
-		'n':                openMessageCmdScrollDown,
-		gocui.KeyCtrlP:     openMessageCmdPrev,
-		gocui.KeyCtrlN:     openMessageCmdNext,
-		gocui.KeySpace:     openMessageCmdPageDown,
-		gocui.KeyPgdn:      openMessageCmdPageDown,
-		gocui.KeyBackspace: openMessageCmdPageUp,
-		gocui.KeyPgup:      openMessageCmdPageUp,
+		gocui.KeyTab:   details,
+		'p':            prev,
+		'n':            next,
+		'\n':           messagesCmdOpen,
+		'\r':           messagesCmdOpen,
+		gocui.KeyCtrlM: messagesCmdOpen,
+		gocui.KeyCtrlJ: messagesCmdOpen,
+		'>':            messagesCmdOpen,
 	} {
-		if err := ui.SetKeybinding("openMessage", key, 0, cb); err != nil {
+		if err := ui.SetKeybinding(vnMessages, key, 0, cb); err != nil {
+			log.Fatalf("Bind %v: %v", key, err)
+		}
+	}
+
+	// Open message read.
+	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
+		'a':                 openMessageCmdClose,
+		'<':                 openMessageCmdClose,
+		'p':                 openMessageCmdScrollUp,
+		'n':                 openMessageCmdScrollDown,
+		gocui.KeyCtrlP:      openMessageCmdPrev,
+		gocui.KeyCtrlN:      openMessageCmdNext,
+		gocui.KeySpace:      openMessageCmdPageDown,
+		gocui.KeyPgdn:       openMessageCmdPageDown,
+		gocui.KeyBackspace:  openMessageCmdPageUp,
+		gocui.KeyBackspace2: openMessageCmdPageUp,
+		gocui.KeyPgup:       openMessageCmdPageUp,
+	} {
+		if err := ui.SetKeybinding(vnOpenMessage, key, 0, cb); err != nil {
 			log.Fatalf("Bind %v: %v", key, err)
 		}
 	}
 	ui.Flush()
-	ui.SetCurrentView("messages")
+	ui.SetCurrentView(vnMessages)
 	run(g)
 	err = ui.MainLoop()
 	if err != nil && err != gocui.ErrorQuit {
