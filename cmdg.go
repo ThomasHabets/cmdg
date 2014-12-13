@@ -30,10 +30,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/mail"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 
 	gmail "code.google.com/p/google-api-go-client/gmail/v1"
 	"github.com/ThomasHabets/drive-du/lib"
@@ -158,11 +160,57 @@ func hasLabel(labels []string, needle string) bool {
 	return false
 }
 
+func parseTime(s string) (time.Time, error) {
+	var t time.Time
+	var err error
+	for _, layout := range []string{
+		"Mon, 2 Jan 2006 15:04:05 -0700",
+		time.RFC1123Z,
+	} {
+		t, err = time.Parse(layout, s)
+		if err == nil {
+			break
+		}
+	}
+	return t, err
+}
+
+func timestring(m *gmail.Message) string {
+	s := getHeader(m, "Date")
+	ts, err := parseTime(s)
+	if err != nil {
+		return "Unknown"
+	}
+	if time.Since(ts) > 365*24*time.Hour {
+		return ts.Format("2006")
+	}
+	if time.Now().Day() != ts.Day() {
+		return ts.Format("Jan 02")
+	}
+	return ts.Format("15:04")
+}
+
+func fromString(m *gmail.Message) string {
+	s := getHeader(m, "From")
+	a, err := mail.ParseAddress(s)
+	if err != nil {
+		return s
+	}
+	if len(a.Name) > 0 {
+		return a.Name
+	}
+	return a.Address
+}
+
 func (l *messageList) draw() {
 	messagesView.Clear()
-	fromMax := 10
+	fromMax := 20
+	tsWidth := 7
 	for n, m := range l.messages {
-		s := fmt.Sprintf(" %.*s | %s", fromMax, getHeader(m, "From")[:fromMax], getHeader(m, "Subject"))
+		s := fmt.Sprintf(" %+*s | %+*s | %s",
+			tsWidth, timestring(m),
+			fromMax, fromString(m),
+			getHeader(m, "Subject"))
 		if l.marked[m.Id] {
 			s = "X" + s
 		} else if hasLabel(m.LabelIds, unread) {
