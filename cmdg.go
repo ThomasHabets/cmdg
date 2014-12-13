@@ -110,6 +110,15 @@ func list(g *gmail.Service) *messageList {
 	return ret
 }
 
+func hasLabel(labels []string, needle string) bool {
+	for _, l := range labels {
+		if l == needle {
+			return true
+		}
+	}
+	return false
+}
+
 func (l *messageList) draw() {
 	messagesView.Clear()
 	fromMax := 10
@@ -117,6 +126,8 @@ func (l *messageList) draw() {
 		s := fmt.Sprintf(" %.*s | %s", fromMax, getHeader(m, "From")[:fromMax], getHeader(m, "Subject"))
 		if l.marked[m.Id] {
 			s = "X" + s
+		} else if hasLabel(m.LabelIds, unread) {
+			s = ">" + s
 		} else {
 			s = " " + s
 		}
@@ -291,6 +302,7 @@ func openMessageCmdMark(g *gocui.Gui, v *gocui.View) error {
 
 func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 	openMessage = messages.messages[messages.current]
+	// TODO: remove label unread.
 	g.Flush()
 	openMessageView.Clear()
 	w, h := openMessageView.Size()
