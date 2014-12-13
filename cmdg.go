@@ -25,6 +25,7 @@ var (
 	// State keepers.
 	openMessageScrollY int
 	messages           *messageList
+	labels             = make(map[string]string) // From name to ID.
 	openMessage        *gmail.Message
 )
 
@@ -37,6 +38,10 @@ const (
 	vnMessages    = "messages"
 	vnOpenMessage = "openMessage"
 	vnBottom      = "bottom"
+
+	// Fixed labels.
+	inbox  = "INBOX"
+	unread = "UNREAD"
 )
 
 func getHeader(m *gmail.Message, header string) string {
@@ -79,6 +84,7 @@ func list(g *gmail.Service) *messageList {
 		MaxResults(20).
 		//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
 		Fields("messages,resultSizeEstimate").
+		Q("in:inbox").
 		Do()
 	if err != nil {
 		log.Fatalf("Listing: %v", err)
@@ -149,6 +155,16 @@ func (l *messageList) details() {
 	l.showDetails = !l.showDetails
 }
 
+func getLabels(g *gmail.Service) {
+	res, err := g.Users.Labels.List(email).Do()
+	if err != nil {
+		log.Fatalf("listing labels: %v", err)
+	}
+	for _, l := range res.Labels {
+		labels[l.Name] = l.Id
+	}
+}
+
 func run(g *gmail.Service) {
 	marked := make(map[string]bool)
 	current := 0
@@ -212,9 +228,18 @@ func messagesCmdMark(g *gocui.Gui, v *gocui.View) error {
 
 var gmailService *gmail.Service
 
-func messagesCmdDelete(g *gocui.Gui, v *gocui.View) error {
+func messagesCmdArchive(g *gocui.Gui, v *gocui.View) error {
+	return messagesCmdApply(g, v, "archiving", func(id string) error {
+		_, err := gmailService.Users.Messages.Modify(email, id, &gmail.ModifyMessageRequest{
+			RemoveLabelIds: []string{inbox},
+		}).Do()
+		return err
+	})
+}
+
+func messagesCmdApply(g *gocui.Gui, v *gocui.View, verb string, f func(string) error) error {
 	bottomView.Clear()
-	fmt.Fprintf(bottomView, "Trashing emails, please wait...")
+	fmt.Fprintf(bottomView, "%s emails, please wait...", verb)
 	ui.Flush()
 	p := parallel{}
 	var errstr string
@@ -225,14 +250,15 @@ func messagesCmdDelete(g *gocui.Gui, v *gocui.View) error {
 			continue
 		}
 		p.add(func(ch chan<- func()) {
-			_, err := gmailService.Users.Messages.Trash(email, id).Do()
+			err := f(id)
 			if err != nil {
 				ch <- func() {
-					errstr = fmt.Sprintf("Error trashing %q: %v", id, err)
+					errstr = fmt.Sprintf("Error %s %q: %v", verb, id, err)
 					fail++
 				}
 			} else {
 				ch <- func() {
+					delete(messages.marked, id)
 					ok++
 				}
 			}
@@ -241,14 +267,21 @@ func messagesCmdDelete(g *gocui.Gui, v *gocui.View) error {
 	p.run()
 	bottomView.Clear()
 	if fail > 0 {
-		fmt.Fprintf(bottomView, "%d trashed OK, %d failed: %s", ok, fail, errstr)
+		fmt.Fprintf(bottomView, "%d %s OK, %d failed: %s", ok, verb, fail, errstr)
 	} else {
 		messages.marked = make(map[string]bool)
-		fmt.Fprintf(bottomView, "OK, deleted %d messages", ok)
+		fmt.Fprintf(bottomView, "OK, %s %d messages", verb, ok)
 	}
 	run(gmailService)
 	messages.draw()
 	return nil
+}
+
+func messagesCmdDelete(g *gocui.Gui, v *gocui.View) error {
+	return messagesCmdApply(g, v, "trashing", func(id string) error {
+		_, err := gmailService.Users.Messages.Trash(email, id).Do()
+		return err
+	})
 }
 
 func openMessageCmdMark(g *gocui.Gui, v *gocui.View) error {
@@ -433,6 +466,8 @@ func main() {
 		gocui.KeyCtrlJ: messagesCmdOpen,
 		'>':            messagesCmdOpen,
 		'd':            messagesCmdDelete,
+		'a':            messagesCmdArchive,
+		'e':            messagesCmdArchive,
 	} {
 		if err := ui.SetKeybinding(vnMessages, key, 0, cb); err != nil {
 			log.Fatalf("Bind %v: %v", key, err)
@@ -460,6 +495,7 @@ func main() {
 	ui.Flush()
 	ui.SetCurrentView(vnMessages)
 	run(g)
+	getLabels(g)
 	gmailService = g
 	err = ui.MainLoop()
 	if err != nil && err != gocui.ErrorQuit {
