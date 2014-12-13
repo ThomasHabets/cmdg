@@ -4,12 +4,17 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"os/exec"
+	"regexp"
 	"strings"
 
 	gmail "code.google.com/p/google-api-go-client/gmail/v1"
 	"github.com/ThomasHabets/drive-du/lib"
 	"github.com/jroimartin/gocui"
+	"github.com/nsf/termbox-go"
 )
 
 var (
@@ -27,6 +32,8 @@ var (
 	messages           *messageList
 	labels             = make(map[string]string) // From name to ID.
 	openMessage        *gmail.Message
+
+	replyRE = regexp.MustCompile(`^(Re|Sv|Aw|AW): `)
 )
 
 const (
@@ -42,6 +49,9 @@ const (
 	// Fixed labels.
 	inbox  = "INBOX"
 	unread = "UNREAD"
+
+	maxLine = 80
+	spaces  = " \t\r"
 )
 
 func getHeader(m *gmail.Message, header string) string {
@@ -206,6 +216,19 @@ func mimeDecode(s string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(s)
 	return string(data), err
 }
+
+func mimeEncode(s string) string {
+	s = base64.StdEncoding.EncodeToString([]byte(s))
+	s = strings.Replace(s, "+", "-", -1)
+	s = strings.Replace(s, "/", "_", -1)
+	return s
+}
+
+func status(s string, args ...interface{}) {
+	bottomView.Clear()
+	fmt.Fprintf(bottomView, s, args...)
+}
+
 func getBody(m *gmail.Message) string {
 	if len(m.Payload.Parts) == 0 {
 		data, err := mimeDecode(string(m.Payload.Body.Data))
@@ -249,8 +272,7 @@ func messagesCmdArchive(g *gocui.Gui, v *gocui.View) error {
 }
 
 func messagesCmdApply(g *gocui.Gui, v *gocui.View, verb string, f func(string) error) error {
-	bottomView.Clear()
-	fmt.Fprintf(bottomView, "%s emails, please wait...", verb)
+	status("%s emails, please wait...", verb)
 	ui.Flush()
 	p := parallel{}
 	var errstr string
@@ -276,12 +298,11 @@ func messagesCmdApply(g *gocui.Gui, v *gocui.View, verb string, f func(string) e
 		})
 	}
 	p.run()
-	bottomView.Clear()
 	if fail > 0 {
-		fmt.Fprintf(bottomView, "%d %s OK, %d failed: %s", ok, verb, fail, errstr)
+		status("%d %s OK, %d failed: %s", ok, verb, fail, errstr)
 	} else {
 		messages.marked = make(map[string]bool)
-		fmt.Fprintf(bottomView, "OK, %s %d messages", verb, ok)
+		status("OK, %s %d messages", verb, ok)
 	}
 	run(gmailService)
 	messages.draw()
@@ -298,6 +319,77 @@ func messagesCmdDelete(g *gocui.Gui, v *gocui.View) error {
 func openMessageCmdMark(g *gocui.Gui, v *gocui.View) error {
 	messages.marked[messages.messages[messages.current].Id] = !messages.marked[messages.messages[messages.current].Id]
 	return openMessageCmdNext(g, v)
+}
+
+func getReply() (string, error) {
+	f, err := ioutil.TempFile("", "cmdg-")
+	if err != nil {
+		log.Fatalf("Failed to create tempfile for reply: %v", err)
+	}
+	defer os.Remove(f.Name())
+	fmt.Fprintf(f, "On %s, %s said:\n", getHeader(openMessage, "Date"), getHeader(openMessage, "From"))
+	for _, line := range strings.Split(getBody(openMessage), "\n") {
+		line = strings.TrimRight(line, spaces)
+		if len(line) > maxLine {
+			for n := 0; len(line) > maxLine; n++ {
+				fmt.Fprintf(f, "> %s\n", strings.TrimRight(line[:maxLine], spaces))
+				line = strings.TrimLeft(line[maxLine:], spaces)
+			}
+		}
+		if len(line) == 0 {
+			fmt.Fprintf(f, ">\n")
+		} else {
+			fmt.Fprintf(f, "> %s\n", line)
+		}
+	}
+	f.Close()
+
+	termbox.Close()
+	defer func() {
+		if err := termbox.Init(); err != nil {
+			log.Fatalf("Termbox failed to re-init: %v", err)
+		}
+	}()
+	bin := "/usr/bin/emacs"
+	cmd := exec.Command(bin, f.Name())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("Failed to open editor %q: %v", bin, err)
+	}
+
+	data, err := ioutil.ReadFile(f.Name())
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+func openMessageCmdReply(g *gocui.Gui, v *gocui.View) error {
+	status("Composing reply")
+	body, err := getReply()
+	g.Flush()
+	if err != nil {
+		status("Error creating reply: %v", err)
+		return nil
+	}
+
+	subject := getHeader(openMessage, "Subject")
+	if !replyRE.MatchString(subject) {
+		subject = "Re: " + subject
+	}
+
+	if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+		Raw: mimeEncode(fmt.Sprintf(`To: %s
+Subject: %s
+
+%s`, getHeader(openMessage, "From"), subject, body)),
+	}).Do(); err != nil {
+		status("Error sending reply: %v", err)
+		return nil
+	}
+	status("Successfully sent reply")
+	return nil
 }
 
 func openMessageDraw(g *gocui.Gui, v *gocui.View) {
@@ -426,7 +518,7 @@ func layout(g *gocui.Gui) error {
 	}
 	if create {
 		fmt.Fprintf(messagesView, "Loading...")
-		fmt.Fprintf(bottomView, "cmdg")
+		status("cmdg")
 	}
 	return nil
 }
@@ -504,6 +596,7 @@ func main() {
 		'p':                 openMessageCmdScrollUp,
 		'n':                 openMessageCmdScrollDown,
 		'x':                 openMessageCmdMark,
+		'r':                 openMessageCmdReply,
 		gocui.KeyCtrlP:      openMessageCmdPrev,
 		gocui.KeyCtrlN:      openMessageCmdNext,
 		gocui.KeySpace:      openMessageCmdPageDown,
