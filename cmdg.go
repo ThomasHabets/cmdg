@@ -116,6 +116,15 @@ func list(g *gmail.Service) *messageList {
 	ret := &messageList{
 		marked: make(map[string]bool),
 	}
+	var profile *gmail.Profile
+	p.add(func(ch chan<- func()) {
+		var err error
+		profile, err = g.Users.GetProfile(email).Do()
+		if err != nil {
+			log.Fatalf("Get profile: %v", err)
+		}
+		close(ch)
+	})
 	for _, m := range res.Messages {
 		m2 := m
 		p.add(func(ch chan<- func()) {
@@ -129,7 +138,8 @@ func list(g *gmail.Service) *messageList {
 		})
 	}
 	p.run()
-	status("Showing %d of estimated %d total matching emails", len(res.Messages), res.ResultSizeEstimate)
+	status("%s: Showing %d/%d. Total: %d emails, %d threads",
+		profile.EmailAddress, len(res.Messages), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
 	return ret
 }
 
