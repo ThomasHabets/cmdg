@@ -36,6 +36,7 @@ import (
 	"net/mail"
 	"os"
 	"os/exec"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -643,8 +644,11 @@ func main() {
 	if replyRE, err = regexp.Compile(*replyRegex); err != nil {
 		log.Fatalf("-reply_regexp %q is not a valid regex: %v", *replyRegex, err)
 	}
+	if *config == "" && *configure {
+		log.Fatalf("-config required for -configure")
+	}
 	if *config == "" {
-		log.Fatalf("-config required")
+		*config = path.Join(os.Getenv("HOME"), ".cmdg.conf")
 	}
 
 	scope := scopeModify
