@@ -187,7 +187,7 @@ func timestring(m *gmail.Message) string {
 	if time.Since(ts) > 365*24*time.Hour {
 		return ts.Format("2006")
 	}
-	if time.Now().Day() != ts.Day() {
+	if !(time.Now().Month() == ts.Month() && time.Now().Day() == ts.Day()) {
 		return ts.Format("Jan 02")
 	}
 	return ts.Format("15:04")
