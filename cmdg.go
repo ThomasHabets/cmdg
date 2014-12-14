@@ -454,13 +454,32 @@ func runEditorMode(input string) (string, string, error) {
 func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 	maxX, maxY := g.Size()
 
+	height := len(labels) + 1
+	if height > maxY-10 {
+		height = maxY - 10
+	}
+
 	var err error
-	gotoView, err = g.SetView(vnGoto, 5, maxY/2-2, maxX-5, maxY/2+2)
+	gotoView, err = g.SetView(vnGoto, 5, maxY/2-height/2, maxX-5, maxY/2+height/2+1)
 	if err != gocui.ErrorUnkView {
 		status("Failed to create dialog: %v", err)
 		return nil
 	}
 	gotoView.Editable = true
+
+	// Print existing labels.
+	{
+		fmt.Fprintf(gotoView, "\n")
+		lineNum := 0
+		for l := range labels {
+			fmt.Fprintf(gotoView, "%s\n", l)
+			if lineNum > height {
+				break
+			}
+			lineNum++
+		}
+	}
+
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
 		gocui.KeyCtrlM: gotoCmdGoto,
 		gocui.KeyCtrlJ: gotoCmdGoto,
