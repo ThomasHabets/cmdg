@@ -15,6 +15,7 @@
 //   * Forwarding
 //   * ReplyAll
 //   * Label management
+//   * Autocomplete label navigation.
 //   * Refresh list
 //   * Mailbox pagination
 //   * Abort sending while in emacs mode.
@@ -24,6 +25,7 @@
 //   * Searching.
 //   * The Gmail API supports batch. Does the Go library?
 //   * Thread view (default: show only latest email in thread)
+//   * Loading animations to show it's not stuck.
 package main
 
 import (
