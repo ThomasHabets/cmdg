@@ -96,6 +96,12 @@ const (
 	spaces  = " \t\r"
 )
 
+type caseInsensitive []string
+
+func (a caseInsensitive) Len() int           { return len(a) }
+func (a caseInsensitive) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a caseInsensitive) Less(i, j int) bool { return strings.ToLower(a[i]) < strings.ToLower(a[j]) }
+
 func getHeader(m *gmail.Message, header string) string {
 	for _, h := range m.Payload.Headers {
 		if h.Name == header {
@@ -482,7 +488,7 @@ func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 		for l := range labels {
 			ls = append(ls, l)
 		}
-		sort.Strings(ls)
+		sort.Sort(caseInsensitive(ls))
 		lineNum := 0
 		for _, l := range ls {
 			if lineNum > height-3 {
@@ -625,7 +631,7 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 	for _, l := range openMessage.LabelIds {
 		ls = append(ls, labelIDs[l])
 	}
-	sort.Strings(ls)
+	sort.Sort(caseInsensitive(ls))
 
 	fmt.Fprintf(openMessageView, "Email %d of %d%s", messages.current+1, len(messages.messages), marked)
 	fmt.Fprintf(openMessageView, "From: %s", getHeader(openMessage, "From"))
