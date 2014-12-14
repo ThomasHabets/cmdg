@@ -52,6 +52,8 @@ var (
 	replyPrefix = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
 	signature   = flag.String("signature", "Best regards", "End of all emails.")
 
+	gmailService *gmail.Service
+
 	messagesView    *gocui.View
 	openMessageView *gocui.View
 	bottomView      *gocui.View
@@ -92,30 +94,6 @@ func getHeader(m *gmail.Message, header string) string {
 		}
 	}
 	return ""
-}
-
-type parallel struct {
-	chans []<-chan func()
-}
-
-func (p *parallel) add(f func(chan<- func())) {
-	c := make(chan func())
-	go f(c)
-	p.chans = append(p.chans, c)
-}
-
-func (p *parallel) run() {
-	for _, ch := range p.chans {
-		f := <-ch
-		f()
-	}
-}
-
-type messageList struct {
-	current     int
-	marked      map[string]bool
-	showDetails bool
-	messages    []*gmail.Message
 }
 
 func list(g *gmail.Service) *messageList {
@@ -202,57 +180,6 @@ func fromString(m *gmail.Message) string {
 	return a.Address
 }
 
-func (l *messageList) draw() {
-	messagesView.Clear()
-	fromMax := 20
-	tsWidth := 7
-	for n, m := range l.messages {
-		s := fmt.Sprintf(" %+*s | %+*s | %s",
-			tsWidth, timestring(m),
-			fromMax, fromString(m),
-			getHeader(m, "Subject"))
-		if l.marked[m.Id] {
-			s = "X" + s
-		} else if hasLabel(m.LabelIds, unread) {
-			s = ">" + s
-		} else {
-			s = " " + s
-		}
-		if n == l.current {
-			s = "*" + s
-		} else {
-			s = " " + s
-		}
-		fmt.Fprint(messagesView, s)
-		if n == l.current && l.showDetails {
-			fmt.Fprintf(messagesView, "    %s", m.Snippet)
-		}
-	}
-	ui.Flush()
-}
-
-func (l *messageList) next() {
-	if l.current < len(l.messages)-1 {
-		l.current++
-	}
-}
-func (l *messageList) prev() {
-	if l.current > 0 {
-		l.current--
-	}
-}
-func (l *messageList) fixCurrent() {
-	if l.current >= len(l.messages) {
-		l.current = len(l.messages) - 1
-	}
-	if l.current < 0 {
-		l.current = 0
-	}
-}
-func (l *messageList) details() {
-	l.showDetails = !l.showDetails
-}
-
 func getLabels(g *gmail.Service) {
 	res, err := g.Users.Labels.List(email).Do()
 	if err != nil {
@@ -281,11 +208,6 @@ func refreshMessages(g *gmail.Service) {
 
 func quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrorQuit
-}
-func next(g *gocui.Gui, v *gocui.View) error {
-	messages.next()
-	messages.draw()
-	return nil
 }
 
 func mimeDecode(s string) (string, error) {
@@ -340,10 +262,8 @@ func messagesCmdOpen(g *gocui.Gui, v *gocui.View) error {
 
 func messagesCmdMark(g *gocui.Gui, v *gocui.View) error {
 	messages.marked[messages.messages[messages.current].Id] = !messages.marked[messages.messages[messages.current].Id]
-	return next(g, v)
+	return messagesCmdNext(g, v)
 }
-
-var gmailService *gmail.Service
 
 func messagesCmdArchive(g *gocui.Gui, v *gocui.View) error {
 	return messagesCmdApply(g, v, "archiving", func(id string) error {
@@ -596,13 +516,13 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 
 func openMessageCmdPrev(g *gocui.Gui, v *gocui.View) error {
 	openMessageScrollY = 0
-	messages.prev()
+	messages.cmdPrev()
 	openMessageDraw(g, v)
 	return nil
 }
 func openMessageCmdNext(g *gocui.Gui, v *gocui.View) error {
 	openMessageScrollY = 0
-	messages.next()
+	messages.cmdNext()
 	openMessageDraw(g, v)
 	return nil
 }
@@ -636,13 +556,20 @@ func openMessageCmdClose(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func prev(g *gocui.Gui, v *gocui.View) error {
-	messages.prev()
+func messagesCmdNext(g *gocui.Gui, v *gocui.View) error {
+	messages.cmdNext()
 	messages.draw()
 	return nil
 }
-func details(g *gocui.Gui, v *gocui.View) error {
-	messages.details()
+
+func messagesCmdPrev(g *gocui.Gui, v *gocui.View) error {
+	messages.cmdPrev()
+	messages.draw()
+	return nil
+}
+
+func messagesCmdDetails(g *gocui.Gui, v *gocui.View) error {
+	messages.cmdDetails()
 	messages.draw()
 	return nil
 }
@@ -736,11 +663,11 @@ func main() {
 
 	// Message list keys.
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
-		gocui.KeyTab:   details,
-		gocui.KeyCtrlP: prev,
-		'p':            prev,
-		gocui.KeyCtrlN: next,
-		'n':            next,
+		gocui.KeyTab:   messagesCmdDetails,
+		gocui.KeyCtrlP: messagesCmdPrev,
+		'p':            messagesCmdPrev,
+		gocui.KeyCtrlN: messagesCmdNext,
+		'n':            messagesCmdNext,
 		gocui.KeyCtrlR: messagesCmdRefresh,
 		'r':            messagesCmdRefresh,
 		'x':            messagesCmdMark,
