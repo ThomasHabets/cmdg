@@ -635,9 +635,15 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 	fmt.Fprintf(openMessageView, "Labels: %s", strings.Join(ls, ", "))
 	fmt.Fprintf(openMessageView, strings.Repeat("-", w))
 	fmt.Fprintf(openMessageView, "%s", body)
-	fmt.Fprintf(openMessageView, "%+v", *openMessage.Payload)
+	//fmt.Fprintf(openMessageView, "%+v", *openMessage.Payload)
+
+	if len(openMessage.Payload.Parts) > 0 {
+		fmt.Fprintf(openMessageView, strings.Repeat("-", w))
+	}
 	for _, p := range openMessage.Payload.Parts {
-		fmt.Fprintf(openMessageView, "%+v", *p)
+		fmt.Fprintf(openMessageView, "Part of type %s", p.MimeType)
+		fmt.Fprintf(openMessageView, "  Filename: %q", len(p.Filename))
+		fmt.Fprintf(openMessageView, "  Subparts: %d", len(p.Parts))
 	}
 	g.SetCurrentView(vnOpenMessage)
 }
