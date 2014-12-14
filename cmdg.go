@@ -263,7 +263,7 @@ func getLabels(g *gmail.Service) {
 	}
 }
 
-func run(g *gmail.Service) {
+func refreshMessages(g *gmail.Service) {
 	marked := make(map[string]bool)
 	current := 0
 	if messages != nil {
@@ -278,6 +278,7 @@ func run(g *gmail.Service) {
 	}
 	messages.draw()
 }
+
 func quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrorQuit
 }
@@ -324,6 +325,11 @@ func getBody(m *gmail.Message) string {
 		}
 	}
 	return "TODO Unknown data"
+}
+
+func messagesCmdRefresh(g *gocui.Gui, v *gocui.View) error {
+	refreshMessages(gmailService)
+	return nil
 }
 
 func messagesCmdOpen(g *gocui.Gui, v *gocui.View) error {
@@ -381,7 +387,7 @@ func messagesCmdApply(g *gocui.Gui, v *gocui.View, verb string, f func(string) e
 		messages.marked = make(map[string]bool)
 		status("OK, %s %d messages", verb, ok)
 	}
-	run(gmailService)
+	refreshMessages(gmailService)
 	messages.draw()
 	return nil
 }
@@ -735,6 +741,8 @@ func main() {
 		'p':            prev,
 		gocui.KeyCtrlN: next,
 		'n':            next,
+		gocui.KeyCtrlR: messagesCmdRefresh,
+		'r':            messagesCmdRefresh,
 		'x':            messagesCmdMark,
 		'\n':           messagesCmdOpen,
 		'\r':           messagesCmdOpen,
@@ -772,7 +780,7 @@ func main() {
 	}
 	ui.Flush()
 	ui.SetCurrentView(vnMessages)
-	run(g)
+	refreshMessages(g)
 	getLabels(g)
 	gmailService = g
 	err = ui.MainLoop()
