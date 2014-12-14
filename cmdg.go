@@ -70,6 +70,7 @@ var (
 	currentLabel       = inbox
 	messages           *messageList
 	labels             = make(map[string]string) // From name to ID.
+	labelIDs           = make(map[string]string) // From ID to name.
 	openMessage        *gmail.Message
 
 	replyRE      *regexp.Regexp
@@ -206,8 +207,11 @@ func getLabels(g *gmail.Service) {
 	if err != nil {
 		log.Fatalf("listing labels: %v", err)
 	}
+	labels = make(map[string]string)
+	labelIDs = make(map[string]string)
 	for _, l := range res.Labels {
 		labels[l.Name] = l.Id
+		labelIDs[l.Id] = l.Name
 	}
 }
 
@@ -614,11 +618,18 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 		marked = ", MARKED"
 	}
 
+	ls := []string{}
+	for _, l := range openMessage.LabelIds {
+		ls = append(ls, labelIDs[l])
+	}
+	sort.Strings(ls)
+
 	fmt.Fprintf(openMessageView, "Email %d of %d%s", messages.current+1, len(messages.messages), marked)
 	fmt.Fprintf(openMessageView, "From: %s", getHeader(openMessage, "From"))
 	fmt.Fprintf(openMessageView, "To: %s", getHeader(openMessage, "To"))
 	fmt.Fprintf(openMessageView, "Date: %s", getHeader(openMessage, "Date"))
 	fmt.Fprintf(openMessageView, "Subject: %s", getHeader(openMessage, "Subject"))
+	fmt.Fprintf(openMessageView, "Labels: %s", strings.Join(ls, ", "))
 	fmt.Fprintf(openMessageView, strings.Repeat("-", w))
 	fmt.Fprintf(openMessageView, "%s", body)
 	fmt.Fprintf(openMessageView, "%+v", *openMessage.Payload)
