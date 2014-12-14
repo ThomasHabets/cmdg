@@ -41,9 +41,9 @@ func (l *messageList) draw() {
 	fromMax := 20
 	tsWidth := 7
 	for n, m := range l.messages {
-		s := fmt.Sprintf(" %+*s | %+*s | %s",
-			tsWidth, timestring(m),
-			fromMax, fromString(m),
+		s := fmt.Sprintf(" %*.*s | %*.*s | %s",
+			tsWidth, tsWidth, timestring(m),
+			fromMax, fromMax, fromString(m),
 			getHeader(m, "Subject"))
 		if l.marked[m.Id] {
 			s = "X" + s
