@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	gmail "code.google.com/p/google-api-go-client/gmail/v1"
 )
@@ -59,7 +60,17 @@ func (l *messageList) draw() {
 		}
 		fmt.Fprint(messagesView, s)
 		if n == l.current && l.showDetails {
-			fmt.Fprintf(messagesView, "    %s", m.Snippet)
+			maxX, _ := messagesView.Size()
+			maxX -= 10
+			s := m.Snippet
+			for len(s) > 0 {
+				n := maxX
+				if n >= len(s) {
+					n = len(s)
+				}
+				fmt.Fprintf(messagesView, "    %s", strings.Trim(s[:n], spaces))
+				s = s[n:]
+			}
 		}
 	}
 	ui.Flush()
