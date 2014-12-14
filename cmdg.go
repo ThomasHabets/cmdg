@@ -616,6 +616,7 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 
 	fmt.Fprintf(openMessageView, "Email %d of %d%s", messages.current+1, len(messages.messages), marked)
 	fmt.Fprintf(openMessageView, "From: %s", getHeader(openMessage, "From"))
+	fmt.Fprintf(openMessageView, "To: %s", getHeader(openMessage, "To"))
 	fmt.Fprintf(openMessageView, "Date: %s", getHeader(openMessage, "Date"))
 	fmt.Fprintf(openMessageView, "Subject: %s", getHeader(openMessage, "Subject"))
 	fmt.Fprintf(openMessageView, strings.Repeat("-", w))
