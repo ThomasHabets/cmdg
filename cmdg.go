@@ -523,9 +523,7 @@ func gotoCmdGoto(g *gocui.Gui, v *gocui.View) error {
 		status("Failed to get label: %v", err)
 	} else {
 		id, ok := labels[l]
-		if !ok {
-			status("Unknown label: %q", l)
-		} else {
+		if ok {
 			change = true
 			currentLabel = id
 		}
