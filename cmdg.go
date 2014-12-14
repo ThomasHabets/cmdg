@@ -15,7 +15,6 @@
 //   * Forwarding
 //   * ReplyAll
 //   * Label management
-//   * Label navigation
 //   * Refresh list
 //   * Mailbox pagination
 //   * Abort sending while in emacs mode.
@@ -24,6 +23,7 @@
 //   * Surface allow modifying "important" and "starred".
 //   * Searching.
 //   * The Gmail API supports batch. Does the Go library?
+//   * Thread view (default: show only latest email in thread)
 package main
 
 import (
@@ -61,10 +61,12 @@ var (
 	messagesView    *gocui.View
 	openMessageView *gocui.View
 	bottomView      *gocui.View
+	gotoView        *gocui.View
 	ui              *gocui.Gui
 
 	// State keepers.
 	openMessageScrollY int
+	currentLabel       = inbox
 	messages           *messageList
 	labels             = make(map[string]string) // From name to ID.
 	openMessage        *gmail.Message
@@ -82,6 +84,7 @@ const (
 	vnMessages    = "messages"
 	vnOpenMessage = "openMessage"
 	vnBottom      = "bottom"
+	vnGoto        = "goto"
 
 	// Fixed labels.
 	inbox  = "INBOX"
@@ -100,14 +103,14 @@ func getHeader(m *gmail.Message, header string) string {
 	return ""
 }
 
-func list(g *gmail.Service) *messageList {
+func list(g *gmail.Service, label string) *messageList {
 	res, err := g.Users.Messages.List(email).
 		//		LabelIds().
 		//		PageToken().
 		MaxResults(20).
 		//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
 		Fields("messages,resultSizeEstimate").
-		LabelIds(inbox).
+		LabelIds(label).
 		Do()
 	if err != nil {
 		log.Fatalf("Listing: %v", err)
@@ -212,7 +215,7 @@ func refreshMessages(g *gmail.Service) {
 		current = messages.current
 		marked = messages.marked
 	}
-	messages = list(g)
+	messages = list(g, currentLabel)
 	if marked != nil {
 		messages.current = current
 		messages.marked = marked
@@ -444,6 +447,60 @@ func runEditorMode(input string) (string, string, error) {
 		break
 	}
 	return mode, s, nil
+}
+
+func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
+	maxX, maxY := g.Size()
+
+	var err error
+	gotoView, err = g.SetView(vnGoto, 5, maxY/2-2, maxX-5, maxY/2+2)
+	if err != gocui.ErrorUnkView {
+		status("Failed to create dialog: %v", err)
+		return nil
+	}
+	gotoView.Editable = true
+	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
+		gocui.KeyCtrlM: gotoCmdGoto,
+		gocui.KeyCtrlJ: gotoCmdGoto,
+		'\n':           gotoCmdGoto,
+		'\r':           gotoCmdGoto,
+	} {
+		if err := ui.SetKeybinding(vnGoto, key, 0, cb); err != nil {
+			log.Fatalf("Bind %v for %q: %v", key, vnGoto, err)
+		}
+	}
+	g.Flush()
+	g.SetCurrentView(vnGoto)
+	return nil
+}
+
+func gotoCmdGoto(g *gocui.Gui, v *gocui.View) error {
+	// TODO: Log error if fail.
+	change := false
+	l, err := gotoView.Line(0)
+	l = strings.Trim(l, "\x00")
+	if err != nil {
+		status("Failed to get label: %v", err)
+	} else {
+		id, ok := labels[l]
+		if !ok {
+			status("Unknown label: %q", l)
+		} else {
+			change = true
+			currentLabel = id
+		}
+	}
+	g.DeleteView(vnGoto)
+	g.Flush()
+	g.SetCurrentView(vnMessages)
+	if change {
+		messagesView.Clear()
+		fmt.Fprintf(messagesView, "Loading...")
+		g.Flush()
+		refreshMessages(gmailService)
+	}
+	messages.draw()
+	return nil
 }
 
 func messagesCmdCompose(g *gocui.Gui, v *gocui.View) error {
@@ -686,7 +743,6 @@ func main() {
 	// Global keys.
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
 		gocui.KeyCtrlC: quit,
-		'q':            quit,
 	} {
 		if err := ui.SetKeybinding("", key, 0, cb); err != nil {
 			log.Fatalf("Bind %v: %v", key, err)
@@ -695,6 +751,7 @@ func main() {
 
 	// Message list keys.
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
+		'q':                 quit,
 		gocui.KeyTab:        messagesCmdDetails,
 		gocui.KeyArrowUp:    messagesCmdPrev,
 		gocui.KeyCtrlP:      messagesCmdPrev,
@@ -715,6 +772,7 @@ func main() {
 		'a':                 messagesCmdArchive,
 		'e':                 messagesCmdArchive,
 		'c':                 messagesCmdCompose,
+		'g':                 messagesCmdGoto,
 	} {
 		if err := ui.SetKeybinding(vnMessages, key, 0, cb); err != nil {
 			log.Fatalf("Bind %v: %v", key, err)
@@ -723,6 +781,7 @@ func main() {
 
 	// Open message read.
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
+		'q':                 quit,
 		'<':                 openMessageCmdClose,
 		gocui.KeyArrowLeft:  openMessageCmdClose,
 		gocui.KeyEsc:        openMessageCmdClose,
