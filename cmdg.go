@@ -106,10 +106,12 @@ func getHeader(m *gmail.Message, header string) string {
 }
 
 func list(g *gmail.Service, label string) *messageList {
+	_, nres := ui.Size()
+	nres -= 2 + 3 // Bottom view and room for snippet.
 	res, err := g.Users.Messages.List(email).
 		//		LabelIds().
 		//		PageToken().
-		MaxResults(20).
+		MaxResults(int64(nres)).
 		//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
 		Fields("messages,resultSizeEstimate").
 		LabelIds(label).
