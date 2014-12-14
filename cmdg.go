@@ -260,8 +260,17 @@ func messagesCmdOpen(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+func markCurrentMessage() {
+	if messages.marked[messages.messages[messages.current].Id] {
+		delete(messages.marked, messages.messages[messages.current].Id)
+	} else {
+		messages.marked[messages.messages[messages.current].Id] = true
+	}
+	status("%d messages marked", len(messages.marked))
+}
+
 func messagesCmdMark(g *gocui.Gui, v *gocui.View) error {
-	messages.marked[messages.messages[messages.current].Id] = !messages.marked[messages.messages[messages.current].Id]
+	markCurrentMessage()
 	return messagesCmdNext(g, v)
 }
 
@@ -320,7 +329,7 @@ func messagesCmdDelete(g *gocui.Gui, v *gocui.View) error {
 }
 
 func openMessageCmdMark(g *gocui.Gui, v *gocui.View) error {
-	messages.marked[messages.messages[messages.current].Id] = !messages.marked[messages.messages[messages.current].Id]
+	markCurrentMessage()
 	return openMessageCmdNext(g, v)
 }
 
@@ -501,7 +510,12 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 	bodyLines = bodyLines[openMessageScrollY:]
 	body := strings.Join(bodyLines, "\n")
 
-	fmt.Fprintf(openMessageView, "Email %d of %d", messages.current+1, len(messages.messages))
+	marked := ""
+	if messages.marked[openMessage.Id] {
+		marked = ", MARKED"
+	}
+
+	fmt.Fprintf(openMessageView, "Email %d of %d%s", messages.current+1, len(messages.messages), marked)
 	fmt.Fprintf(openMessageView, "From: %s", getHeader(openMessage, "From"))
 	fmt.Fprintf(openMessageView, "Date: %s", getHeader(openMessage, "Date"))
 	fmt.Fprintf(openMessageView, "Subject: %s", getHeader(openMessage, "Subject"))
@@ -663,23 +677,26 @@ func main() {
 
 	// Message list keys.
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
-		gocui.KeyTab:   messagesCmdDetails,
-		gocui.KeyCtrlP: messagesCmdPrev,
-		'p':            messagesCmdPrev,
-		gocui.KeyCtrlN: messagesCmdNext,
-		'n':            messagesCmdNext,
-		gocui.KeyCtrlR: messagesCmdRefresh,
-		'r':            messagesCmdRefresh,
-		'x':            messagesCmdMark,
-		'\n':           messagesCmdOpen,
-		'\r':           messagesCmdOpen,
-		gocui.KeyCtrlM: messagesCmdOpen,
-		gocui.KeyCtrlJ: messagesCmdOpen,
-		'>':            messagesCmdOpen,
-		'd':            messagesCmdDelete,
-		'a':            messagesCmdArchive,
-		'e':            messagesCmdArchive,
-		'c':            messagesCmdCompose,
+		gocui.KeyTab:        messagesCmdDetails,
+		gocui.KeyArrowUp:    messagesCmdPrev,
+		gocui.KeyCtrlP:      messagesCmdPrev,
+		'p':                 messagesCmdPrev,
+		gocui.KeyArrowDown:  messagesCmdNext,
+		gocui.KeyCtrlN:      messagesCmdNext,
+		'n':                 messagesCmdNext,
+		gocui.KeyCtrlR:      messagesCmdRefresh,
+		'r':                 messagesCmdRefresh,
+		'x':                 messagesCmdMark,
+		gocui.KeyArrowRight: messagesCmdOpen,
+		'\n':                messagesCmdOpen,
+		'\r':                messagesCmdOpen,
+		gocui.KeyCtrlM:      messagesCmdOpen,
+		gocui.KeyCtrlJ:      messagesCmdOpen,
+		'>':                 messagesCmdOpen,
+		'd':                 messagesCmdDelete,
+		'a':                 messagesCmdArchive,
+		'e':                 messagesCmdArchive,
+		'c':                 messagesCmdCompose,
 	} {
 		if err := ui.SetKeybinding(vnMessages, key, 0, cb); err != nil {
 			log.Fatalf("Bind %v: %v", key, err)
@@ -689,8 +706,12 @@ func main() {
 	// Open message read.
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
 		'<':                 openMessageCmdClose,
+		gocui.KeyArrowLeft:  openMessageCmdClose,
+		gocui.KeyEsc:        openMessageCmdClose,
 		'p':                 openMessageCmdScrollUp,
+		gocui.KeyArrowUp:    openMessageCmdScrollUp,
 		'n':                 openMessageCmdScrollDown,
+		gocui.KeyArrowDown:  openMessageCmdScrollDown,
 		'x':                 openMessageCmdMark,
 		'r':                 openMessageCmdReply,
 		gocui.KeyCtrlP:      openMessageCmdPrev,
