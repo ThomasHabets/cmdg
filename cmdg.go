@@ -21,6 +21,9 @@
 //   * Abort sending while in emacs mode.
 //   * Delayed sending.
 //   * Drafts
+//   * Surface allow modifying "important" and "starred".
+//   * Searching.
+//   * The Gmail API supports batch. Does the Go library?
 package main
 
 import (
@@ -103,7 +106,7 @@ func list(g *gmail.Service) *messageList {
 		MaxResults(20).
 		//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
 		Fields("messages,resultSizeEstimate").
-		Q("in:inbox").
+		LabelIds(inbox).
 		Do()
 	if err != nil {
 		log.Fatalf("Listing: %v", err)
@@ -126,6 +129,7 @@ func list(g *gmail.Service) *messageList {
 		})
 	}
 	p.run()
+	status("Showing %d of estimated %d total matching emails", len(res.Messages), res.ResultSizeEstimate)
 	return ret
 }
 
