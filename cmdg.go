@@ -284,6 +284,10 @@ func getBody(m *gmail.Message) string {
 }
 
 func messagesCmdRefresh(g *gocui.Gui, v *gocui.View) error {
+	status("Refreshing...")
+	messagesView.Clear()
+	fmt.Fprintf(messagesView, "Loading...")
+	g.Flush()
 	refreshMessages(gmailService)
 	return nil
 }
