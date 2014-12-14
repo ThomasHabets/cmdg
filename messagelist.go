@@ -41,6 +41,9 @@ func (l *messageList) draw() {
 	messagesView.Clear()
 	fromMax := 20
 	tsWidth := 7
+	if len(l.messages) == 0 {
+		fmt.Fprintf(messagesView, "<empty>")
+	}
 	for n, m := range l.messages {
 		s := fmt.Sprintf(" %*.*s | %*.*s | %s",
 			tsWidth, tsWidth, timestring(m),
