@@ -38,6 +38,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -470,13 +471,18 @@ func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 	// Print existing labels.
 	{
 		fmt.Fprintf(gotoView, "\n")
-		lineNum := 0
+		ls := []string{}
 		for l := range labels {
-			fmt.Fprintf(gotoView, "%s\n", l)
-			if lineNum > height {
+			ls = append(ls, l)
+		}
+		sort.Strings(ls)
+		lineNum := 0
+		for _, l := range ls {
+			if lineNum > height-3 {
 				break
 			}
 			lineNum++
+			fmt.Fprintf(gotoView, "%s\n", l)
 		}
 	}
 
@@ -499,7 +505,7 @@ func gotoCmdGoto(g *gocui.Gui, v *gocui.View) error {
 	// TODO: Log error if fail.
 	change := false
 	l, err := gotoView.Line(0)
-	l = strings.Trim(l, "\x00")
+	l = strings.Trim(l, "\x00 ")
 	if err != nil {
 		status("Failed to get label: %v", err)
 	} else {
