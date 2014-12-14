@@ -565,7 +565,7 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 	w, h := openMessageView.Size()
 
 	bodyLines := strings.Split(getBody(openMessage), "\n")
-	maxScroll := len(bodyLines) - h
+	maxScroll := len(bodyLines) - h + 10
 	if openMessageScrollY > maxScroll {
 		openMessageScrollY = maxScroll
 	}
@@ -731,7 +731,9 @@ func main() {
 	// Message list keys.
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
 		gocui.KeyTab:   details,
+		gocui.KeyCtrlP: prev,
 		'p':            prev,
+		gocui.KeyCtrlN: next,
 		'n':            next,
 		'x':            messagesCmdMark,
 		'\n':           messagesCmdOpen,
