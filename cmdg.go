@@ -36,7 +36,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -54,7 +53,7 @@ import (
 	gmail "code.google.com/p/google-api-go-client/gmail/v1"
 	"github.com/ThomasHabets/drive-du/lib"
 	"github.com/jroimartin/gocui"
-	"github.com/nsf/termbox-go"
+	termbox "github.com/nsf/termbox-go"
 )
 
 var (
@@ -380,24 +379,37 @@ func openMessageCmdMark(g *gocui.Gui, v *gocui.View) error {
 	return openMessageCmdNext(g, v)
 }
 
-func getReply() (string, error) {
-	f := &bytes.Buffer{}
-	fmt.Fprintf(f, "On %s, %s said:\n", getHeader(openMessage, "Date"), getHeader(openMessage, "From"))
-	for _, line := range strings.Split(getBody(openMessage), "\n") {
+func prefixQuote(in []string) []string {
+	var out []string
+	for _, line := range in {
+		if len(line) == 0 {
+			out = append(out, ">")
+		} else {
+			out = append(out, "> "+line)
+		}
+	}
+	return out
+}
+
+func breakLines(in []string) []string {
+	var out []string
+	for _, line := range in {
 		line = strings.TrimRight(line, spaces)
 		if len(line) > maxLine {
 			for n := 0; len(line) > maxLine; n++ {
-				fmt.Fprintf(f, "> %s\n", strings.TrimRight(line[:maxLine], spaces))
+				out = append(out, strings.TrimRight(line[:maxLine], spaces))
 				line = strings.TrimLeft(line[maxLine:], spaces)
 			}
 		}
-		if len(line) == 0 {
-			fmt.Fprintf(f, ">\n")
-		} else {
-			fmt.Fprintf(f, "> %s\n", line)
-		}
+		// TODO: There's probably an off-by-one here whe line is multiple of maxLine.
+		out = append(out, line)
 	}
-	return runEditor(f.String())
+	return out
+}
+
+func getReply() (string, error) {
+	head := fmt.Sprintf("On %s, %s said:\n", getHeader(openMessage, "Date"), getHeader(openMessage, "From"))
+	return runEditor(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
 }
 
 func runEditor(input string) (string, error) {
@@ -623,7 +635,7 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 	openMessageView.Clear()
 	w, h := openMessageView.Size()
 
-	bodyLines := strings.Split(getBody(openMessage), "\n")
+	bodyLines := breakLines(strings.Split(getBody(openMessage), "\n"))
 	maxScroll := len(bodyLines) - h + 10
 	if openMessageScrollY > maxScroll {
 		openMessageScrollY = maxScroll
