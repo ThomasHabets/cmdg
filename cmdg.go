@@ -9,22 +9,29 @@
 //   * Uses your EDITOR for composing (emacs keys, yay!)
 //
 // TODO features:
+//   * Thread view (default: show only latest email in thread)
 //   * Send all email asynchronously, with a local journal file for
 //     when there are network issues.
 //   * GPG integration.
 //   * Forwarding
+//   * Mark unread.
 //   * ReplyAll
+//   * Archive from message view.
+//   * Make Goto work from message view.
+//   * Inline help showing keyboard shortcuts.
+//   * History API for refreshing (?).
+//   * Before sending, show dialog with "draft, send, abort" and "send+label waiting".
+//   * Log (non-sensitive) stuff to logfile.
 //   * Label management
 //   * Autocomplete label navigation.
 //   * Refresh list
 //   * Mailbox pagination
 //   * Abort sending while in emacs mode.
 //   * Delayed sending.
-//   * Drafts
+//   * Drafts, continuing drafts.
 //   * Surface allow modifying "important" and "starred".
 //   * Searching.
 //   * The Gmail API supports batch. Does the Go library?
-//   * Thread view (default: show only latest email in thread)
 //   * Loading animations to show it's not stuck.
 package main
 
@@ -542,6 +549,7 @@ func gotoCmdGoto(g *gocui.Gui, v *gocui.View) error {
 		fmt.Fprintf(messagesView, "Loading...")
 		g.Flush()
 		refreshMessages(gmailService)
+		messages.marked = make(map[string]bool)
 	}
 	messages.draw()
 	return nil
