@@ -14,6 +14,7 @@
 //     when there are network issues.
 //   * GPG integration.
 //   * Forwarding
+//   * Attach file.
 //   * Mark unread.
 //   * ReplyAll
 //   * Archive from message view.
@@ -64,6 +65,7 @@ var (
 	replyRegex  = flag.String("reply_regexp", `^(Re|Sv|Aw|AW): `, "If subject matches, there's no need to add a Re: prefix.")
 	replyPrefix = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
 	signature   = flag.String("signature", "Best regards", "End of all emails.")
+	logFile     = flag.String("log", "/dev/null", "Log non-sensitive data to this file.")
 
 	gmailService *gmail.Service
 
@@ -122,6 +124,7 @@ func getHeader(m *gmail.Message, header string) string {
 func list(g *gmail.Service, label string) *messageList {
 	_, nres := ui.Size()
 	nres -= 2 + 3 // Bottom view and room for snippet.
+	st := time.Now()
 	res, err := g.Users.Messages.List(email).
 		//		LabelIds().
 		//		PageToken().
@@ -141,10 +144,12 @@ func list(g *gmail.Service, label string) *messageList {
 	var profile *gmail.Profile
 	p.add(func(ch chan<- func()) {
 		var err error
+		st := time.Now()
 		profile, err = g.Users.GetProfile(email).Do()
 		if err != nil {
 			log.Fatalf("Get profile: %v", err)
 		}
+		log.Printf("Users.GetProfile: %v", time.Since(st))
 		close(ch)
 	})
 	for _, m := range res.Messages {
@@ -160,6 +165,7 @@ func list(g *gmail.Service, label string) *messageList {
 		})
 	}
 	p.run()
+	log.Printf("Listing: %v", time.Since(st))
 	status("%s: Showing %d/%d. Total: %d emails, %d threads",
 		profile.EmailAddress, len(res.Messages), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
 	return ret
@@ -220,9 +226,12 @@ func fromString(m *gmail.Message) string {
 }
 
 func getLabels(g *gmail.Service) {
+	st := time.Now()
 	res, err := g.Users.Labels.List(email).Do()
 	if err != nil {
 		log.Fatalf("listing labels: %v", err)
+	} else {
+		log.Printf("Users.Labels.List: %v", time.Since(st))
 	}
 	labels = make(map[string]string)
 	labelIDs = make(map[string]string)
@@ -322,9 +331,13 @@ func messagesCmdMark(g *gocui.Gui, v *gocui.View) error {
 
 func messagesCmdArchive(g *gocui.Gui, v *gocui.View) error {
 	return messagesCmdApply(g, v, "archiving", func(id string) error {
+		st := time.Now()
 		_, err := gmailService.Users.Messages.Modify(email, id, &gmail.ModifyMessageRequest{
 			RemoveLabelIds: []string{inbox},
 		}).Do()
+		if err == nil {
+			log.Printf("Users.Messages.Modify(archive): %v", time.Since(st))
+		}
 		return err
 	})
 }
@@ -369,7 +382,11 @@ func messagesCmdApply(g *gocui.Gui, v *gocui.View, verb string, f func(string) e
 
 func messagesCmdDelete(g *gocui.Gui, v *gocui.View) error {
 	return messagesCmdApply(g, v, "trashing", func(id string) error {
+		st := time.Now()
 		_, err := gmailService.Users.Messages.Trash(email, id).Do()
+		if err == nil {
+			log.Printf("Users.Messages.Trash: %v", time.Since(st))
+		}
 		return err
 	})
 }
@@ -576,12 +593,14 @@ func messagesCmdCompose(g *gocui.Gui, v *gocui.View) error {
 		return nil
 	}
 
+	st := time.Now()
 	switch mode {
 	case "send":
 		if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{Raw: mimeEncode(s)}).Do(); err != nil {
 			status("Error sending: %v", err)
 			return nil
 		}
+		log.Printf("Users.Messages.Send: %v", time.Since(st))
 		status("Successfully sent")
 	case "draft":
 		// TODO
@@ -603,6 +622,7 @@ func openMessageCmdReply(g *gocui.Gui, v *gocui.View) error {
 		subject = *replyPrefix + subject
 	}
 
+	st := time.Now()
 	if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
 		Raw: mimeEncode(fmt.Sprintf(`To: %s
 Subject: %s
@@ -612,6 +632,7 @@ Subject: %s
 		status("Error sending reply: %v", err)
 		return nil
 	}
+	log.Printf("Users.Messages.Send: %v", time.Since(st))
 	status("Successfully sent reply")
 	return nil
 }
@@ -623,11 +644,14 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 			return
 		}
 		id := openMessage.Id
+		st := time.Now()
 		_, err := gmailService.Users.Messages.Modify(email, id, &gmail.ModifyMessageRequest{
 			RemoveLabelIds: []string{unread},
 		}).Do()
 		if err != nil {
 			// TODO: log to file or something.
+		} else {
+			log.Printf("Users.Messages.Modify(remove unread): %v", time.Since(st))
 		}
 	}()
 
@@ -814,6 +838,16 @@ func main() {
 	g, err := gmail.New(t.Client())
 	if err != nil {
 		log.Fatalf("Failed to create gmail client: %v", err)
+	}
+
+	{
+		f, err := os.OpenFile(*logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			log.Fatalf("Can't create logfile %q: %v", *logFile, err)
+		}
+		defer f.Close()
+		log.SetOutput(f)
+		log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	}
 
 	ui = gocui.NewGui()
