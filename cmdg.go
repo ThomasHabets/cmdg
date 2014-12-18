@@ -13,7 +13,6 @@
 //   * Send all email asynchronously, with a local journal file for
 //     when there are network issues.
 //   * GPG integration.
-//   * Forwarding
 //   * Attach file.
 //   * Mark unread.
 //   * ReplyAll
@@ -58,14 +57,16 @@ import (
 )
 
 var (
-	config      = flag.String("config", "", "Config file.")
-	configure   = flag.Bool("configure", false, "Configure OAuth.")
-	readonly    = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
-	editor      = flag.String("editor", "/usr/bin/emacs", "Default editor to use if EDITOR is not set.")
-	replyRegex  = flag.String("reply_regexp", `^(Re|Sv|Aw|AW): `, "If subject matches, there's no need to add a Re: prefix.")
-	replyPrefix = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
-	signature   = flag.String("signature", "Best regards", "End of all emails.")
-	logFile     = flag.String("log", "/dev/null", "Log non-sensitive data to this file.")
+	config        = flag.String("config", "", "Config file.")
+	configure     = flag.Bool("configure", false, "Configure OAuth.")
+	readonly      = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
+	editor        = flag.String("editor", "/usr/bin/emacs", "Default editor to use if EDITOR is not set.")
+	replyRegex    = flag.String("reply_regexp", `^(Re|Sv|Aw|AW): `, "If subject matches, there's no need to add a Re: prefix.")
+	replyPrefix   = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
+	forwardRegex  = flag.String("forward_regexp", `^(Fwd): `, "If subject matches, there's no need to add a Fwd: prefix.")
+	forwardPrefix = flag.String("forward_prefix", "Fwd: ", "String to prepend to subject in forwards.")
+	signature     = flag.String("signature", "Best regards", "End of all emails.")
+	logFile       = flag.String("log", "/dev/null", "Log non-sensitive data to this file.")
 
 	gmailService *gmail.Service
 
@@ -86,7 +87,8 @@ var (
 	labelIDs           = make(map[string]string) // From ID to name.
 	openMessage        *gmail.Message
 
-	replyRE *regexp.Regexp
+	replyRE   *regexp.Regexp
+	forwardRE *regexp.Regexp
 )
 
 const (
@@ -440,6 +442,21 @@ func getReply() (string, error) {
 	return runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
 }
 
+func getForward() (string, error) {
+	subject := getHeader(openMessage, "Subject")
+	if !forwardRE.MatchString(subject) {
+		subject = *forwardPrefix + subject
+	}
+	head := fmt.Sprintf("To: %s\nSubject: \n\n--------- Forwarded message -----------\nDate: %s\nFrom: %s\nTo: %s\nSubject: %s\n\n",
+		subject,
+		getHeader(openMessage, "Date"),
+		getHeader(openMessage, "From"),
+		getHeader(openMessage, "To"),
+		getHeader(openMessage, "Subject"),
+	)
+	return runEditorHeadersOK(head + strings.Join(breakLines(strings.Split(getBody(openMessage), "\n")), "\n"))
+}
+
 func runEditor(input string) (string, error) {
 	f, err := ioutil.TempFile("", "cmdg-")
 	if err != nil {
@@ -674,6 +691,22 @@ func openMessageCmdReply(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+func openMessageCmdForward(g *gocui.Gui, v *gocui.View) error {
+	status("Composing forwarded email")
+	var err error
+	sendMessage, err = getForward()
+	g.Flush()
+	if err != nil {
+		status("Error creating forwarded email: %v", err)
+		return nil
+	}
+	openMessage = nil
+	g.SetCurrentView(vnMessages)
+	messages.draw()
+	createSend(g)
+	return nil
+}
+
 func createSend(g *gocui.Gui) {
 	maxX, maxY := g.Size()
 	height := 6
@@ -868,6 +901,9 @@ func main() {
 	if replyRE, err = regexp.Compile(*replyRegex); err != nil {
 		log.Fatalf("-reply_regexp %q is not a valid regex: %v", *replyRegex, err)
 	}
+	if forwardRE, err = regexp.Compile(*forwardRegex); err != nil {
+		log.Fatalf("-forward_regexp %q is not a valid regex: %v", *forwardRegex, err)
+	}
 	if *config == "" && *configure {
 		log.Fatalf("-config required for -configure")
 	}
@@ -973,6 +1009,7 @@ func main() {
 		gocui.KeyArrowDown:  openMessageCmdScrollDown,
 		'x':                 openMessageCmdMark,
 		'r':                 openMessageCmdReply,
+		'f':                 openMessageCmdForward,
 		gocui.KeyCtrlP:      openMessageCmdPrev,
 		gocui.KeyCtrlN:      openMessageCmdNext,
 		gocui.KeySpace:      openMessageCmdPageDown,
