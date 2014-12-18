@@ -22,7 +22,6 @@
 //   * History API for refreshing (?).
 //   * Label management
 //   * Autocomplete label navigation.
-//   * Refresh list
 //   * Mailbox pagination
 //   * Delayed sending.
 //   * Continuing drafts.
@@ -102,8 +101,13 @@ const (
 	vnSend        = "send"
 
 	// Fixed labels.
-	inbox  = "INBOX"
-	unread = "UNREAD"
+	inbox     = "INBOX"
+	unread    = "UNREAD"
+	draft     = "DRAFT"
+	important = "IMPORTANT"
+	spam      = "SPAM"
+	starred   = "STARRED"
+	trash     = "TRASH"
 
 	maxLine = 80
 	spaces  = " \t\r"
@@ -580,6 +584,8 @@ func gotoCmdGoto(g *gocui.Gui, v *gocui.View) error {
 		if ok {
 			change = true
 			currentLabel = id
+		} else if l != "" {
+			status("Label %q doesn't exist", l)
 		}
 	}
 	g.DeleteView(vnGoto)
