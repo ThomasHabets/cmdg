@@ -21,7 +21,7 @@
 //   * Make Goto work from message view.
 //   * Inline help showing keyboard shortcuts.
 //   * History API for refreshing (?).
-//   * Before sending, show dialog with "draft, send, abort" and "send+label waiting".
+//   * Add option to send+label waiting.
 //   * Log (non-sensitive) stuff to logfile.
 //   * Label management
 //   * Autocomplete label navigation.
@@ -29,7 +29,7 @@
 //   * Mailbox pagination
 //   * Abort sending while in emacs mode.
 //   * Delayed sending.
-//   * Drafts, continuing drafts.
+//   * Continuing drafts.
 //   * Surface allow modifying "important" and "starred".
 //   * Searching.
 //   * The Gmail API supports batch. Does the Go library?
@@ -73,7 +73,10 @@ var (
 	openMessageView *gocui.View
 	bottomView      *gocui.View
 	gotoView        *gocui.View
+	sendView        *gocui.View
 	ui              *gocui.Gui
+
+	sendMessage string
 
 	// State keepers.
 	openMessageScrollY int
@@ -83,8 +86,7 @@ var (
 	labelIDs           = make(map[string]string) // From ID to name.
 	openMessage        *gmail.Message
 
-	replyRE      *regexp.Regexp
-	sendHeaderRE = regexp.MustCompile(`(?:^|\n)Mode: (\w+)(?:$|\n)`)
+	replyRE *regexp.Regexp
 )
 
 const (
@@ -97,6 +99,7 @@ const (
 	vnOpenMessage = "openMessage"
 	vnBottom      = "bottom"
 	vnGoto        = "goto"
+	vnSend        = "send"
 
 	// Fixed labels.
 	inbox  = "INBOX"
@@ -425,8 +428,16 @@ func breakLines(in []string) []string {
 }
 
 func getReply() (string, error) {
-	head := fmt.Sprintf("On %s, %s said:\n", getHeader(openMessage, "Date"), getHeader(openMessage, "From"))
-	return runEditor(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
+	subject := getHeader(openMessage, "Subject")
+	if !replyRE.MatchString(subject) {
+		subject = *replyPrefix + subject
+	}
+	head := fmt.Sprintf("To: %s\nSubject: %s\n\nOn %s, %s said:\n",
+		getHeader(openMessage, "From"),
+		getHeader(openMessage, "Subject"),
+		getHeader(openMessage, "Date"),
+		getHeader(openMessage, "From"))
+	return runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
 }
 
 func runEditor(input string) (string, error) {
@@ -470,41 +481,25 @@ func runEditor(input string) (string, error) {
 	return string(data), nil
 }
 
-func runEditorMode(input string) (string, string, error) {
-	var s, mode string
+func runEditorHeadersOK(input string) (string, error) {
+	var s string
 	for {
 		var err error
 		s, err = runEditor(input)
 		if err != nil {
 			status("Running editor failed: %v", err)
-			return "", "", err
+			return "", err
 		}
 		s2 := strings.SplitN(s, "\n\n", 2)
 		if len(s2) != 2 {
+			// TODO: Ask about reopening editor.
 			status("Malformed email, reopening editor")
-			input = s
-			continue
-		}
-		m := sendHeaderRE.FindStringSubmatch(s2[0])
-		if len(m) != 2 {
-			status("Sending mode not present in %q, trying again", s2[0])
-			input = s
-			continue
-		}
-		mode = strings.ToLower(m[1])
-		switch mode {
-		case "send":
-		case "draft":
-		case "abort":
-			status("Sending aborted")
-			return mode, s, nil
-		default:
 			input = s
 			continue
 		}
 		break
 	}
-	return mode, s, nil
+	return s, nil
 }
 
 func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
@@ -586,55 +581,125 @@ func gotoCmdGoto(g *gocui.Gui, v *gocui.View) error {
 
 func messagesCmdCompose(g *gocui.Gui, v *gocui.View) error {
 	status("Running editor")
-	input := "To: \nSubject: \nMode: Send\n\n" + *signature
-	mode, s, err := runEditorMode(input)
+	input := "To: \nSubject: \n\n" + *signature
+	var err error
+	sendMessage, err = runEditorHeadersOK(input)
 	if err != nil {
 		status("Running editor: %v", err)
 		return nil
 	}
 
-	st := time.Now()
-	switch mode {
-	case "send":
-		if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{Raw: mimeEncode(s)}).Do(); err != nil {
-			status("Error sending: %v", err)
-			return nil
-		}
-		log.Printf("Users.Messages.Send: %v", time.Since(st))
-		status("Successfully sent")
-	case "draft":
-		// TODO
+	maxX, maxY := g.Size()
+	height := 6
+	width := 20
+	x, y := maxX/2-width/2, maxY/2-height/2
+	sendView, err := g.SetView(vnSend, x, y, x+width, y+height)
+	if err != gocui.ErrorUnkView {
+		status("Failed to create dialog: %v", err)
+		return nil
 	}
+	// TODO: move to template.
+	fmt.Fprintf(sendView, "\n S - Send\n D - Draft\n A - Abort")
+	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
+		's': sendCmdSend,
+		'S': sendCmdSend,
+		'a': sendCmdAbort,
+		'A': sendCmdAbort,
+		'd': sendCmdDraft,
+		'D': sendCmdDraft,
+	} {
+		if err := ui.SetKeybinding(vnSend, key, 0, cb); err != nil {
+			log.Fatalf("Bind %v for %q: %v", key, vnGoto, err)
+		}
+	}
+	g.Flush()
+	g.SetCurrentView(vnSend)
+	return nil
+}
+
+func sendCmdSend(g *gocui.Gui, v *gocui.View) error {
+	st := time.Now()
+	if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{Raw: mimeEncode(sendMessage)}).Do(); err != nil {
+		status("Error sending: %v", err)
+		return nil
+	}
+	log.Printf("Users.Messages.Send: %v", time.Since(st))
+	g.DeleteView(vnSend)
+	g.Flush()
+	g.SetCurrentView(vnMessages)
+	status("Successfully sent")
+	return nil
+}
+
+func sendCmdAbort(g *gocui.Gui, v *gocui.View) error {
+	if err := g.SetCurrentView(vnMessages); err != nil {
+		log.Fatalf("Failed to set current view to %q: %v", vnMessages, err)
+	}
+	g.Flush()
+	g.DeleteView(vnSend)
+	status("Aborted send")
+	return nil
+}
+
+func sendCmdDraft(g *gocui.Gui, v *gocui.View) error {
+	st := time.Now()
+	if _, err := gmailService.Users.Drafts.Create(email, &gmail.Draft{
+		Message: &gmail.Message{Raw: mimeEncode(sendMessage)},
+	}).Do(); err != nil {
+		status("Error saving as draft: %v", err)
+		// TODO: data loss!
+		return nil
+	}
+	log.Printf("Users.Drafts.Create: %v", time.Since(st))
+	g.SetCurrentView(vnMessages)
+	g.Flush()
+	g.DeleteView(vnSend)
+	status("Saved as draft")
 	return nil
 }
 
 func openMessageCmdReply(g *gocui.Gui, v *gocui.View) error {
 	status("Composing reply")
-	body, err := getReply()
+	var err error
+	sendMessage, err = getReply()
 	g.Flush()
 	if err != nil {
 		status("Error creating reply: %v", err)
 		return nil
 	}
-
-	subject := getHeader(openMessage, "Subject")
-	if !replyRE.MatchString(subject) {
-		subject = *replyPrefix + subject
-	}
-
-	st := time.Now()
-	if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
-		Raw: mimeEncode(fmt.Sprintf(`To: %s
-Subject: %s
-
-%s`, getHeader(openMessage, "From"), subject, body)),
-	}).Do(); err != nil {
-		status("Error sending reply: %v", err)
-		return nil
-	}
-	log.Printf("Users.Messages.Send: %v", time.Since(st))
-	status("Successfully sent reply")
+	openMessage = nil
+	g.SetCurrentView(vnMessages)
+	messages.draw()
+	createSend(g)
 	return nil
+}
+
+func createSend(g *gocui.Gui) {
+	maxX, maxY := g.Size()
+	height := 6
+	width := 20
+	x, y := maxX/2-width/2, maxY/2-height/2
+	sendView, err := g.SetView(vnSend, x, y, x+width, y+height)
+	if err != gocui.ErrorUnkView {
+		status("Failed to create dialog: %v", err)
+		return
+	}
+	// TODO: move to template.
+	fmt.Fprintf(sendView, "\n S - Send\n D - Draft\n A - Abort")
+	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
+		's': sendCmdSend,
+		'S': sendCmdSend,
+		'a': sendCmdAbort,
+		'A': sendCmdAbort,
+		'd': sendCmdDraft,
+		'D': sendCmdDraft,
+	} {
+		if err := ui.SetKeybinding(vnSend, key, 0, cb); err != nil {
+			log.Fatalf("Bind %v for %q: %v", key, vnGoto, err)
+		}
+	}
+	g.Flush()
+	g.SetCurrentView(vnSend)
 }
 
 func openMessageDraw(g *gocui.Gui, v *gocui.View) {
