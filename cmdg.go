@@ -21,12 +21,10 @@
 //   * Inline help showing keyboard shortcuts.
 //   * History API for refreshing (?).
 //   * Add option to send+label waiting.
-//   * Log (non-sensitive) stuff to logfile.
 //   * Label management
 //   * Autocomplete label navigation.
 //   * Refresh list
 //   * Mailbox pagination
-//   * Abort sending while in emacs mode.
 //   * Delayed sending.
 //   * Continuing drafts.
 //   * Surface allow modifying "important" and "starred".
