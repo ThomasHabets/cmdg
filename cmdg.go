@@ -20,7 +20,6 @@
 //   * Make Goto work from message view.
 //   * Inline help showing keyboard shortcuts.
 //   * History API for refreshing (?).
-//   * Add option to send+label waiting.
 //   * Label management
 //   * Autocomplete label navigation.
 //   * Refresh list
@@ -65,6 +64,7 @@ var (
 	forwardPrefix = flag.String("forward_prefix", "Fwd: ", "String to prepend to subject in forwards.")
 	signature     = flag.String("signature", "Best regards", "End of all emails.")
 	logFile       = flag.String("log", "/dev/null", "Log non-sensitive data to this file.")
+	waitingLabel  = flag.String("waiting_label", "", "Label to add as 'waiting for reply'.")
 
 	gmailService *gmail.Service
 
@@ -603,32 +603,7 @@ func messagesCmdCompose(g *gocui.Gui, v *gocui.View) error {
 		status("Running editor: %v", err)
 		return nil
 	}
-
-	maxX, maxY := g.Size()
-	height := 6
-	width := 20
-	x, y := maxX/2-width/2, maxY/2-height/2
-	sendView, err := g.SetView(vnSend, x, y, x+width, y+height)
-	if err != gocui.ErrorUnkView {
-		status("Failed to create dialog: %v", err)
-		return nil
-	}
-	// TODO: move to template.
-	fmt.Fprintf(sendView, "\n S - Send\n D - Draft\n A - Abort")
-	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
-		's': sendCmdSend,
-		'S': sendCmdSend,
-		'a': sendCmdAbort,
-		'A': sendCmdAbort,
-		'd': sendCmdDraft,
-		'D': sendCmdDraft,
-	} {
-		if err := ui.SetKeybinding(vnSend, key, 0, cb); err != nil {
-			log.Fatalf("Bind %v for %q: %v", key, vnGoto, err)
-		}
-	}
-	g.Flush()
-	g.SetCurrentView(vnSend)
+	createSend(g)
 	return nil
 }
 
@@ -643,6 +618,35 @@ func sendCmdSend(g *gocui.Gui, v *gocui.View) error {
 	g.Flush()
 	g.SetCurrentView(vnMessages)
 	status("Successfully sent")
+	return nil
+}
+
+func sendCmdSendWait(g *gocui.Gui, v *gocui.View) error {
+	st := time.Now()
+	l, ok := labels[*waitingLabel]
+	if !ok {
+		log.Fatalf("Waiting label %q does not exist!", *waitingLabel)
+	}
+
+	status("Sending with label...")
+	if msg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+		Raw: mimeEncode(sendMessage),
+	}).Do(); err != nil {
+		status("Error sending: %v", err)
+	} else {
+		if _, err := gmailService.Users.Messages.Modify(email, msg.Id, &gmail.ModifyMessageRequest{
+			AddLabelIds: []string{l},
+		}).Do(); err != nil {
+			status("Error labelling: %v", err)
+			log.Printf("Error labelling: %v", err)
+		} else {
+			status("Successfully sent (with waiting label %q)", l)
+			log.Printf("Users.Messages.Send+Add waiting: %v", time.Since(st))
+		}
+	}
+	g.DeleteView(vnSend)
+	g.Flush()
+	g.SetCurrentView(vnMessages)
 	return nil
 }
 
@@ -707,8 +711,8 @@ func openMessageCmdForward(g *gocui.Gui, v *gocui.View) error {
 
 func createSend(g *gocui.Gui) {
 	maxX, maxY := g.Size()
-	height := 6
-	width := 20
+	height := 7
+	width := 40
 	x, y := maxX/2-width/2, maxY/2-height/2
 	sendView, err := g.SetView(vnSend, x, y, x+width, y+height)
 	if err != gocui.ErrorUnkView {
@@ -716,10 +720,12 @@ func createSend(g *gocui.Gui) {
 		return
 	}
 	// TODO: move to template.
-	fmt.Fprintf(sendView, "\n S - Send\n D - Draft\n A - Abort")
+	fmt.Fprintf(sendView, "\n S - Send\n W - Send and apply waiting label\n D - Draft\n A - Abort")
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
 		's': sendCmdSend,
 		'S': sendCmdSend,
+		'w': sendCmdSendWait,
+		'W': sendCmdSendWait,
 		'a': sendCmdAbort,
 		'A': sendCmdAbort,
 		'd': sendCmdDraft,
