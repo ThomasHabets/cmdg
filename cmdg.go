@@ -796,6 +796,11 @@ func main() {
 		}
 		return
 	}
+	if fi, err := os.Stat(*config); err != nil {
+		log.Fatalf("Missing config file %q: %v", *config, err)
+	} else if (fi.Mode() & 0477) != 0400 {
+		log.Fatalf("Config file (%q) permissions must be 0600 or better, was 0%o", *config, fi.Mode()&os.ModePerm)
+	}
 
 	conf, err := lib.ReadConfig(*config)
 	if err != nil {
