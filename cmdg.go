@@ -21,7 +21,6 @@
 //   * Inline help showing keyboard shortcuts.
 //   * History API for refreshing (?).
 //   * Label management
-//   * Autocomplete label navigation.
 //   * Mailbox pagination
 //   * Delayed sending.
 //   * Continuing drafts.
@@ -69,7 +68,6 @@ var (
 	messagesView    *gocui.View
 	openMessageView *gocui.View
 	bottomView      *gocui.View
-	gotoView        *gocui.View
 	sendView        *gocui.View
 	ui              *gocui.Gui
 
@@ -97,7 +95,6 @@ const (
 	vnMessages    = "messages"
 	vnOpenMessage = "openMessage"
 	vnBottom      = "bottom"
-	vnGoto        = "goto"
 	vnSend        = "send"
 
 	// Fixed labels.
@@ -109,15 +106,24 @@ const (
 	starred   = "STARRED"
 	trash     = "TRASH"
 
+	letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ /"
 	maxLine = 80
 	spaces  = " \t\r"
 )
 
-type caseInsensitive []string
+type sortLabels []string
 
-func (a caseInsensitive) Len() int           { return len(a) }
-func (a caseInsensitive) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a caseInsensitive) Less(i, j int) bool { return strings.ToLower(a[i]) < strings.ToLower(a[j]) }
+func (a sortLabels) Len() int      { return len(a) }
+func (a sortLabels) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a sortLabels) Less(i, j int) bool {
+	if a[i] == inbox && a[j] != inbox {
+		return true
+	}
+	if a[j] == inbox && a[i] != inbox {
+		return false
+	}
+	return strings.ToLower(a[i]) < strings.ToLower(a[j])
+}
 
 func getHeader(m *gmail.Message, header string) string {
 	for _, h := range m.Payload.Headers {
@@ -546,7 +552,6 @@ func messagesCmdSearch(g *gocui.Gui, v *gocui.View) error {
 		return nil
 	}
 
-	letters := "abcdefghijklmnopqrstuvwxyz /"
 	s := &searchBox{
 		g:        g,
 		v:        searchView,
@@ -643,36 +648,62 @@ func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 	}
 
 	var err error
-	gotoView, err = g.SetView(vnGoto, 5, maxY/2-height/2, maxX-5, maxY/2+height/2+1)
+	x, y := 5, maxY/2-height/2
+	// TODO: this appears to be a bug in gocui. Only works with unique view name.
+	vnGoto := fmt.Sprintf("goto-%v", time.Now())
+	gotoView, err := g.SetView(vnGoto, x, y, maxX-5, y+height)
 	if err != gocui.ErrorUnkView {
 		status("Failed to create dialog: %v", err)
 		return nil
 	}
-	gotoView.Editable = true
 
-	// Print existing labels.
-	{
-		fmt.Fprintf(gotoView, "\n")
-		ls := []string{}
-		for l := range labels {
-			ls = append(ls, l)
-		}
-		sort.Sort(caseInsensitive(ls))
-		lineNum := 0
-		for _, l := range ls {
-			if lineNum > height-3 {
-				break
-			}
-			lineNum++
-			fmt.Fprintf(gotoView, "%s\n", l)
+	ls := []string{}
+	for l := range labels {
+		ls = append(ls, l)
+	}
+	sort.Sort(sortLabels(ls))
+
+	s := &gotoBox{
+		g:        g,
+		v:        gotoView,
+		viewName: vnGoto,
+		labels:   ls,
+	}
+
+	// Normal keystrokes identity mapped.
+	for _, li := range letters {
+		l := translateKey(li)
+		if err := ui.SetKeybinding(vnGoto, l, 0, func(g *gocui.Gui, v *gocui.View) error {
+			s.keyPress(l)
+			return nil
+		}); err != nil {
+			log.Fatalf("Bind %v for %q: %v", l, vnGoto, err)
 		}
 	}
 
+	// Control keys identity mapped.
+	for _, key := range []interface{}{
+		gocui.KeyBackspace,
+		gocui.KeyBackspace2,
+		gocui.KeyCtrlU,
+		gocui.KeyCtrlN,
+		gocui.KeyCtrlP,
+		gocui.KeyArrowDown,
+		gocui.KeyArrowUp,
+	} {
+		k := key
+		cb := func(g *gocui.Gui, v *gocui.View) error { s.keyPress(k); return nil }
+		if err := ui.SetKeybinding(vnGoto, key, 0, cb); err != nil {
+			log.Fatalf("Bind %v for %q: %v", key, vnGoto, err)
+		}
+	}
+
+	// Go!
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
-		gocui.KeyCtrlM: gotoCmdGoto,
-		gocui.KeyCtrlJ: gotoCmdGoto,
-		'\n':           gotoCmdGoto,
-		'\r':           gotoCmdGoto,
+		gocui.KeyCtrlM: func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
+		gocui.KeyCtrlJ: func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
+		'\n':           func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
+		'\r':           func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
 	} {
 		if err := ui.SetKeybinding(vnGoto, key, 0, cb); err != nil {
 			log.Fatalf("Bind %v for %q: %v", key, vnGoto, err)
@@ -680,38 +711,121 @@ func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 	}
 	g.Flush()
 	g.SetCurrentView(vnGoto)
+	s.keyPress(gocui.KeyCtrlU)
 	return nil
 }
 
-func gotoCmdGoto(g *gocui.Gui, v *gocui.View) error {
-	// TODO: Log error if fail.
-	change := false
-	l, err := gotoView.Line(0)
-	l = strings.Trim(l, "\x00 ")
-	if err != nil {
-		status("Failed to get label: %v", err)
-	} else {
-		id, ok := labels[l]
-		if ok {
-			change = true
-			currentLabel = id
-			currentSearch = ""
-		} else if l != "" {
-			status("Label %q doesn't exist", l)
+type gotoBox struct {
+	g           *gocui.Gui
+	v           *gocui.View
+	viewName    string
+	cur         string
+	labels      []string
+	active      int
+	forcePicker bool // Enable enter-picker even when nothing has been typed.
+}
+
+func (s *gotoBox) keyPress(l interface{}) {
+	switch l {
+	case gocui.KeyBackspace, gocui.KeyBackspace2:
+		if len(s.cur) > 0 {
+			s.cur = s.cur[:len(s.cur)-1]
+		}
+		s.forcePicker = false
+	case gocui.KeyArrowDown, gocui.KeyCtrlN:
+		if s.forcePicker || s.cur != "" {
+			s.active++
+		}
+		s.forcePicker = true
+	case gocui.KeyArrowUp, gocui.KeyCtrlP:
+		s.active--
+		s.forcePicker = true
+	case gocui.KeyCtrlU:
+		s.cur = ""
+		s.forcePicker = false
+	default:
+		s.cur += fmt.Sprintf("%c", l)
+		s.forcePicker = false
+	}
+	if s.active < 0 {
+		s.active = 0
+	}
+
+	// Figure out what the maximum 'active' counter is.
+	{
+		matching := 0
+		_, height := s.v.Size()
+		for _, l := range s.labels {
+			if strings.Contains(l, s.cur) {
+				matching++
+				if matching >= height-2 {
+					break
+				}
+			}
+		}
+		if s.active >= matching {
+			s.active = matching - 1
 		}
 	}
-	g.DeleteView(vnGoto)
-	g.Flush()
-	g.SetCurrentView(vnMessages)
-	if change {
-		messagesView.Clear()
-		fmt.Fprintf(messagesView, "Loading...")
-		g.Flush()
-		refreshMessages(gmailService)
-		messages.marked = make(map[string]bool)
+
+	s.v.Clear()
+	fmt.Fprintf(s.v, "Go to label: %s", s.cur)
+
+	// Print matching labels.
+	_, height := s.v.Size()
+	fmt.Fprintf(s.v, "\n")
+	lineNum := 0
+	a := s.active
+	for _, l := range s.labels {
+		if lineNum > height-3 {
+			break
+		}
+		if strings.Contains(l, s.cur) {
+			if a == 0 && (s.forcePicker || s.cur != "") {
+				fmt.Fprintf(s.v, "> %s\n", l)
+			} else {
+				fmt.Fprintf(s.v, "  %s\n", l)
+			}
+			a--
+			lineNum++
+		}
 	}
-	messages.draw()
-	return nil
+}
+
+func (s *gotoBox) enter() {
+	if s.cur == "" && !s.forcePicker {
+		backToMessagesView(s.g, s.viewName, false)
+		return
+	}
+
+	change := false
+
+	id, ok := labels[s.cur]
+	if !ok {
+		// If no exact match, use partial match.
+		a := s.active
+		for _, l := range s.labels {
+			if strings.Contains(l, s.cur) {
+				if a > 0 {
+					a--
+				} else {
+					id = labels[l]
+					ok = true
+					break
+				}
+			}
+		}
+	}
+	if ok {
+		change = true
+		currentLabel = id
+		currentSearch = ""
+	} else {
+		status("Label %q doesn't exist", s.cur)
+	}
+	currentSearch = ""
+	currentLabel = id
+	backToMessagesView(s.g, s.viewName, change)
 }
 
 func messagesCmdCompose(g *gocui.Gui, v *gocui.View) error {
@@ -852,7 +966,7 @@ func createSend(g *gocui.Gui) {
 		'D': sendCmdDraft,
 	} {
 		if err := ui.SetKeybinding(vnSend, key, 0, cb); err != nil {
-			log.Fatalf("Bind %v for %q: %v", key, vnGoto, err)
+			log.Fatalf("Bind %v for %q: %v", key, vnSend, err)
 		}
 	}
 	g.Flush()
@@ -901,7 +1015,7 @@ func openMessageDraw(g *gocui.Gui, v *gocui.View) {
 	for _, l := range openMessage.LabelIds {
 		ls = append(ls, labelIDs[l])
 	}
-	sort.Sort(caseInsensitive(ls))
+	sort.Sort(sortLabels(ls))
 
 	fmt.Fprintf(openMessageView, "Email %d of %d%s", messages.current+1, len(messages.messages), marked)
 	fmt.Fprintf(openMessageView, "From: %s", getHeader(openMessage, "From"))
