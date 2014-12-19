@@ -628,6 +628,7 @@ func (s *searchBox) enter() {
 }
 
 func backToMessagesView(g *gocui.Gui, vn string, reload bool) {
+	messages.current = 0
 	if err := g.DeleteView(vn); err != nil {
 		log.Fatalf("Failed to delete %q: %v", vn, err)
 	}
