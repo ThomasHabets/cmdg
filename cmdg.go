@@ -105,6 +105,7 @@ const (
 	spam      = "SPAM"
 	starred   = "STARRED"
 	trash     = "TRASH"
+	sent      = "SENT"
 
 	letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ /"
 	maxLine = 80
@@ -234,6 +235,9 @@ func timestring(m *gmail.Message) string {
 
 func fromString(m *gmail.Message) string {
 	s := getHeader(m, "From")
+	if hasLabel(m.LabelIds, sent) {
+		s = getHeader(m, "To")
+	}
 	a, err := mail.ParseAddress(s)
 	if err != nil {
 		return s
