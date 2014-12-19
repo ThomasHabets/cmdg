@@ -42,7 +42,7 @@ func (l *messageList) draw() {
 	fromMax := 20
 	tsWidth := 7
 	if len(l.messages) == 0 {
-		fmt.Fprintf(messagesView, "<empty>")
+		fmt.Fprintf(messagesView, "<empty for label %q, search query %q>", currentLabel, currentSearch)
 	}
 	for n, m := range l.messages {
 		s := fmt.Sprintf(" %*.*s | %*.*s | %s",

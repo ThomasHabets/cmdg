@@ -26,7 +26,6 @@
 //   * Delayed sending.
 //   * Continuing drafts.
 //   * Surface allow modifying "important" and "starred".
-//   * Searching.
 //   * The Gmail API supports batch. Does the Go library?
 //   * Loading animations to show it's not stuck.
 package main
@@ -79,6 +78,7 @@ var (
 	// State keepers.
 	openMessageScrollY int
 	currentLabel       = inbox
+	currentSearch      = ""
 	messages           *messageList
 	labels             = make(map[string]string) // From name to ID.
 	labelIDs           = make(map[string]string) // From ID to name.
@@ -128,18 +128,22 @@ func getHeader(m *gmail.Message, header string) string {
 	return ""
 }
 
-func list(g *gmail.Service, label string) *messageList {
+func list(g *gmail.Service, label, search string) *messageList {
 	_, nres := ui.Size()
 	nres -= 2 + 3 // Bottom view and room for snippet.
 	st := time.Now()
-	res, err := g.Users.Messages.List(email).
-		//		LabelIds().
+	q := g.Users.Messages.List(email).
 		//		PageToken().
 		MaxResults(int64(nres)).
 		//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
-		Fields("messages,resultSizeEstimate").
-		LabelIds(label).
-		Do()
+		Fields("messages,resultSizeEstimate")
+	if label != "" {
+		q = q.LabelIds(label)
+	}
+	if search != "" {
+		q = q.Q(search)
+	}
+	res, err := q.Do()
 	if err != nil {
 		log.Fatalf("Listing: %v", err)
 	}
@@ -257,7 +261,7 @@ func refreshMessages(g *gmail.Service) {
 		current = messages.current
 		marked = messages.marked
 	}
-	messages = list(g, currentLabel)
+	messages = list(g, currentLabel, currentSearch)
 	if marked != nil {
 		messages.current = current
 		messages.marked = marked
@@ -523,6 +527,113 @@ func runEditorHeadersOK(input string) (string, error) {
 	return s, nil
 }
 
+func messagesCmdSearch(g *gocui.Gui, v *gocui.View) error {
+	maxX, maxY := g.Size()
+
+	height := len(labels) + 1
+	if height > maxY-10 {
+		height = maxY - 10
+	}
+
+	var err error
+	x, y := 5, maxY/2-height/2
+
+	// TODO: this appears to be a bug in gocui. Only works with unique view name.
+	vnSearch := fmt.Sprintf("search-%v", time.Now())
+	searchView, err := g.SetView(vnSearch, x, y, maxX-5, y+height)
+	if err != gocui.ErrorUnkView {
+		status("Failed to create search dialog: %v", err)
+		return nil
+	}
+
+	letters := "abcdefghijklmnopqrstuvwxyz /"
+	s := &searchBox{
+		g:        g,
+		v:        searchView,
+		viewName: vnSearch,
+	}
+	for _, li := range letters {
+		l := translateKey(li)
+		if err := ui.SetKeybinding(vnSearch, l, 0, func(g *gocui.Gui, v *gocui.View) error {
+			s.keyPress(l)
+			return nil
+		}); err != nil {
+			log.Fatalf("Bind %v for %q: %v", l, vnSearch, err)
+		}
+	}
+	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
+		gocui.KeyBackspace:  func(g *gocui.Gui, v *gocui.View) error { s.keyPress(gocui.KeyBackspace); return nil },
+		gocui.KeyBackspace2: func(g *gocui.Gui, v *gocui.View) error { s.keyPress(gocui.KeyBackspace); return nil },
+		gocui.KeyCtrlU:      func(g *gocui.Gui, v *gocui.View) error { s.keyPress(gocui.KeyCtrlU); return nil },
+		gocui.KeyCtrlM:      func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
+		gocui.KeyCtrlJ:      func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
+		'\n':                func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
+		'\r':                func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
+	} {
+		if err := ui.SetKeybinding(vnSearch, key, 0, cb); err != nil {
+			log.Fatalf("Bind %v for %q: %v", key, vnSearch, err)
+		}
+	}
+	g.Flush()
+	g.SetCurrentView(vnSearch)
+	fmt.Fprintf(searchView, "Search for: ")
+	return nil
+}
+
+func translateKey(l rune) interface{} {
+	if l == ' ' {
+		return gocui.KeySpace
+	}
+	return l
+}
+
+type searchBox struct {
+	g        *gocui.Gui
+	v        *gocui.View
+	viewName string
+	cur      string
+}
+
+func (s *searchBox) keyPress(l interface{}) {
+	if l == gocui.KeyBackspace {
+		if len(s.cur) > 0 {
+			s.cur = s.cur[:len(s.cur)-1]
+		}
+	} else if l == gocui.KeyCtrlU {
+		s.cur = ""
+	} else {
+		s.cur += fmt.Sprintf("%c", l)
+	}
+	s.v.Clear()
+	fmt.Fprintf(s.v, "Search for: %s", s.cur)
+}
+
+func (s *searchBox) enter() {
+	if s.cur != "" {
+		currentSearch = s.cur
+		currentLabel = ""
+		backToMessagesView(s.g, s.viewName, true)
+	} else {
+		backToMessagesView(s.g, s.viewName, false)
+	}
+}
+
+func backToMessagesView(g *gocui.Gui, vn string, reload bool) {
+	if err := g.DeleteView(vn); err != nil {
+		log.Fatalf("Failed to delete %q: %v", vn, err)
+	}
+	g.Flush()
+	g.SetCurrentView(vnMessages)
+	if reload {
+		messagesView.Clear()
+		fmt.Fprintf(messagesView, "Loading...")
+		g.Flush()
+		refreshMessages(gmailService)
+		messages.marked = make(map[string]bool)
+	}
+	messages.draw()
+}
+
 func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 	maxX, maxY := g.Size()
 
@@ -584,6 +695,7 @@ func gotoCmdGoto(g *gocui.Gui, v *gocui.View) error {
 		if ok {
 			change = true
 			currentLabel = id
+			currentSearch = ""
 		} else if l != "" {
 			status("Label %q doesn't exist", l)
 		}
@@ -1003,6 +1115,7 @@ func main() {
 		'e':                 messagesCmdArchive,
 		'c':                 messagesCmdCompose,
 		'g':                 messagesCmdGoto,
+		's':                 messagesCmdSearch,
 	} {
 		if err := ui.SetKeybinding(vnMessages, key, 0, cb); err != nil {
 			log.Fatalf("Bind %v: %v", key, err)
