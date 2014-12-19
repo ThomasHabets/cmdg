@@ -752,44 +752,45 @@ func (s *gotoBox) keyPress(l interface{}) {
 	}
 
 	// Figure out what the maximum 'active' counter is.
-	{
-		matching := 0
-		_, height := s.v.Size()
-		for _, l := range s.labels {
-			if strings.Contains(l, s.cur) {
-				matching++
-				if matching >= height-2 {
-					break
-				}
-			}
-		}
-		if s.active >= matching {
-			s.active = matching - 1
-		}
+	matching := matchingLabels(s.labels, s.cur)
+	if s.active >= len(matching) {
+		s.active = len(matching) - 1
+	}
+
+	_, height := s.v.Size()
+	if s.active >= height {
+		s.active = height - 1
 	}
 
 	s.v.Clear()
 	fmt.Fprintf(s.v, "Go to label: %s", s.cur)
 
 	// Print matching labels.
-	_, height := s.v.Size()
 	fmt.Fprintf(s.v, "\n")
 	lineNum := 0
 	a := s.active
-	for _, l := range s.labels {
+	for _, l := range matching {
 		if lineNum > height-3 {
 			break
 		}
-		if strings.Contains(l, s.cur) {
-			if a == 0 && (s.forcePicker || s.cur != "") {
-				fmt.Fprintf(s.v, "> %s\n", l)
-			} else {
-				fmt.Fprintf(s.v, "  %s\n", l)
-			}
-			a--
-			lineNum++
+		if a == 0 && (s.forcePicker || s.cur != "") {
+			fmt.Fprintf(s.v, "> %s\n", l)
+		} else {
+			fmt.Fprintf(s.v, "  %s\n", l)
+		}
+		a--
+		lineNum++
+	}
+}
+
+func matchingLabels(labels []string, label string) []string {
+	ret := []string{}
+	for _, l := range labels {
+		if strings.Contains(strings.ToLower(l), strings.ToLower(label)) {
+			ret = append(ret, l)
 		}
 	}
+	return ret
 }
 
 func (s *gotoBox) enter() {
@@ -798,21 +799,21 @@ func (s *gotoBox) enter() {
 		return
 	}
 
+	matching := matchingLabels(s.labels, s.cur)
+
 	change := false
 
 	id, ok := labels[s.cur]
 	if !ok {
 		// If no exact match, use partial match.
 		a := s.active
-		for _, l := range s.labels {
-			if strings.Contains(l, s.cur) {
-				if a > 0 {
-					a--
-				} else {
-					id = labels[l]
-					ok = true
-					break
-				}
+		for _, l := range matching {
+			if a > 0 {
+				a--
+			} else {
+				id = labels[l]
+				ok = true
+				break
 			}
 		}
 	}
