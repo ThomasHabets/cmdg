@@ -24,7 +24,8 @@
 //   * Make Goto work from message view.
 //   * Inline help showing keyboard shortcuts.
 //   * History API for refreshing (?).
-//   * Label management
+//   * Remove labels
+//   * Add labels from messages view.
 //   * Mailbox pagination
 //   * Delayed sending.
 //   * Continuing drafts.
@@ -641,6 +642,24 @@ func (s *searchBox) enter() {
 	}
 }
 
+func restoreView(g *gocui.Gui, vn string, reload bool) {
+	switch vn {
+	case vnMessages:
+		messages.current = 0
+		if reload {
+			messagesView.Clear()
+			fmt.Fprintf(messagesView, "Loading...")
+			g.Flush()
+			refreshMessages(gmailService)
+			messages.marked = make(map[string]bool)
+		}
+		messages.draw()
+	}
+	g.Flush()
+	g.SetCurrentView(vn)
+	g.Flush()
+}
+
 func backToMessagesView(g *gocui.Gui, vn string, reload bool) {
 	messages.current = 0
 	if err := g.DeleteView(vn); err != nil {
@@ -672,9 +691,24 @@ func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+func openMessageCmdLabel(g *gocui.Gui, v *gocui.View) error {
+	ls := []string{}
+	for l := range labels {
+		ls = append(ls, l)
+	}
+	sort.Sort(sortLabels(ls))
+
+	_, err := newLabelBox(g, v, "Add label> ", ls, addLabelEnter)
+	if err != nil {
+		status("%v", err)
+	}
+	return nil
+}
+
 type labelBox struct {
-	g *gocui.Gui
-	v *gocui.View
+	g          *gocui.Gui
+	labelView  *gocui.View
+	parentView *gocui.View
 
 	labels []string
 	prompt string
@@ -686,7 +720,7 @@ type labelBox struct {
 	enterCB func(g *gocui.Gui, v *gocui.View, choice string)
 }
 
-func newLabelBox(g *gocui.Gui, v *gocui.View, prompt string, ls []string, enterCB func(g *gocui.Gui, v *gocui.View, choice string)) (*labelBox, error) {
+func newLabelBox(g *gocui.Gui, parentView *gocui.View, prompt string, ls []string, enterCB func(g *gocui.Gui, v *gocui.View, choice string)) (*labelBox, error) {
 	maxX, maxY := g.Size()
 
 	height := len(labels) + 1
@@ -694,7 +728,6 @@ func newLabelBox(g *gocui.Gui, v *gocui.View, prompt string, ls []string, enterC
 		height = maxY - 10
 	}
 
-	var err error
 	x, y := 5, maxY/2-height/2
 	// TODO: this appears to be a bug in gocui. Only works with unique view name.
 	vnLabel := fmt.Sprintf("label-%v", time.Now())
@@ -704,11 +737,12 @@ func newLabelBox(g *gocui.Gui, v *gocui.View, prompt string, ls []string, enterC
 	}
 
 	s := &labelBox{
-		g:       g,
-		v:       labelView,
-		labels:  ls,
-		prompt:  prompt,
-		enterCB: enterCB,
+		g:          g,
+		labelView:  labelView,
+		parentView: parentView,
+		labels:     ls,
+		prompt:     prompt,
+		enterCB:    enterCB,
 	}
 	// Normal keystrokes identity mapped.
 	for _, li := range letters {
@@ -765,16 +799,22 @@ func (s *labelBox) enter() {
 	}
 	// If invalid label, use whatever's selected.
 	if _, found := labels[cur]; !found {
-		n := matching[s.active]
-		if _, found := labels[n]; found {
-			cur = n
+		if s.active < len(matching) {
+			n := matching[s.active]
+			if _, found := labels[n]; found {
+				cur = n
+			}
 		}
 	}
 
 	if s.cur == "" && !s.forcePicker {
 		cur = ""
 	}
-	s.enterCB(s.g, s.v, cur)
+	log.Printf("Pressed enter on %p", s)
+	s.enterCB(s.g, s.parentView, cur)
+	if err := s.g.DeleteView(s.labelView.Name()); err != nil {
+		log.Fatalf("Failed to delete label view %q: %v", s.labelView.Name(), err)
+	}
 }
 
 func (s *labelBox) keyPress(l interface{}) {
@@ -799,9 +839,6 @@ func (s *labelBox) keyPress(l interface{}) {
 		s.cur += fmt.Sprintf("%c", l)
 		s.forcePicker = false
 	}
-	if s.active < 0 {
-		s.active = 0
-	}
 
 	// Figure out what the maximum 'active' counter is.
 	matching := matchingLabels(s.labels, s.cur)
@@ -809,16 +846,19 @@ func (s *labelBox) keyPress(l interface{}) {
 		s.active = len(matching) - 1
 	}
 
-	_, height := s.v.Size()
+	_, height := s.labelView.Size()
 	if s.active >= height {
 		s.active = height - 1
 	}
+	if s.active < 0 {
+		s.active = 0
+	}
 
-	s.v.Clear()
-	fmt.Fprintf(s.v, "%s%s", s.prompt, s.cur)
+	s.labelView.Clear()
+	fmt.Fprintf(s.labelView, "%s%s", s.prompt, s.cur)
 
 	// Print matching labels.
-	fmt.Fprintf(s.v, "\n")
+	fmt.Fprintf(s.labelView, "\n")
 	lineNum := 0
 	a := s.active
 	for _, l := range matching {
@@ -826,9 +866,9 @@ func (s *labelBox) keyPress(l interface{}) {
 			break
 		}
 		if a == 0 && (s.forcePicker || s.cur != "") {
-			fmt.Fprintf(s.v, "> %s\n", l)
+			fmt.Fprintf(s.labelView, "> %s\n", l)
 		} else {
-			fmt.Fprintf(s.v, "  %s\n", l)
+			fmt.Fprintf(s.labelView, "  %s\n", l)
 		}
 		a--
 		lineNum++
@@ -843,6 +883,27 @@ func matchingLabels(labels []string, label string) []string {
 		}
 	}
 	return ret
+}
+
+func addLabelEnter(g *gocui.Gui, parentView *gocui.View, choice string) {
+	change := true
+	defer restoreView(g, parentView.Name(), change)
+
+	if choice == "" {
+		return
+	}
+
+	id, ok := labels[choice]
+	if !ok {
+		status("Label %q doesn't exist", choice)
+		return
+	}
+
+	if _, err := gmailService.Users.Messages.Modify(email, openMessage.Id, &gmail.ModifyMessageRequest{
+		AddLabelIds: []string{id},
+	}).Do(); err != nil {
+		status("Failed to apply label %q: %v", choice, err)
+	}
 }
 
 func gotoBoxEnter(g *gocui.Gui, v *gocui.View, choice string) {
@@ -1304,6 +1365,7 @@ func main() {
 		'p':                 openMessageCmdScrollUp,
 		gocui.KeyArrowUp:    openMessageCmdScrollUp,
 		'n':                 openMessageCmdScrollDown,
+		'l':                 openMessageCmdLabel,
 		gocui.KeyArrowDown:  openMessageCmdScrollDown,
 		'x':                 openMessageCmdMark,
 		'r':                 openMessageCmdReply,
