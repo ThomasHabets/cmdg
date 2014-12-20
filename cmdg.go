@@ -20,9 +20,8 @@
 //   * Attach file.
 //   * Mark unread.
 //   * ReplyAll
-//   * Archive from message view.
 //   * Make Goto work from message view.
-//   * Inline help showing keyboard shortcuts.
+//   * Inline help showing keyboard shortcuts. (shell out to manpage?)
 //   * History API for refreshing (?).
 //   * Remove labels
 //   * Mailbox pagination
@@ -377,6 +376,23 @@ func messagesCmdArchive(g *gocui.Gui, v *gocui.View) error {
 		}
 		return err
 	})
+}
+
+func openMessageCmdArchive(g *gocui.Gui, v *gocui.View) error {
+	st := time.Now()
+	_, err := gmailService.Users.Messages.Modify(email, openMessage.Id, &gmail.ModifyMessageRequest{
+		RemoveLabelIds: []string{inbox},
+	}).Do()
+	if err != nil {
+		status("Failed to archive: %v", err)
+		return nil
+	}
+	log.Printf("Users.Messages.Modify(archive): %v", time.Since(st))
+	refreshMessages(gmailService)
+	openMessage = nil
+	g.SetCurrentView(vnMessages)
+	messages.draw()
+	return nil
 }
 
 func messagesCmdApply(g *gocui.Gui, v *gocui.View, verb string, f func(string) error) error {
@@ -1402,6 +1418,7 @@ func main() {
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
 		'q':                 quit,
 		'<':                 openMessageCmdClose,
+		'e':                 openMessageCmdArchive,
 		gocui.KeyArrowLeft:  openMessageCmdClose,
 		gocui.KeyEsc:        openMessageCmdClose,
 		'p':                 openMessageCmdScrollUp,
