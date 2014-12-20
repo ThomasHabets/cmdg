@@ -37,6 +37,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/mail"
@@ -59,6 +60,8 @@ const (
 )
 
 var (
+	help          = flag.Bool("help", false, "Show usage text and exit.")
+	help2         = flag.Bool("h", false, "Show usage text and exit.")
 	config        = flag.String("config", "", "Config file. If empty will default to ~/cmdg.conf.")
 	configure     = flag.Bool("configure", false, "Configure OAuth and write config file.")
 	readonly      = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
@@ -1150,22 +1153,29 @@ func layout(g *gocui.Gui) error {
 	}
 	return nil
 }
-func main() {
-	flag.Usage = func() {
-		fmt.Printf(`cmdg version %s - Command line interface to Gmail
+
+func usage(f io.Writer) {
+	fmt.Fprintf(f, `cmdg version %s - Command line interface to Gmail
 https://github.com/ThomasHabets/cmdg/
 
 Usage: %s [...options...]
 
 `, version, os.Args[0])
 
-		flag.VisitAll(func(f *flag.Flag) {
-			fmt.Printf("  %15s  %s\n%sDefault: %q\n", "-"+f.Name, f.Usage, strings.Repeat(" ", 19), f.DefValue)
-		})
-	}
+	flag.VisitAll(func(fl *flag.Flag) {
+		fmt.Fprintf(f, "  %15s  %s\n%sDefault: %q\n", "-"+fl.Name, fl.Usage, strings.Repeat(" ", 19), fl.DefValue)
+	})
+}
+
+func main() {
+	flag.Usage = func() { usage(os.Stderr) }
 	flag.Parse()
 	if flag.NArg() > 0 {
 		log.Fatalf("Non-argument options provided: %q", flag.Args())
+	}
+	if *help || *help2 {
+		usage(os.Stdout)
+		return
 	}
 
 	var err error
