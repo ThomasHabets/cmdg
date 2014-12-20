@@ -635,9 +635,9 @@ func (s *searchBox) enter() {
 	if s.cur != "" {
 		currentSearch = s.cur
 		currentLabel = ""
-		backToMessagesView(s.g, s.viewName, true)
+		backToMessagesView(s.g, s.v.Name(), true)
 	} else {
-		backToMessagesView(s.g, s.viewName, false)
+		backToMessagesView(s.g, s.v.Name(), false)
 	}
 }
 
@@ -659,6 +659,34 @@ func backToMessagesView(g *gocui.Gui, vn string, reload bool) {
 }
 
 func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
+	ls := []string{}
+	for l := range labels {
+		ls = append(ls, l)
+	}
+	sort.Sort(sortLabels(ls))
+
+	_, err := newLabelBox(g, v, "Go to label> ", ls, gotoBoxEnter)
+	if err != nil {
+		status("%v", err)
+	}
+	return nil
+}
+
+type labelBox struct {
+	g *gocui.Gui
+	v *gocui.View
+
+	labels []string
+	prompt string
+
+	cur         string
+	active      int
+	forcePicker bool // Enable enter-picker even when nothing has been typed.
+
+	enterCB func(g *gocui.Gui, v *gocui.View, choice string)
+}
+
+func newLabelBox(g *gocui.Gui, v *gocui.View, prompt string, ls []string, enterCB func(g *gocui.Gui, v *gocui.View, choice string)) (*labelBox, error) {
 	maxX, maxY := g.Size()
 
 	height := len(labels) + 1
@@ -669,34 +697,27 @@ func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 	var err error
 	x, y := 5, maxY/2-height/2
 	// TODO: this appears to be a bug in gocui. Only works with unique view name.
-	vnGoto := fmt.Sprintf("goto-%v", time.Now())
-	gotoView, err := g.SetView(vnGoto, x, y, maxX-5, y+height)
+	vnLabel := fmt.Sprintf("label-%v", time.Now())
+	labelView, err := g.SetView(vnLabel, x, y, maxX-5, y+height)
 	if err != gocui.ErrorUnkView {
-		status("Failed to create dialog: %v", err)
-		return nil
+		return nil, fmt.Errorf("failed to create dialog: %v", err)
 	}
 
-	ls := []string{}
-	for l := range labels {
-		ls = append(ls, l)
+	s := &labelBox{
+		g:       g,
+		v:       labelView,
+		labels:  ls,
+		prompt:  prompt,
+		enterCB: enterCB,
 	}
-	sort.Sort(sortLabels(ls))
-
-	s := &gotoBox{
-		g:        g,
-		v:        gotoView,
-		viewName: vnGoto,
-		labels:   ls,
-	}
-
 	// Normal keystrokes identity mapped.
 	for _, li := range letters {
 		l := translateKey(li)
-		if err := ui.SetKeybinding(vnGoto, l, 0, func(g *gocui.Gui, v *gocui.View) error {
+		if err := ui.SetKeybinding(vnLabel, l, 0, func(g *gocui.Gui, v *gocui.View) error {
 			s.keyPress(l)
 			return nil
 		}); err != nil {
-			log.Fatalf("Bind %v for %q: %v", l, vnGoto, err)
+			log.Fatalf("Bind %v for %q: %v", l, vnLabel, err)
 		}
 	}
 
@@ -712,8 +733,8 @@ func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 	} {
 		k := key
 		cb := func(g *gocui.Gui, v *gocui.View) error { s.keyPress(k); return nil }
-		if err := ui.SetKeybinding(vnGoto, key, 0, cb); err != nil {
-			log.Fatalf("Bind %v for %q: %v", key, vnGoto, err)
+		if err := ui.SetKeybinding(vnLabel, key, 0, cb); err != nil {
+			log.Fatalf("Bind %v for %q: %v", key, vnLabel, err)
 		}
 	}
 
@@ -724,27 +745,39 @@ func messagesCmdGoto(g *gocui.Gui, v *gocui.View) error {
 		'\n':           func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
 		'\r':           func(g *gocui.Gui, v *gocui.View) error { s.enter(); return nil },
 	} {
-		if err := ui.SetKeybinding(vnGoto, key, 0, cb); err != nil {
-			log.Fatalf("Bind %v for %q: %v", key, vnGoto, err)
+		if err := ui.SetKeybinding(vnLabel, key, 0, cb); err != nil {
+			log.Fatalf("Bind %v for %q: %v", key, vnLabel, err)
 		}
 	}
 	g.Flush()
-	g.SetCurrentView(vnGoto)
+	g.SetCurrentView(vnLabel)
 	s.keyPress(gocui.KeyCtrlU)
-	return nil
+	return s, nil
 }
 
-type gotoBox struct {
-	g           *gocui.Gui
-	v           *gocui.View
-	viewName    string
-	cur         string
-	labels      []string
-	active      int
-	forcePicker bool // Enable enter-picker even when nothing has been typed.
+func (s *labelBox) enter() {
+	matching := matchingLabels(s.labels, s.cur)
+
+	cur := s.cur
+	// If forcing picker (empty string, but ^N pressed)
+	if s.forcePicker {
+		cur = matching[s.active]
+	}
+	// If invalid label, use whatever's selected.
+	if _, found := labels[cur]; !found {
+		n := matching[s.active]
+		if _, found := labels[n]; found {
+			cur = n
+		}
+	}
+
+	if s.cur == "" && !s.forcePicker {
+		cur = ""
+	}
+	s.enterCB(s.g, s.v, cur)
 }
 
-func (s *gotoBox) keyPress(l interface{}) {
+func (s *labelBox) keyPress(l interface{}) {
 	switch l {
 	case gocui.KeyBackspace, gocui.KeyBackspace2:
 		if len(s.cur) > 0 {
@@ -782,7 +815,7 @@ func (s *gotoBox) keyPress(l interface{}) {
 	}
 
 	s.v.Clear()
-	fmt.Fprintf(s.v, "Go to label: %s", s.cur)
+	fmt.Fprintf(s.v, "%s%s", s.prompt, s.cur)
 
 	// Print matching labels.
 	fmt.Fprintf(s.v, "\n")
@@ -812,40 +845,23 @@ func matchingLabels(labels []string, label string) []string {
 	return ret
 }
 
-func (s *gotoBox) enter() {
-	if s.cur == "" && !s.forcePicker {
-		backToMessagesView(s.g, s.viewName, false)
+func gotoBoxEnter(g *gocui.Gui, v *gocui.View, choice string) {
+	if choice == "" {
+		backToMessagesView(g, v.Name(), false)
 		return
 	}
 
-	matching := matchingLabels(s.labels, s.cur)
-
 	change := false
 
-	id, ok := labels[s.cur]
-	if !ok {
-		// If no exact match, use partial match.
-		a := s.active
-		for _, l := range matching {
-			if a > 0 {
-				a--
-			} else {
-				id = labels[l]
-				ok = true
-				break
-			}
-		}
-	}
+	id, ok := labels[choice]
 	if ok {
 		change = true
 		currentLabel = id
 		currentSearch = ""
 	} else {
-		status("Label %q doesn't exist", s.cur)
+		status("Label %q doesn't exist", choice)
 	}
-	currentSearch = ""
-	currentLabel = id
-	backToMessagesView(s.g, s.viewName, change)
+	backToMessagesView(g, v.Name(), change)
 }
 
 func messagesCmdCompose(g *gocui.Gui, v *gocui.View) error {
