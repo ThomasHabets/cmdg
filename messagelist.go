@@ -1,3 +1,4 @@
+// TODO: copyright
 package main
 
 import (

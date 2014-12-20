@@ -1,5 +1,9 @@
 // cmdg is a command line client to Gmail.
 //
+// TODO: copyright
+//
+// TODO: license
+//
 // The major reason for its existence is that the Gmail web UI is not
 // friendly to proper quoting.
 //
@@ -50,9 +54,13 @@ import (
 	termbox "github.com/nsf/termbox-go"
 )
 
+const (
+	version = "0.0.1"
+)
+
 var (
-	config        = flag.String("config", "", "Config file.")
-	configure     = flag.Bool("configure", false, "Configure OAuth.")
+	config        = flag.String("config", "", "Config file. If empty will default to ~/cmdg.conf.")
+	configure     = flag.Bool("configure", false, "Configure OAuth and write config file.")
 	readonly      = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
 	editor        = flag.String("editor", "/usr/bin/emacs", "Default editor to use if EDITOR is not set.")
 	replyRegex    = flag.String("reply_regexp", `^(Re|Sv|Aw|AW): `, "If subject matches, there's no need to add a Re: prefix.")
@@ -61,7 +69,7 @@ var (
 	forwardPrefix = flag.String("forward_prefix", "Fwd: ", "String to prepend to subject in forwards.")
 	signature     = flag.String("signature", "Best regards", "End of all emails.")
 	logFile       = flag.String("log", "/dev/null", "Log non-sensitive data to this file.")
-	waitingLabel  = flag.String("waiting_label", "", "Label to add as 'waiting for reply'.")
+	waitingLabel  = flag.String("waiting_label", "", "Label used for 'awaiting reply'. If empty disables feature.")
 
 	gmailService *gmail.Service
 
@@ -960,7 +968,11 @@ func createSend(g *gocui.Gui) {
 		return
 	}
 	// TODO: move to template.
-	fmt.Fprintf(sendView, "\n S - Send\n W - Send and apply waiting label\n D - Draft\n A - Abort")
+	s := "\n S - Send\n"
+	if *waitingLabel != "" {
+		s += " W - Send and apply waiting label\n"
+	}
+	fmt.Fprintf(sendView, s+" D - Draft\n A - Abort")
 	for key, cb := range map[interface{}]func(g *gocui.Gui, v *gocui.View) error{
 		's': sendCmdSend,
 		'S': sendCmdSend,
@@ -1139,7 +1151,22 @@ func layout(g *gocui.Gui) error {
 	return nil
 }
 func main() {
+	flag.Usage = func() {
+		fmt.Printf(`cmdg version %s - Command line interface to Gmail
+https://github.com/ThomasHabets/cmdg/
+
+Usage: %s [...options...]
+
+`, version, os.Args[0])
+
+		flag.VisitAll(func(f *flag.Flag) {
+			fmt.Printf("  %15s  %s\n%sDefault: %q\n", "-"+f.Name, f.Usage, strings.Repeat(" ", 19), f.DefValue)
+		})
+	}
 	flag.Parse()
+	if flag.NArg() > 0 {
+		log.Fatalf("Non-argument options provided: %q", flag.Args())
+	}
 
 	var err error
 	if replyRE, err = regexp.Compile(*replyRegex); err != nil {
