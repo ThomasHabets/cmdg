@@ -63,6 +63,7 @@ const (
 )
 
 var (
+	license       = flag.Bool("license", false, "Show program license.")
 	help          = flag.Bool("help", false, "Show usage text and exit.")
 	help2         = flag.Bool("h", false, "Show usage text and exit.")
 	config        = flag.String("config", "", "Config file. If empty will default to ~/cmdg.conf.")
@@ -666,6 +667,11 @@ func main() {
 	}
 	if *help || *help2 {
 		usage(os.Stdout)
+		return
+	}
+
+	if *license {
+		fmt.Printf("%s\n", licenseText)
 		return
 	}
 
