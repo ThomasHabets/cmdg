@@ -25,7 +25,6 @@
 //   * Inline help showing keyboard shortcuts.
 //   * History API for refreshing (?).
 //   * Remove labels
-//   * Add labels from messages view.
 //   * Mailbox pagination
 //   * Delayed sending.
 //   * Continuing drafts.
@@ -705,6 +704,20 @@ func openMessageCmdLabel(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+func messagesCmdLabel(g *gocui.Gui, v *gocui.View) error {
+	ls := []string{}
+	for l := range labels {
+		ls = append(ls, l)
+	}
+	sort.Sort(sortLabels(ls))
+
+	_, err := newLabelBox(g, v, "Add label> ", ls, messagesAddLabelEnter)
+	if err != nil {
+		status("%v", err)
+	}
+	return nil
+}
+
 type labelBox struct {
 	g          *gocui.Gui
 	labelView  *gocui.View
@@ -885,6 +898,7 @@ func matchingLabels(labels []string, label string) []string {
 	return ret
 }
 
+// add label to the open message.
 func addLabelEnter(g *gocui.Gui, parentView *gocui.View, choice string) {
 	change := true
 	defer restoreView(g, parentView.Name(), change)
@@ -904,6 +918,33 @@ func addLabelEnter(g *gocui.Gui, parentView *gocui.View, choice string) {
 	}).Do(); err != nil {
 		status("Failed to apply label %q: %v", choice, err)
 	}
+}
+
+// add label to the marked messages.
+func messagesAddLabelEnter(g *gocui.Gui, parentView *gocui.View, choice string) {
+	change := true
+	defer restoreView(g, parentView.Name(), change)
+
+	if choice == "" {
+		return
+	}
+
+	labelID, ok := labels[choice]
+	if !ok {
+		status("Label %q doesn't exist", choice)
+		return
+	}
+
+	messagesCmdApply(g, parentView, "labelling", func(id string) error {
+		st := time.Now()
+		_, err := gmailService.Users.Messages.Modify(email, id, &gmail.ModifyMessageRequest{
+			AddLabelIds: []string{labelID},
+		}).Do()
+		if err == nil {
+			log.Printf("Users.Messages.Modify(labelling): %v", time.Since(st))
+		}
+		return err
+	})
 }
 
 func gotoBoxEnter(g *gocui.Gui, v *gocui.View, choice string) {
@@ -1349,6 +1390,7 @@ func main() {
 		'e':                 messagesCmdArchive,
 		'c':                 messagesCmdCompose,
 		'g':                 messagesCmdGoto,
+		'l':                 messagesCmdLabel,
 		's':                 messagesCmdSearch,
 	} {
 		if err := ui.SetKeybinding(vnMessages, key, 0, cb); err != nil {
