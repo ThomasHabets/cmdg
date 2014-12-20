@@ -103,6 +103,9 @@ const (
 	accessType    = "offline"
 	email         = "me"
 
+	publicClientID     = "335469909366-qhq3697h8u20bgup89tc00fibh60upa0.apps.googleusercontent.com"
+	publicClientSecret = "vCElmPsOx5Ed3mkvmDmO9FSg"
+
 	vnMessages    = "messages"
 	vnOpenMessage = "openMessage"
 	vnBottom      = "bottom"
@@ -1185,9 +1188,6 @@ func main() {
 	if forwardRE, err = regexp.Compile(*forwardRegex); err != nil {
 		log.Fatalf("-forward_regexp %q is not a valid regex: %v", *forwardRegex, err)
 	}
-	if *config == "" && *configure {
-		log.Fatalf("-config required for -configure")
-	}
 	if *config == "" {
 		*config = path.Join(os.Getenv("HOME"), ".cmdg.conf")
 	}
@@ -1197,7 +1197,7 @@ func main() {
 		scope = scopeReadonly
 	}
 	if *configure {
-		if err := lib.ConfigureWrite(scope, accessType, *config); err != nil {
+		if err := lib.ConfigureWriteSharedSecrets(scope, accessType, *config, publicClientID, publicClientSecret); err != nil {
 			log.Fatalf("Failed to config: %v", err)
 		}
 		return

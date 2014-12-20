@@ -57,16 +57,14 @@ $ cp cmdg /usr/local/bin
 
 Configuring
 ===========
-TODO: Create a client ID for people to use.
 ```
 $ cmdg -configure
-Client ID: <your client ID here>
-Client Secret: <your client secret here>
 Cut and paste this URL into your browser:
   https://long-url....
 Returned code: <paste code here>
 $
 ```
+This creates ~/.cmdg.conf.
 
 Running
 =======
