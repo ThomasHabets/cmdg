@@ -23,7 +23,6 @@
 //   * Make Goto work from message view.
 //   * Inline help showing keyboard shortcuts. (shell out to manpage?)
 //   * History API for refreshing (?).
-//   * Remove labels
 //   * Mailbox pagination
 //   * Delayed sending.
 //   * Continuing drafts.
@@ -81,7 +80,7 @@ var (
 	sendView        *gocui.View
 	ui              *gocui.Gui
 
-	sendMessage string
+	sendMessage string // The full raw message being composed.
 
 	// State keepers.
 	openMessageScrollY int
@@ -120,7 +119,9 @@ const (
 	trash     = "TRASH"
 	sent      = "SENT"
 
-	letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ /"
+	// This is what you can type in search boxes and stuff.
+	letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ .:/"
+
 	maxLine = 80
 	spaces  = " \t\r"
 )
@@ -720,7 +721,25 @@ func openMessageCmdLabel(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+func openMessageCmdRemoveLabel(g *gocui.Gui, v *gocui.View) error {
+	ls := []string{}
+	for _, l := range openMessage.LabelIds {
+		ls = append(ls, labelIDs[l])
+	}
+	sort.Sort(sortLabels(ls))
+
+	_, err := newLabelBox(g, v, "Remove label> ", ls, removeLabelEnter)
+	if err != nil {
+		status("%v", err)
+	}
+	return nil
+}
+
 func messagesCmdLabel(g *gocui.Gui, v *gocui.View) error {
+	if len(messages.marked) == 0 {
+		status("No messages selected.")
+		return nil
+	}
 	ls := []string{}
 	for l := range labels {
 		ls = append(ls, l)
@@ -933,6 +952,28 @@ func addLabelEnter(g *gocui.Gui, parentView *gocui.View, choice string) {
 		AddLabelIds: []string{id},
 	}).Do(); err != nil {
 		status("Failed to apply label %q: %v", choice, err)
+	}
+}
+
+// remove label from the open message.
+func removeLabelEnter(g *gocui.Gui, parentView *gocui.View, choice string) {
+	change := true
+	defer restoreView(g, parentView.Name(), change)
+
+	if choice == "" {
+		return
+	}
+
+	id, ok := labels[choice]
+	if !ok {
+		status("Label %q doesn't exist", choice)
+		return
+	}
+
+	if _, err := gmailService.Users.Messages.Modify(email, openMessage.Id, &gmail.ModifyMessageRequest{
+		RemoveLabelIds: []string{id},
+	}).Do(); err != nil {
+		status("Failed to remove label %q: %v", choice, err)
 	}
 }
 
@@ -1425,6 +1466,7 @@ func main() {
 		gocui.KeyArrowUp:    openMessageCmdScrollUp,
 		'n':                 openMessageCmdScrollDown,
 		'l':                 openMessageCmdLabel,
+		'L':                 openMessageCmdRemoveLabel,
 		gocui.KeyArrowDown:  openMessageCmdScrollDown,
 		'x':                 openMessageCmdMark,
 		'r':                 openMessageCmdReply,
