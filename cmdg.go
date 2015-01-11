@@ -491,6 +491,20 @@ func getReply() (string, error) {
 	return runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
 }
 
+func getReplyAll() (string, error) {
+	subject := getHeader(openMessage, "Subject")
+	if !replyRE.MatchString(subject) {
+		subject = *replyPrefix + subject
+	}
+	head := fmt.Sprintf("To: %s\nCc: %s\nSubject: %s\n\nOn %s, %s said:\n",
+		getHeader(openMessage, "From"),
+		getHeader(openMessage, "Cc"),
+		getHeader(openMessage, "Subject"),
+		getHeader(openMessage, "Date"),
+		getHeader(openMessage, "From"))
+	return runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
+}
+
 func getForward() (string, error) {
 	subject := getHeader(openMessage, "Subject")
 	if !forwardRE.MatchString(subject) {
@@ -1122,6 +1136,22 @@ func openMessageCmdReply(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+func openMessageCmdReplyAll(g *gocui.Gui, v *gocui.View) error {
+	status("Composing reply")
+	var err error
+	sendMessage, err = getReplyAll()
+	g.Flush()
+	if err != nil {
+		status("Error creating reply: %v", err)
+		return nil
+	}
+	openMessage = nil
+	g.SetCurrentView(vnMessages)
+	messages.draw()
+	createSend(g)
+	return nil
+}
+
 func openMessageCmdForward(g *gocui.Gui, v *gocui.View) error {
 	status("Composing forwarded email")
 	var err error
@@ -1470,6 +1500,7 @@ func main() {
 		gocui.KeyArrowDown:  openMessageCmdScrollDown,
 		'x':                 openMessageCmdMark,
 		'r':                 openMessageCmdReply,
+		'a':                 openMessageCmdReplyAll,
 		'f':                 openMessageCmdForward,
 		gocui.KeyCtrlP:      openMessageCmdPrev,
 		gocui.KeyCtrlN:      openMessageCmdNext,
