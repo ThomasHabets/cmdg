@@ -32,6 +32,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -42,9 +43,11 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	gmail "code.google.com/p/google-api-go-client/gmail/v1"
@@ -64,6 +67,7 @@ var (
 	configure     = flag.Bool("configure", false, "Configure OAuth and write config file.")
 	readonly      = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
 	editor        = flag.String("editor", "/usr/bin/emacs", "Default editor to use if EDITOR is not set.")
+	gpg           = flag.String("gpg", "/usr/bin/gpg", "Path to GnuPG.")
 	replyRegex    = flag.String("reply_regexp", `^(Re|Sv|Aw|AW): `, "If subject matches, there's no need to add a Re: prefix.")
 	replyPrefix   = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
 	forwardRegex  = flag.String("forward_regexp", `^(Fwd): `, "If subject matches, there's no need to add a Fwd: prefix.")
@@ -1152,6 +1156,41 @@ func openMessageCmdReplyAll(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// TODO: This function has a data race.
+func openMessageCmdGPGVerify(g *gocui.Gui, v *gocui.View) error {
+	status("Verifying...")
+	go func() {
+		in := bytes.NewBuffer([]byte(getBody(openMessage)))
+		cmd := exec.Command(*gpg, "-v")
+		cmd.Stdin = in
+		defer g.Flush()
+		if err := cmd.Start(); err != nil {
+			status("Verify failed to execute: %v", err)
+			return
+		}
+		if err := cmd.Wait(); err != nil {
+			if _, normal := err.(*exec.ExitError); !normal {
+				status("Verify failed, failed to run: %v", err)
+				return
+			}
+		}
+		if cmd.ProcessState.Success() {
+			status("Verify succeeded")
+		} else if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
+			switch uint32(ws) {
+			case 1:
+				status("Signature found, but BAD")
+			default:
+				status("Unable to verify anything")
+			}
+		} else {
+			status("Verify failed: status %v", cmd.ProcessState.String())
+		}
+		g.Flush()
+	}()
+	return nil
+}
+
 func openMessageCmdForward(g *gocui.Gui, v *gocui.View) error {
 	status("Composing forwarded email")
 	var err error
@@ -1502,6 +1541,7 @@ func main() {
 		'r':                 openMessageCmdReply,
 		'a':                 openMessageCmdReplyAll,
 		'f':                 openMessageCmdForward,
+		'v':                 openMessageCmdGPGVerify,
 		gocui.KeyCtrlP:      openMessageCmdPrev,
 		gocui.KeyCtrlN:      openMessageCmdNext,
 		gocui.KeySpace:      openMessageCmdPageDown,
