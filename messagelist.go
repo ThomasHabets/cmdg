@@ -245,7 +245,7 @@ func messageListMain() {
 				allFine := true
 				for _, m := range markedMessages(msgs, marked) {
 					st := time.Now()
-					if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
+					if _, err := gmailService.Users.Messages.Modify(email, m.Id, &gmail.ModifyMessageRequest{
 						RemoveLabelIds: []string{inbox},
 					}).Do(); err == nil {
 						reloadTODO = true
@@ -274,7 +274,7 @@ func messageListMain() {
 					allFine := true
 					for _, m := range markedMessages(msgs, marked) {
 						st := time.Now()
-						if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
+						if _, err := gmailService.Users.Messages.Modify(email, m.Id, &gmail.ModifyMessageRequest{
 							AddLabelIds: []string{id},
 						}).Do(); err == nil {
 							reloadTODO = true
@@ -310,7 +310,7 @@ func messageListMain() {
 					allFine := true
 					for _, m := range markedMessages(msgs, marked) {
 						st := time.Now()
-						if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
+						if _, err := gmailService.Users.Messages.Modify(email, m.Id, &gmail.ModifyMessageRequest{
 							RemoveLabelIds: []string{id},
 						}).Do(); err == nil {
 							reloadTODO = true
