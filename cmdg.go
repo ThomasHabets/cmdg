@@ -95,8 +95,8 @@ const (
 	email         = "me"
 
 	// TODO: Public client IDs are for some reason not allowed by the ToS for Open Source.
-	publicClientID     = "335469909366-qhq3697h8u20bgup89tc00fibh60upa0.apps.googleusercontent.com"
-	publicClientSecret = "vCElmPsOx5Ed3mkvmDmO9FSg"
+	publicClientID     = ""
+	publicClientSecret = ""
 
 	// Well known labels.
 	inbox     = "INBOX"
@@ -548,8 +548,14 @@ func main() {
 		scope = scopeReadonly
 	}
 	if *configure {
-		if err := lib.ConfigureWriteSharedSecrets(scope, accessType, *config, publicClientID, publicClientSecret); err != nil {
-			log.Fatalf("Failed to config: %v", err)
+		if len(publicClientID) > 0 {
+			if err := lib.ConfigureWriteSharedSecrets(scope, accessType, *config, publicClientID, publicClientSecret); err != nil {
+				log.Fatalf("Failed to config: %v", err)
+			}
+		} else {
+			if err := lib.ConfigureWrite(scope, accessType, *config); err != nil {
+				log.Fatalf("Failed to config: %v", err)
+			}
 		}
 		return
 	}
