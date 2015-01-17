@@ -198,6 +198,7 @@ func messageListMain() {
 				if openMessageMain(msgs, current, marked, currentLabel) {
 					return
 				}
+				reloadTODO = true
 			case 'g':
 				ls := []string{}
 				for l := range labels {
