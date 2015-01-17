@@ -174,11 +174,11 @@ func messageListMain() {
 			switch key {
 			case 'q':
 				return
-			case 'p', 16:
+			case 'p', 16, 'k':
 				if current > 0 {
 					current--
 				}
-			case 'n', 14:
+			case 'n', 14, 'j':
 				if current < len(msgs)-1 {
 					current++
 				}
