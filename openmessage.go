@@ -149,9 +149,11 @@ func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool,
 				RemoveLabelIds: []string{inbox},
 			}).Do(); err == nil {
 				log.Printf("Users.Messages.Modify(archive): %v", time.Since(st))
+				nc.Status("[green]OK, archived")
 			} else {
 				nc.Status("Failed to archive: %v", err)
 			}
+			return false
 		case 'l':
 			ls := notLabeled(msgs[current])
 			id := getLabel("Add label>", ls)
