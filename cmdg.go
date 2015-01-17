@@ -23,6 +23,7 @@
 //   * Attach file.
 //   * Mark unread.
 //   * ReplyAll
+//   * Contacts
 //   * Make Goto work from message view.
 //   * Inline help showing keyboard shortcuts. (shell out to manpage?)
 //   * History API for refreshing (?).
@@ -326,6 +327,10 @@ func breakLines(in []string) []string {
 	return out
 }
 
+func standardHeaders() string {
+	return "Content-Type: text/plain; charset=UTF-8\n"
+}
+
 func getReply(openMessage *gmail.Message) (string, error) {
 	subject := getHeader(openMessage, "Subject")
 	if !replyRE.MatchString(subject) {
@@ -335,8 +340,10 @@ func getReply(openMessage *gmail.Message) (string, error) {
 		getHeader(openMessage, "From"),
 		getHeader(openMessage, "Subject"),
 		getHeader(openMessage, "Date"),
-		getHeader(openMessage, "From"))
-	return runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
+		getHeader(openMessage, "From"),
+	)
+	s, err := runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
+	return standardHeaders() + s, err
 }
 
 func getReplyAll(openMessage *gmail.Message) (string, error) {
@@ -350,7 +357,8 @@ func getReplyAll(openMessage *gmail.Message) (string, error) {
 		getHeader(openMessage, "Subject"),
 		getHeader(openMessage, "Date"),
 		getHeader(openMessage, "From"))
-	return runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
+	s, err := runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
+	return standardHeaders() + s, err
 }
 
 func getForward(openMessage *gmail.Message) (string, error) {
@@ -365,7 +373,8 @@ func getForward(openMessage *gmail.Message) (string, error) {
 		getHeader(openMessage, "To"),
 		getHeader(openMessage, "Subject"),
 	)
-	return runEditorHeadersOK(head + strings.Join(breakLines(strings.Split(getBody(openMessage), "\n")), "\n"))
+	s, err := runEditorHeadersOK(head + strings.Join(breakLines(strings.Split(getBody(openMessage), "\n")), "\n"))
+	return standardHeaders() + s, err
 }
 
 // runEditorHeadersOK is a poorly named function that calls runEditor() until the reply looks somewhat like an email.
@@ -435,7 +444,7 @@ func runEditor(input string) (string, error) {
 
 func createSend(msg string) {
 	maxY, maxX := winSize()
-	height := 7
+	height := 10
 	width := 40
 	x, y := maxX/2-width/2, maxY/2-height/2
 	w, err := gc.NewWindow(height, width, y, x)
