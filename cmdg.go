@@ -48,7 +48,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode"
 
 	gc "code.google.com/p/goncurses"
 	gmail "code.google.com/p/google-api-go-client/gmail/v1"
@@ -447,17 +446,18 @@ func createSend(msg string) {
 	log.Printf("send window: %d %d %d %d", height, width, y, x)
 
 	w.Clear()
-	w.Print("\n\n   S - Send\n")
+	w.Print("\n\n   s - Send\n   S - Send and Archive\n")
 	if *waitingLabel != "" {
-		w.Print("   W - Send and apply waiting label\n")
+		w.Print("   w - Send and apply waiting label\n")
+		w.Print("   W - Send and apply waiting label, and archive\n")
 	}
-	w.Print("   D - Draft\n   A - Abort")
+	w.Print("   d - Draft\n   a - Abort")
 	winBorder(w)
 	for {
 		w.Refresh()
 		gc.Cursor(0)
 		key := <-nc.Input
-		switch unicode.ToLower(rune(key)) {
+		switch key {
 		case 's':
 			st := time.Now()
 			if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{Raw: mimeEncode(msg)}).Do(); err != nil {
@@ -466,6 +466,19 @@ func createSend(msg string) {
 			}
 			log.Printf("Users.Messages.Send: %v", time.Since(st))
 			nc.Status("Successfully sent")
+			return
+		case 'S':
+			st := time.Now()
+			if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{Raw: mimeEncode(msg)}).Do(); err != nil {
+				nc.Status("Error sending: %v", err)
+				return
+			}
+			log.Printf("Users.Messages.Send: %v", time.Since(st))
+			nc.Status("Successfully sent")
+			go func() {
+				// TODO: Do this in a better way.
+				nc.Input <- 'e'
+			}()
 			return
 		case 'w':
 			st := time.Now()
@@ -488,6 +501,34 @@ func createSend(msg string) {
 				} else {
 					nc.Status("Successfully sent (with waiting label %q)", l)
 					log.Printf("Users.Messages.Send+Add waiting: %v", time.Since(st))
+				}
+			}
+			return
+		case 'W':
+			st := time.Now()
+			l, ok := labels[*waitingLabel]
+			if !ok {
+				log.Fatalf("Waiting label %q does not exist!", *waitingLabel)
+			}
+
+			nc.Status("Sending with label...")
+			if gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+				Raw: mimeEncode(msg),
+			}).Do(); err != nil {
+				nc.Status("Error sending: %v", err)
+			} else {
+				if _, err := gmailService.Users.Messages.Modify(email, gmsg.Id, &gmail.ModifyMessageRequest{
+					AddLabelIds: []string{l},
+				}).Do(); err != nil {
+					nc.Status("Error labelling: %v", err)
+					log.Printf("Error labelling: %v", err)
+				} else {
+					nc.Status("Successfully sent (with waiting label %q)", l)
+					log.Printf("Users.Messages.Send+Add waiting: %v", time.Since(st))
+					go func() {
+						// TODO: Do this in a better way.
+						nc.Input <- 'e'
+					}()
 				}
 			}
 			return
