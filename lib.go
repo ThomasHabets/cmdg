@@ -1,3 +1,4 @@
+// Copyright Thomas Habets <thomas@habets.se> 2015
 package main
 
 // parallel runs several functions in parallel, functions that then

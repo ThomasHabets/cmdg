@@ -1,6 +1,6 @@
 cmdg - A command line client to Gmail.
 
-TODO: copyright
+Copyright Thomas Habets <thomas@habets.se> 2015
 
 https://github.com/ThomasHabets/cmdg
 
