@@ -447,11 +447,12 @@ func createSend(msg string) {
 	log.Printf("send window: %d %d %d %d", height, width, y, x)
 
 	w.Clear()
-	w.Print("\n S - Send\n")
+	w.Print("\n\n   S - Send\n")
 	if *waitingLabel != "" {
-		w.Print(" W - Send and apply waiting label\n")
+		w.Print("   W - Send and apply waiting label\n")
 	}
-	w.Print(" D - Draft\n A - Abort")
+	w.Print("   D - Draft\n   A - Abort")
+	winBorder(w)
 	for {
 		w.Refresh()
 		gc.Cursor(0)

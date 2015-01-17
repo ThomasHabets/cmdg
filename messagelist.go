@@ -28,6 +28,12 @@ func winSize() (int, int) {
 	return maxY, maxX
 }
 
+func winBorder(w *gc.Window) {
+	if err := w.Border(gc.ACS_VLINE, gc.ACS_VLINE, gc.ACS_HLINE, gc.ACS_HLINE, gc.ACS_ULCORNER, gc.ACS_URCORNER, gc.ACS_LLCORNER, gc.ACS_LRCORNER); err != nil {
+		log.Fatalf("Failed to add border: %v", err)
+	}
+}
+
 // getLabel interactively asks the user for a label, and returns the label ID.
 func getLabel(prompt string, ls []string) string {
 	maxY, maxX := winSize()
@@ -37,9 +43,6 @@ func getLabel(prompt string, ls []string) string {
 		log.Fatalf("Creating label window: %v", err)
 	}
 	defer w.Delete()
-	if err := w.Border('|', '|', '|', '|', '|', '|', '|', '-'); err != nil {
-		log.Fatalf("Failed to add border: %v", err)
-	}
 
 	s := ""
 	curLabel := ""
@@ -47,7 +50,7 @@ func getLabel(prompt string, ls []string) string {
 
 	for {
 		w.Clear()
-		w.Print(fmt.Sprintf("%s %q\n", prompt, s))
+		w.Print(fmt.Sprintf("\n %s %s\n", prompt, s))
 		seenLabels := 0
 		for _, l := range ls {
 			if strings.Contains(strings.ToLower(l), strings.ToLower(s)) {
@@ -56,13 +59,14 @@ func getLabel(prompt string, ls []string) string {
 					prefix = ">[bold]"
 					curLabel = l
 				}
-				ncwrap.ColorPrint(w, "%s%s[unbold]\n", ncwrap.Preformat(prefix), l)
+				ncwrap.ColorPrint(w, "  %s%s[unbold]\n", ncwrap.Preformat(prefix), l)
 				seenLabels++
 			}
 			if y, _ := w.MaxYX(); seenLabels > y-2 {
 				break
 			}
 		}
+		winBorder(w)
 		w.Refresh()
 		select {
 		case key := <-nc.Input:
