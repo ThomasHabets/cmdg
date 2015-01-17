@@ -154,27 +154,27 @@ func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool,
 			}
 		case 'l':
 			ls := notLabeled(msgs[current])
-			newLabel := getLabel("Add label>", ls)
-			if newLabel != "" {
+			id := getLabel("Add label>", ls)
+			if id != "" {
 				if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
-					AddLabelIds: []string{labels[newLabel]},
+					AddLabelIds: []string{id},
 				}).Do(); err != nil {
-					nc.Status("[red]Failed to apply label %q: %v", newLabel, err)
+					nc.Status("[red]Failed to apply label %q: %v", id, labelIDs[id], err)
 				} else {
-					nc.Status("[green]Applied label %q", newLabel)
+					nc.Status("[green]Applied label %q (%q)", id, labelIDs[id])
 				}
 			}
 
 		case 'L':
 			ls := labeled(msgs[current])
-			newLabel := getLabel("Remove label>", ls)
-			if newLabel != "" {
+			id := getLabel("Remove label>", ls)
+			if id != "" {
 				if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
-					RemoveLabelIds: []string{labels[newLabel]},
+					RemoveLabelIds: []string{id},
 				}).Do(); err != nil {
-					nc.Status("[red]Failed to remove label %q: %v", newLabel, err)
+					nc.Status("[red]Failed to remove label %q (%q): %v", id, labelIDs[id], err)
 				} else {
-					nc.Status("[green]Removed label %q", newLabel)
+					nc.Status("[green]Removed label %q (%q)", id, labelIDs[id])
 				}
 			}
 
