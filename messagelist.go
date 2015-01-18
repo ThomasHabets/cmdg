@@ -341,7 +341,17 @@ func messageListMain() {
 				nc.Status("Unknown key %v (%v)", key, gc.KeyString(key))
 				continue
 			}
-		case msgs = <-msgsCh:
+		case newMsgs := <-msgsCh:
+			old := make(map[string]*gmail.Message)
+			for _, m := range msgs {
+				old[m.Id] = m
+			}
+			msgs = newMsgs
+			for n := range msgs {
+				if m, found := old[msgs[n].Id]; found {
+					msgs[n] = m
+				}
+			}
 			if current >= len(msgs) {
 				current = len(msgs) - 1
 			}
