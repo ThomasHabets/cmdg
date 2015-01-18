@@ -127,6 +127,9 @@ func (a sortLabels) Less(i, j int) bool {
 }
 
 func getHeader(m *gmail.Message, header string) string {
+	if m.Payload == nil {
+		return "loading"
+	}
 	for _, h := range m.Payload.Headers {
 		if h.Name == header {
 			return h.Value
@@ -135,7 +138,7 @@ func getHeader(m *gmail.Message, header string) string {
 	return ""
 }
 
-func list(label, search string) []*gmail.Message {
+func list(label, search string) ([]*gmail.Message, <-chan *gmail.Message) {
 	log.Printf("listing %q %q", label, search)
 	nres := 100
 	nres -= 2 + 3 // Bottom view and room for snippet.
@@ -157,9 +160,9 @@ func list(label, search string) []*gmail.Message {
 	}
 	nc.Status(fmt.Sprintf("Total number of messages in folder: %d\n", res.ResultSizeEstimate))
 	p := parallel{}
-	var messages []*gmail.Message
 	var profile *gmail.Profile
-	p.add(func(ch chan<- func()) {
+
+	{
 		var err error
 		st := time.Now()
 		profile, err = gmailService.Users.GetProfile(email).Do()
@@ -167,25 +170,27 @@ func list(label, search string) []*gmail.Message {
 			log.Fatalf("Get profile: %v", err)
 		}
 		log.Printf("Users.GetProfile: %v", time.Since(st))
-		close(ch)
-	})
+	}
+
+	msgChan := make(chan *gmail.Message)
 	for _, m := range res.Messages {
 		m2 := m
 		p.add(func(ch chan<- func()) {
+			defer close(ch)
 			mres, err := gmailService.Users.Messages.Get(email, m2.Id).Format("full").Do()
 			if err != nil {
 				log.Fatalf("Get message: %v", err)
 			}
 			ch <- func() {
-				messages = append(messages, mres)
+				msgChan <- mres
 			}
 		})
 	}
-	p.run()
+	go p.run()
 	log.Printf("Listing: %v", time.Since(st))
 	nc.Status("%s: Showing %d/%d. Total: %d emails, %d threads",
 		profile.EmailAddress, len(res.Messages), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
-	return messages
+	return res.Messages, msgChan
 }
 
 func hasLabel(labels []string, needle string) bool {
@@ -280,6 +285,9 @@ func mimeEncode(s string) string {
 }
 
 func getBody(m *gmail.Message) string {
+	if m.Payload == nil {
+		return "loading..."
+	}
 	if len(m.Payload.Parts) == 0 {
 		data, err := mimeDecode(string(m.Payload.Body.Data))
 		if err != nil {

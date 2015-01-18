@@ -155,9 +155,14 @@ func messageListMain() {
 		w.Print("Loading...")
 	})
 	msgsCh := make(chan []*gmail.Message)
+	msgUpdateCh := make(chan *gmail.Message)
 	loadMsgs := func(label, search string) {
 		log.Printf("Loading %s", label)
-		msgsCh <- list(label, search)
+		l, lch := list(label, search)
+		msgsCh <- l
+		for m := range lch {
+			msgUpdateCh <- m
+		}
 	}
 	go loadMsgs(currentLabel, currentSearch)
 	marked := make(map[string]bool)
@@ -340,6 +345,12 @@ func messageListMain() {
 			if current >= len(msgs) {
 				current = len(msgs) - 1
 			}
+		case m := <-msgUpdateCh:
+			for n := range msgs {
+				if msgs[n].Id == m.Id {
+					msgs[n] = m
+				}
+			}
 		}
 		if reloadTODO {
 			go loadMsgs(currentLabel, currentSearch)
@@ -350,14 +361,20 @@ func messageListMain() {
 	}
 }
 
+// This runs in the UI goroutine.
 func messageListPrint(w *gc.Window, msgs []*gmail.Message, marked map[string]bool, current int, showDetails bool, currentLabel, currentSearch string) {
-	w.Clear()
+	w.Move(0, 0)
+	maxY, _ := w.MaxYX()
+
 	fromMax := 20
 	tsWidth := 7
 	if len(msgs) == 0 {
 		ncwrap.ColorPrint(w, "<empty for label %q, search query %q>", currentLabel, currentSearch)
 	}
 	for n, m := range msgs {
+		if n >= maxY {
+			break
+		}
 		style := ""
 		if hasLabel(m.LabelIds, unread) {
 			style = "[bold]"
@@ -393,5 +410,8 @@ func messageListPrint(w *gc.Window, msgs []*gmail.Message, marked map[string]boo
 				s = s[n:]
 			}
 		}
+	}
+	for i := len(msgs); i < maxY; i++ {
+		w.Printf("\n")
 	}
 }
