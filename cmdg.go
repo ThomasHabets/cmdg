@@ -142,52 +142,67 @@ func list(label, search string) ([]*gmail.Message, <-chan *gmail.Message) {
 	log.Printf("listing %q %q", label, search)
 	nres := 100
 	nres -= 2 + 3 // Bottom view and room for snippet.
-	st := time.Now()
-	q := gmailService.Users.Messages.List(email).
-		//		PageToken().
-		MaxResults(int64(nres)).
-		//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
-		Fields("messages,resultSizeEstimate")
-	if label != "" {
-		q = q.LabelIds(label)
-	}
-	if search != "" {
-		q = q.Q(search)
-	}
-	res, err := q.Do()
-	if err != nil {
-		log.Fatalf("Listing: %v", err)
-	}
-	nc.Status(fmt.Sprintf("Total number of messages in folder: %d\n", res.ResultSizeEstimate))
-	p := parallel{}
-	var profile *gmail.Profile
 
-	{
+	syncP := parallel{} // Run the parts that can't wait in parallel.
+
+	// List messages.
+	var res *gmail.ListMessagesResponse
+	syncP.add(func(ch chan<- func()) {
+		defer close(ch)
 		var err error
 		st := time.Now()
+		q := gmailService.Users.Messages.List(email).
+			//		PageToken().
+			MaxResults(int64(nres)).
+			//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
+			Fields("messages,resultSizeEstimate")
+		if label != "" {
+			q = q.LabelIds(label)
+		}
+		if search != "" {
+			q = q.Q(search)
+		}
+		res, err = q.Do()
+		if err != nil {
+			log.Fatalf("Listing: %v", err)
+		}
+		log.Printf("Listing: %v", time.Since(st))
+	})
+
+	var profile *gmail.Profile
+	syncP.add(func(ch chan<- func()) {
+		defer close(ch)
+		st := time.Now()
+		var err error
 		profile, err = gmailService.Users.GetProfile(email).Do()
 		if err != nil {
 			log.Fatalf("Get profile: %v", err)
 		}
 		log.Printf("Users.GetProfile: %v", time.Since(st))
-	}
+	})
+	syncP.run()
+
+	nc.Status("Total number of messages in folder: %d\n", res.ResultSizeEstimate)
 
 	msgChan := make(chan *gmail.Message)
-	for _, m := range res.Messages {
-		m2 := m
-		p.add(func(ch chan<- func()) {
-			defer close(ch)
-			mres, err := gmailService.Users.Messages.Get(email, m2.Id).Format("full").Do()
-			if err != nil {
-				log.Fatalf("Get message: %v", err)
-			}
-			ch <- func() {
-				msgChan <- mres
-			}
-		})
+	// Load messages async.
+	{
+		p := parallel{}
+		for _, m := range res.Messages {
+			m2 := m
+			p.add(func(ch chan<- func()) {
+				defer close(ch)
+				mres, err := gmailService.Users.Messages.Get(email, m2.Id).Format("full").Do()
+				if err != nil {
+					log.Fatalf("Get message: %v", err)
+				}
+				ch <- func() {
+					msgChan <- mres
+				}
+			})
+		}
+		go p.run()
 	}
-	go p.run()
-	log.Printf("Listing: %v", time.Since(st))
 	nc.Status("%s: Showing %d/%d. Total: %d emails, %d threads",
 		profile.EmailAddress, len(res.Messages), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
 	return res.Messages, msgChan
