@@ -32,6 +32,8 @@
 //   * Special shortcuts for labelling 'important', 'starred' and 'unread'.
 //   * The Gmail API supports batch. Does the Go library?
 //   * Loading animations to show it's not stuck.
+//   * In-memory cache for messages (all but labels for messages is immutable)
+//   * On disk (encrypted) cache for messages.
 package main
 
 import (

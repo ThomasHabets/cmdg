@@ -213,6 +213,7 @@ func messageListMain() {
 				newLabel := getLabel("Go to label>", ls)
 				if newLabel != "" {
 					log.Printf("Going to label %q (%q)", newLabel, labelIDs[newLabel])
+					marked = make(map[string]bool)
 					currentLabel = newLabel
 					currentSearch = ""
 					go loadMsgs(currentLabel, currentSearch)
@@ -334,9 +335,13 @@ func messageListMain() {
 				}
 
 			case 's':
-				currentLabel = ""
-				currentSearch = getText("Search: ")
-				go loadMsgs(currentLabel, currentSearch)
+				cs := getText("Search: ")
+				if cs != "" {
+					currentLabel = ""
+					currentSearch = cs
+					marked = make(map[string]bool)
+					go loadMsgs(currentLabel, currentSearch)
+				}
 			default:
 				nc.Status("Unknown key %v (%v)", key, gc.KeyString(key))
 				continue
