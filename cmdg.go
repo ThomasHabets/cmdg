@@ -21,7 +21,6 @@
 //   * GPG encrypt.
 //   * GPG decrypt.
 //   * Attach file.
-//   * Mark unread.
 //   * ReplyAll
 //   * Contacts
 //   * Make Goto work from message view.
@@ -30,7 +29,7 @@
 //   * Mailbox pagination
 //   * Delayed sending.
 //   * Continuing drafts.
-//   * Special shortcuts for labelling 'important' and 'starred'.
+//   * Special shortcuts for labelling 'important', 'starred' and 'unread'.
 //   * The Gmail API supports batch. Does the Go library?
 //   * Loading animations to show it's not stuck.
 package main
