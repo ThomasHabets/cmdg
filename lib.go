@@ -16,9 +16,10 @@ func (p *parallel) add(f func(chan<- func())) {
 
 func (p *parallel) run() {
 	for _, ch := range p.chans {
-		f := <-ch
-		if f != nil {
-			f()
+		for f := range ch {
+			if f != nil {
+				f()
+			}
 		}
 	}
 }

@@ -9,6 +9,7 @@ func TestParallelSimple(t *testing.T) {
 	p := &parallel{}
 	var res1, res2 int
 	p.add(func(ch chan<- func()) {
+		defer close(ch)
 		ch <- func() {
 			if got, want := 0, res2; got != want {
 				t.Errorf("Res2 got %d before func1, want %d", got, want)
@@ -17,6 +18,7 @@ func TestParallelSimple(t *testing.T) {
 		}
 	})
 	p.add(func(ch chan<- func()) {
+		defer close(ch)
 		ch <- func() {
 			if got, want := 1, res1; got != want {
 				t.Errorf("Res1 got %d before func2, want %d", got, want)
@@ -43,4 +45,22 @@ func TestParallelNil(t *testing.T) {
 	p := &parallel{}
 	p.add(func(ch chan<- func()) { close(ch) })
 	p.run()
+}
+
+func TestParallelMulticallback(t *testing.T) {
+	p := &parallel{}
+	i := 0
+	p.add(func(ch chan<- func()) {
+		defer close(ch)
+		ch <- func() {
+			i += 1
+		}
+		ch <- func() {
+			i += 2
+		}
+	})
+	p.run()
+	if got, want := i, 3; got != want {
+		t.Errorf("got %d, want %d", got, want)
+	}
 }
