@@ -124,25 +124,25 @@ func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool,
 			msg, err := getForward(msgs[current])
 			if err != nil {
 				nc.Status("Failed to compose forward: %v", err)
+			} else {
+				createSend(msg)
 			}
-			createSend(msg)
-			nc.Status("Sent forward")
 		case 'r':
 			nc.Status("Composing reply")
 			msg, err := getReply(msgs[current])
 			if err != nil {
 				nc.Status("Failed to compose reply: %v", err)
+			} else {
+				createSend(msg)
 			}
-			createSend(msg)
-			nc.Status("Sent reply")
 		case 'a':
 			nc.Status("Composing reply to all")
 			msg, err := getReplyAll(msgs[current])
 			if err != nil {
-				nc.Status("Failed to compose reply: %v", err)
+				nc.Status("Failed to compose reply all: %v", err)
+			} else {
+				createSend(msg)
 			}
-			createSend(msg)
-			nc.Status("Sent reply")
 		case 'e':
 			st := time.Now()
 			if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
