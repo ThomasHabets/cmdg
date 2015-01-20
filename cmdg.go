@@ -488,7 +488,7 @@ func runEditor(input string) (string, error) {
 	return string(data), nil
 }
 
-func createSend(msg string) {
+func createSend(thread, msg string) {
 	maxY, maxX := winSize()
 	height := 10
 	width := 40
@@ -515,7 +515,10 @@ func createSend(msg string) {
 		switch key {
 		case 's':
 			st := time.Now()
-			if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{Raw: mimeEncode(msg)}).Do(); err != nil {
+			if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+				ThreadId: thread,
+				Raw:      mimeEncode(msg),
+			}).Do(); err != nil {
 				nc.Status("Error sending: %v", err)
 				return
 			}
@@ -524,7 +527,10 @@ func createSend(msg string) {
 			return
 		case 'S':
 			st := time.Now()
-			if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{Raw: mimeEncode(msg)}).Do(); err != nil {
+			if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+				ThreadId: thread,
+				Raw:      mimeEncode(msg),
+			}).Do(); err != nil {
 				nc.Status("Error sending: %v", err)
 				return
 			}
@@ -544,7 +550,8 @@ func createSend(msg string) {
 
 			nc.Status("Sending with label...")
 			if gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
-				Raw: mimeEncode(msg),
+				ThreadId: thread,
+				Raw:      mimeEncode(msg),
 			}).Do(); err != nil {
 				nc.Status("Error sending: %v", err)
 			} else {
@@ -569,7 +576,8 @@ func createSend(msg string) {
 
 			nc.Status("Sending with label...")
 			if gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
-				Raw: mimeEncode(msg),
+				ThreadId: thread,
+				Raw:      mimeEncode(msg),
 			}).Do(); err != nil {
 				nc.Status("Error sending: %v", err)
 			} else {
@@ -595,7 +603,10 @@ func createSend(msg string) {
 		case 'd':
 			st := time.Now()
 			if _, err := gmailService.Users.Drafts.Create(email, &gmail.Draft{
-				Message: &gmail.Message{Raw: mimeEncode(msg)},
+				Message: &gmail.Message{
+					ThreadId: thread,
+					Raw:      mimeEncode(msg),
+				},
 			}).Do(); err != nil {
 				nc.Status("[red]Error saving as draft: %v", err)
 				// TODO: data loss!

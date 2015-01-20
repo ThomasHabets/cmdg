@@ -225,7 +225,7 @@ func messageListMain() {
 				if err != nil {
 					nc.Status("Running editor: %v", err)
 				}
-				createSend(sendMessage)
+				createSend("", sendMessage)
 				nc.Status("Sent email")
 
 				// We could be in sent folders or a search that sees this message.

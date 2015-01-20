@@ -125,7 +125,7 @@ func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool,
 			if err != nil {
 				nc.Status("Failed to compose forward: %v", err)
 			} else {
-				createSend(msg)
+				createSend(msgs[current].ThreadId, msg)
 			}
 		case 'r':
 			nc.Status("Composing reply")
@@ -133,7 +133,7 @@ func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool,
 			if err != nil {
 				nc.Status("Failed to compose reply: %v", err)
 			} else {
-				createSend(msg)
+				createSend(msgs[current].ThreadId, msg)
 			}
 		case 'a':
 			nc.Status("Composing reply to all")
@@ -141,7 +141,7 @@ func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool,
 			if err != nil {
 				nc.Status("Failed to compose reply all: %v", err)
 			} else {
-				createSend(msg)
+				createSend(msgs[current].ThreadId, msg)
 			}
 		case 'e':
 			st := time.Now()
