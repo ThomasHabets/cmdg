@@ -210,5 +210,15 @@ func (nc *NCWrap) Redraw() {
 	nc.redraw <- true
 }
 func (nc *NCWrap) ApplyMain(f func(*gc.Window)) {
-	nc.main <- f
+	s := make(chan bool)
+	nc.main <- func(w *gc.Window) {
+		defer close(s)
+		f(w)
+	}
+	<-s
+}
+
+// Apply runs the function synchronously in the UI goroutine.
+func (nc *NCWrap) Apply(f func()) {
+	nc.ApplyMain(func(*gc.Window) { f() })
 }
