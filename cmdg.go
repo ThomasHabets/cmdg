@@ -23,7 +23,6 @@
 //   * Attach file.
 //   * Contacts
 //   * Make Goto work from message view.
-//   * Inline help showing keyboard shortcuts. (shell out to manpage?)
 //   * History API for refreshing (?).
 //   * Mailbox pagination
 //   * Delayed sending.

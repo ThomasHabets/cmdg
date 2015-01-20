@@ -107,15 +107,32 @@ func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool,
 		key := <-nc.Input
 		nc.Status("OK")
 		switch key {
+		case '?':
+			helpWin(`q                 Quit
+^P, k             Previous
+^N, j             Next
+f                 Forward
+r                 Reply
+a                 Reply all
+e                 Archive
+l                 Add label
+L                 Remove label
+x                 Mark message (TODO)
+v                 Verify GPG signature
+p                 Scroll up (TODO)
+n                 Scroll down (TODO)
+Space             Page down (TODO)
+Backspace         Page up (TODO)
+`)
 		case 'q':
 			return true
 		case gc.KEY_LEFT, '<', 'u':
 			return false
-		case 16: // CtrlP
+		case 16, 'k': // CtrlP
 			if current > 0 {
 				current--
 			}
-		case 14: // CtrlN
+		case 14, 'j': // CtrlN
 			if current < len(msgs)-1 {
 				current++
 			}
@@ -184,8 +201,8 @@ func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool,
 			// TODO; Mark message
 		case 'v':
 			openMessageCmdGPGVerify(msgs[current])
-		case 'n': // Scroll up.
-		case 'p': // Scroll down.
+		case 'n': // Scroll down.
+		case 'p': // Scroll up.
 		case ' ': // Page down .
 		case '\b': // Page up..
 		default:

@@ -75,5 +75,4 @@ $ cmdg
 ```
 For keyboard shortcuts, see the manpage, or press '?' in most screens.
 
-To quit, press Ctrl-C.
-(TODO: implement '?' inline help)
+To quit, press 'q'.
