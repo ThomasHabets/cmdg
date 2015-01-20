@@ -56,7 +56,7 @@ func ColorPrint(w *gc.Window, f string, args ...interface{}) {
 	}
 	s := fmt.Sprintf(f, newargs...)
 	//colorRE := regexp.MustCompile(`(.*?)(\[color (\w+)\]([^a-z. ]+)?:)?(.*)`)
-	colorRE := regexp.MustCompile(`(?s)(.*?)\[(\w+)\]([^[]+)`)
+	colorRE := regexp.MustCompile(`(?s)(.*?)\[(\w+)\]([^[]*)`)
 	w.ColorOn(1)
 	w.AttrOff(gc.A_BOLD)
 	for {
@@ -73,6 +73,8 @@ func ColorPrint(w *gc.Window, f string, args ...interface{}) {
 			w.ColorOn(3)
 		case "bold":
 			w.AttrOn(gc.A_BOLD)
+		case "reverse":
+			w.ColorOn(4)
 		case "unbold":
 			w.AttrOff(gc.A_BOLD)
 		default:
@@ -133,6 +135,7 @@ func Start() (*NCWrap, error) {
 			{gc.C_WHITE, gc.C_BLACK},
 			{gc.C_GREEN, gc.C_BLACK},
 			{gc.C_RED, gc.C_BLACK},
+			{gc.C_BLACK, gc.C_WHITE},
 		} {
 			log.Printf("InitPair(%v,%v,%v)", n+1, c.fg, c.bg)
 			if err := gc.InitPair(int16(n+1), c.fg, c.bg); err != nil {

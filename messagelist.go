@@ -407,6 +407,7 @@ func messageListPrint(w *gc.Window, msgs []*gmail.Message, marked map[string]boo
 		}
 		if n == current {
 			s = "*" + s
+			style = "[reverse]" + style
 		} else {
 			s = " " + s
 		}
