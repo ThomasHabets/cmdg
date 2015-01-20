@@ -109,13 +109,13 @@ func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool,
 		switch key {
 		case 'q':
 			return true
-		case '<', 'u':
+		case gc.KEY_LEFT, '<', 'u':
 			return false
-		case 16:
+		case 16: // CtrlP
 			if current > 0 {
 				current--
 			}
-		case 14:
+		case 14: // CtrlN
 			if current < len(msgs)-1 {
 				current++
 			}

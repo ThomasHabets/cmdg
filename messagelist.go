@@ -78,11 +78,11 @@ func getLabel(prompt string, ls []string) string {
 				if len(s) == 0 {
 					cur = -1
 				}
-			case 14: // CtrlN
+			case gc.KEY_DOWN, 14: // CtrlN
 				if cur < seenLabels-1 {
 					cur++
 				}
-			case 16: // CtrlP
+			case gc.KEY_UP, 16: // CtrlP
 				if cur > 0 {
 					cur--
 				}
@@ -179,11 +179,11 @@ func messageListMain() {
 			switch key {
 			case 'q':
 				return
-			case 'p', 16, 'k':
+			case gc.KEY_UP, 'p', 16, 'k':
 				if current > 0 {
 					current--
 				}
-			case 'n', 14, 'j':
+			case gc.KEY_DOWN, 'n', 14, 'j':
 				if current < len(msgs)-1 {
 					current++
 				}
@@ -199,7 +199,7 @@ func messageListMain() {
 						marked[msgs[current].Id] = true
 					}
 				}
-			case '\n', '\r', '>': // TODO: right arrow.
+			case gc.KEY_RIGHT, '\n', '\r', '>':
 				if openMessageMain(msgs, current, marked, currentLabel) {
 					return
 				}

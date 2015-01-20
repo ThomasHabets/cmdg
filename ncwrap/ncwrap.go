@@ -147,6 +147,12 @@ func Start() (*NCWrap, error) {
 	nc.wstatus.Color(0)
 	nc.whr.Color(0)
 
+	// Only StdScr is needed, I think.
+	nc.wmain.Keypad(true)
+	nc.whr.Keypad(true)
+	nc.wstatus.Keypad(true)
+	gc.StdScr().Keypad(true)
+
 	nc.status = make(chan string, 100)
 	nc.main = make(chan func(*gc.Window))
 	nc.redraw = make(chan bool)
