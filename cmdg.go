@@ -186,11 +186,9 @@ func list(label, search string) ([]*gmail.Message, <-chan *gmail.Message) {
 	msgChan := make(chan *gmail.Message)
 	// Load messages async.
 	{
-		p := parallel{}
 		for _, m := range res.Messages {
 			m2 := m
-			p.add(func(ch chan<- func()) {
-				defer close(ch)
+			go func() {
 				st := time.Now()
 				for {
 					mres, err := gmailService.Users.Messages.Get(email, m2.Id).Format("full").Do()
@@ -199,14 +197,11 @@ func list(label, search string) ([]*gmail.Message, <-chan *gmail.Message) {
 						continue
 					}
 					log.Printf("Users.Messages.Get: %v", time.Since(st))
-					ch <- func() {
-						msgChan <- mres
-					}
+					msgChan <- mres
 					return
 				}
-			})
+			}()
 		}
-		go p.run()
 	}
 	nc.Status("%s: Showing %d/%d. Total: %d emails, %d threads",
 		profile.EmailAddress, len(res.Messages), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
