@@ -113,14 +113,12 @@ func getText(prompt string) string {
 		log.Fatalf("Creating text window: %v", err)
 	}
 	defer w.Delete()
-	if err := w.Border('|', '|', '|', '|', '|', '|', '|', '-'); err != nil {
-		log.Fatalf("Failed to add border: %v", err)
-	}
 
 	s := ""
 	for {
 		w.Clear()
-		w.Print(fmt.Sprintf("%s %q\n", prompt, s))
+		w.Print(pad(fmt.Sprintf("%s %s\n", prompt, s)))
+		winBorder(w)
 		w.Refresh()
 		select {
 		case key := <-nc.Input:
@@ -138,6 +136,32 @@ func getText(prompt string) string {
 			}
 		}
 	}
+}
+
+func pad(s string) string {
+	var nl []string
+	for _, l := range strings.Split(s, "\n") {
+		nl = append(nl, "  "+l)
+	}
+	return "\n" + strings.Join(nl, "\n")
+}
+
+func helpWin(s string) {
+	maxY, maxX := winSize()
+	height := maxY - 4
+	width := maxX - 4
+	x, y := maxX/2-width/2, maxY/2-height/2
+
+	w, err := gc.NewWindow(height, width, y, x)
+	if err != nil {
+		log.Fatalf("Creating text window: %v", err)
+	}
+	defer w.Delete()
+	w.Clear()
+	ncwrap.ColorPrint(w, "%s", ncwrap.Preformat(pad(s)))
+	winBorder(w)
+	w.Refresh()
+	<-nc.Input
 }
 
 func markedMessages(msgs []*gmail.Message, marked map[string]bool) []*gmail.Message {
@@ -180,6 +204,22 @@ func messageListMain() {
 		select {
 		case key := <-nc.Input:
 			switch key {
+			case '?':
+				helpWin(`q                 Quit
+Up, p, ^P, k      Previous
+Down, n, ^N, j    Next
+r, ^R             Reload
+x                 Mark/unmark
+Tab               Show/hide snippets
+Right, Enter, >   Open message
+g                 Go to label
+c                 Compose
+d                 Delete marked emails
+e                 Archive marked emails
+l                 Label marked emails
+L                 Unlabel marked emails
+s                 Search
+`)
 			case 'q':
 				return
 			case gc.KEY_UP, 'p', 16, 'k':

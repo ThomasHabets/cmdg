@@ -21,7 +21,6 @@
 //   * GPG encrypt.
 //   * GPG decrypt.
 //   * Attach file.
-//   * ReplyAll
 //   * Contacts
 //   * Make Goto work from message view.
 //   * Inline help showing keyboard shortcuts. (shell out to manpage?)
@@ -193,12 +192,14 @@ func list(label, search string) ([]*gmail.Message, <-chan *gmail.Message) {
 			m2 := m
 			p.add(func(ch chan<- func()) {
 				defer close(ch)
+				st := time.Now()
 				for {
 					mres, err := gmailService.Users.Messages.Get(email, m2.Id).Format("full").Do()
 					if err != nil {
 						log.Printf("Get message failed, retrying: %v", err)
 						continue
 					}
+					log.Printf("Users.Messages.Get: %v", time.Since(st))
 					ch <- func() {
 						msgChan <- mres
 					}
