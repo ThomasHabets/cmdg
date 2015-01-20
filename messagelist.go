@@ -457,6 +457,7 @@ func messageListPrint(w *gc.Window, msgs []*gmail.Message, marked map[string]boo
 		if len(s) > maxX-4 {
 			s = s[:maxX-4]
 		}
+		s = fmt.Sprintf("%-*.*s", maxX-10, maxX-10, s)
 		ncwrap.ColorPrint(w, "%s%s\n", ncwrap.Preformat(style), s)
 		if n == current && showDetails {
 			//maxX, _ := messagesView.Size()

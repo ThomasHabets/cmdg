@@ -48,6 +48,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	gc "code.google.com/p/goncurses"
 	gmail "code.google.com/p/google-api-go-client/gmail/v1"
@@ -125,12 +126,26 @@ func (a sortLabels) Less(i, j int) bool {
 	return strings.ToLower(a[i]) < strings.ToLower(a[j])
 }
 
+func utf8Decode(s string) string {
+	ret := ""
+	for len(s) > 0 {
+		r, size := utf8.DecodeRuneInString(s)
+		ret = fmt.Sprintf("%s%c", ret, r)
+		s = s[size:]
+	}
+	return ret
+}
+
 func getHeader(m *gmail.Message, header string) string {
 	if m.Payload == nil {
 		return "loading"
 	}
 	for _, h := range m.Payload.Headers {
 		if h.Name == header {
+			// TODO: How to decode correctly?
+			if false {
+				return utf8Decode(h.Value)
+			}
 			return h.Value
 		}
 	}
