@@ -45,13 +45,13 @@ func getLabel(prompt string, ls []string) string {
 	defer w.Delete()
 
 	s := ""
-	curLabel := ""
 	cur := -1
 
 	for {
 		w.Clear()
 		w.Print(fmt.Sprintf("\n %s %s\n", prompt, s))
 		seenLabels := 0
+		curLabel := ""
 		for _, l := range ls {
 			if strings.Contains(strings.ToLower(l), strings.ToLower(s)) {
 				prefix := " "
