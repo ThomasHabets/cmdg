@@ -87,6 +87,9 @@ func getLabel(prompt string, ls []string) string {
 					cur--
 				}
 			case '\n', '\r':
+				if seenLabels == 0 {
+					return ""
+				}
 				return labels[curLabel]
 			default:
 				cur = 0
