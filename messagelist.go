@@ -73,6 +73,7 @@ func getLabel(prompt string, ls []string) string {
 			switch key {
 			case '\b', gc.KEY_BACKSPACE, 127:
 				if len(s) > 0 {
+					// TODO: don't break mid-rune.
 					s = s[:len(s)-1]
 				}
 				if len(s) == 0 {
@@ -125,6 +126,7 @@ func getText(prompt string) string {
 			switch key {
 			case '\b', gc.KEY_BACKSPACE, 127:
 				if len(s) > 0 {
+					// TODO: don't break mid-rune.
 					s = s[:len(s)-1]
 				}
 			case '\n', '\r':
@@ -454,6 +456,7 @@ func messageListPrint(w *gc.Window, msgs []*gmail.Message, marked map[string]boo
 		} else {
 			s = " " + s
 		}
+		// TODO: #runes, not #bytes.
 		if len(s) > maxX-4 {
 			s = s[:maxX-4]
 		}
@@ -466,6 +469,7 @@ func messageListPrint(w *gc.Window, msgs []*gmail.Message, marked map[string]boo
 			s := m.Snippet
 			for len(s) > 0 {
 				n := maxX
+				// TODO: don't break mid-rune.
 				if n >= len(s) {
 					n = len(s)
 				}

@@ -22,6 +22,7 @@
 //   * GPG decrypt.
 //   * Attach file.
 //   * Contacts
+//   * Unicode character support.
 //   * Make Goto work from message view.
 //   * History API for refreshing (?).
 //   * Mailbox pagination
@@ -353,6 +354,7 @@ func breakLines(in []string) []string {
 	var out []string
 	for _, line := range in {
 		line = strings.TrimRight(line, spaces)
+		// TODO: break on rune boundary.
 		if len(line) > maxLine {
 			for n := 0; len(line) > maxLine; n++ {
 				out = append(out, strings.TrimRight(line[:maxLine], spaces))
