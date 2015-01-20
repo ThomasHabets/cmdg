@@ -422,7 +422,7 @@ s                 Search
 // This runs in the UI goroutine.
 func messageListPrint(w *gc.Window, msgs []*gmail.Message, marked map[string]bool, current int, showDetails bool, currentLabel, currentSearch string) {
 	w.Move(0, 0)
-	maxY, _ := w.MaxYX()
+	maxY, maxX := w.MaxYX()
 
 	fromMax := 20
 	tsWidth := 7
@@ -453,6 +453,9 @@ func messageListPrint(w *gc.Window, msgs []*gmail.Message, marked map[string]boo
 			style = "[reverse]" + style
 		} else {
 			s = " " + s
+		}
+		if len(s) > maxX-4 {
+			s = s[:maxX-4]
 		}
 		ncwrap.ColorPrint(w, "%s%s\n", ncwrap.Preformat(style), s)
 		if n == current && showDetails {
