@@ -360,8 +360,14 @@ func getReply(openMessage *gmail.Message) (string, error) {
 	if !replyRE.MatchString(subject) {
 		subject = *replyPrefix + subject
 	}
+
+	addr := getHeader(openMessage, "Reply-To")
+	if addr == "" {
+		addr = getHeader(openMessage, "From")
+	}
+
 	head := fmt.Sprintf("To: %s\nSubject: %s\n\nOn %s, %s said:\n",
-		getHeader(openMessage, "From"),
+		addr,
 		getHeader(openMessage, "Subject"),
 		getHeader(openMessage, "Date"),
 		getHeader(openMessage, "From"),
@@ -375,9 +381,21 @@ func getReplyAll(openMessage *gmail.Message) (string, error) {
 	if !replyRE.MatchString(subject) {
 		subject = *replyPrefix + subject
 	}
+	cc := getHeader(openMessage, "Cc")
+	addr := getHeader(openMessage, "Reply-To")
+	if addr == "" {
+		addr = getHeader(openMessage, "From")
+	} else {
+		if cc == "" {
+			cc = getHeader(openMessage, "From")
+		} else {
+			cc = cc + "," + getHeader(openMessage, "From")
+		}
+	}
+
 	head := fmt.Sprintf("To: %s\nCc: %s\nSubject: %s\n\nOn %s, %s said:\n",
-		getHeader(openMessage, "From"),
-		getHeader(openMessage, "Cc"),
+		addr,
+		cc,
 		getHeader(openMessage, "Subject"),
 		getHeader(openMessage, "Date"),
 		getHeader(openMessage, "From"))
@@ -498,7 +516,7 @@ func createSend(msg string) {
 				return
 			}
 			log.Printf("Users.Messages.Send: %v", time.Since(st))
-			nc.Status("Successfully sent")
+			nc.Status("[green]Successfully sent")
 			return
 		case 'S':
 			st := time.Now()
@@ -507,7 +525,7 @@ func createSend(msg string) {
 				return
 			}
 			log.Printf("Users.Messages.Send: %v", time.Since(st))
-			nc.Status("Successfully sent")
+			nc.Status("[green]Successfully sent")
 			go func() {
 				// TODO: Do this in a better way.
 				nc.Input <- 'e'
@@ -536,6 +554,7 @@ func createSend(msg string) {
 					log.Printf("Users.Messages.Send+Add waiting: %v", time.Since(st))
 				}
 			}
+			nc.Status("[green]Sent with label")
 			return
 		case 'W':
 			st := time.Now()
@@ -564,8 +583,10 @@ func createSend(msg string) {
 					}()
 				}
 			}
+			nc.Status("[green]Sent with label")
 			return
 		case 'a':
+			nc.Status("Aborted send")
 			return
 		case 'd':
 			st := time.Now()

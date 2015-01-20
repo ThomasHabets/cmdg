@@ -193,6 +193,7 @@ func Start() (*NCWrap, error) {
 
 func (nc *NCWrap) Stop() {
 	gc.End()
+	// flush output somehow.
 }
 
 func (nc *NCWrap) Status(s string, args ...interface{}) {
