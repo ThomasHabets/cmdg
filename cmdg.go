@@ -600,6 +600,7 @@ func createSend(msg string) {
 				nc.Status("Saved draft")
 			}
 			log.Printf("Users.Drafts.Create: %v", time.Since(st))
+			return
 		}
 	}
 }
