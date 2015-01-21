@@ -315,27 +315,39 @@ func mimeEncode(s string) string {
 	return s
 }
 
-func getBody(m *gmail.Message) string {
-	if m.Payload == nil {
-		return "loading..."
-	}
-	if len(m.Payload.Parts) == 0 {
-		data, err := mimeDecode(string(m.Payload.Body.Data))
+func getBodyRecurse(m *gmail.MessagePart) string {
+	if len(m.Parts) == 0 {
+		data, err := mimeDecode(string(m.Body.Data))
 		if err != nil {
-			return fmt.Sprintf("TODO Content error: %v", err)
+			return fmt.Sprintf("TODO content error: %v", err)
 		}
 		return data
 	}
-	for _, p := range m.Payload.Parts {
+	body := ""
+	for _, p := range m.Parts {
 		if p.MimeType == "text/plain" {
 			data, err := mimeDecode(p.Body.Data)
 			if err != nil {
 				return fmt.Sprintf("TODO Content error: %v", err)
 			}
-			return string(data)
+			body += string(data)
+		} else if p.MimeType == "text/html" {
+			// Skip.
+		} else if p.MimeType == "multipart/alternative" {
+			body += getBodyRecurse(p)
+		} else {
+			// Skip.
+			log.Printf("Unknown mimetype skipped: %q", p.MimeType)
 		}
 	}
-	return "TODO Unknown data"
+	return body
+}
+
+func getBody(m *gmail.Message) string {
+	if m.Payload == nil {
+		return "loading..."
+	}
+	return getBodyRecurse(m.Payload)
 }
 
 func prefixQuote(in []string) []string {
