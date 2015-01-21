@@ -12,7 +12,11 @@
 //   * Low bandwidth.
 //   * Uses your EDITOR for composing (emacs keys, yay!)
 //
-// TODO features:
+// TODO features (in rough prio order):
+//   * Unicode character support.
+//   * Contacts
+//   * Attach file.
+//   * Mailbox pagination
 //   * Thread view (default: show only latest email in thread)
 //   * Send all email asynchronously, with a local journal file for
 //     when there are network issues.
@@ -20,12 +24,8 @@
 //   * If sending fails, optionally re-open.
 //   * GPG encrypt.
 //   * GPG decrypt.
-//   * Attach file.
-//   * Contacts
-//   * Unicode character support.
 //   * Make Goto work from message view.
 //   * History API for refreshing (?).
-//   * Mailbox pagination
 //   * Delayed sending.
 //   * Continuing drafts.
 //   * Special shortcuts for labelling 'important', 'starred' and 'unread'.
