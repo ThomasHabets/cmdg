@@ -39,7 +39,11 @@ func labeled(m *gmail.Message) []string {
 	return ls
 }
 
-func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked bool, currentLabel string) {
+func maxScroll(lines, height int) int {
+	return lines - height/2
+}
+
+func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked bool, currentLabel string, scroll int) {
 	m := msgs[current]
 	go func() {
 		if !hasLabel(m.LabelIds, unread) {
@@ -58,7 +62,19 @@ func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked b
 	}()
 
 	w.Clear()
+	height, width := w.MaxYX()
+
 	bodyLines := breakLines(strings.Split(getBody(m), "\n"))
+	ms := maxScroll(len(bodyLines), height/2)
+	if scroll > ms {
+		scroll = ms
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	if len(bodyLines) > scroll {
+		bodyLines = bodyLines[scroll:]
+	}
 	body := strings.Join(bodyLines, "\n")
 
 	mstr := ""
@@ -73,7 +89,6 @@ func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked b
 	}
 	sort.Sort(sortLabels(ls))
 
-	_, width := w.MaxYX()
 	lsstr := strings.Join(ls, ", ")
 	if len(lsstr) > 0 {
 		lsstr = ", " + lsstr
@@ -100,9 +115,11 @@ Labels: [bold]%s[unbold]%s
 // Return true if cmdg should quit.
 func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool, currentLabel string) bool {
 	nc.Status("Opening message")
+	scroll := 0
 	for {
+		maxY, _ := winSize()
 		nc.ApplyMain(func(w *gc.Window) {
-			openMessagePrint(w, msgs, current, marked[msgs[current].Id], currentLabel)
+			openMessagePrint(w, msgs, current, marked[msgs[current].Id], currentLabel, scroll)
 		})
 		key := <-nc.Input
 		nc.Status("OK")
@@ -119,10 +136,10 @@ l                 Add label
 L                 Remove label
 x                 Mark message (TODO)
 v                 Verify GPG signature
-p                 Scroll up (TODO)
-n                 Scroll down (TODO)
-Space             Page down (TODO)
-Backspace         Page up (TODO)
+p                 Scroll up
+n                 Scroll down
+Space             Page down
+Backspace         Page up
 `)
 		case 'q':
 			return true
@@ -202,11 +219,22 @@ Backspace         Page up (TODO)
 		case 'v':
 			openMessageCmdGPGVerify(msgs[current])
 		case 'n': // Scroll down.
+			scroll++
 		case 'p': // Scroll up.
-		case ' ': // Page down .
-		case '\b': // Page up..
+			scroll--
+		case ' ':
+			scroll += maxY - 4
+		case '\b', gc.KEY_BACKSPACE: // Page up..
+			scroll -= maxY - 4
 		default:
 			nc.Status("unknown key: %v", gc.KeyString(key))
+		}
+		if scroll < 0 {
+			scroll = 0
+		}
+		ms := maxScroll(len(breakLines(strings.Split(getBody(msgs[current]), "\n"))), maxY)
+		if scroll > ms {
+			scroll = ms
 		}
 	}
 }

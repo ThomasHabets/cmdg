@@ -347,7 +347,7 @@ func getBody(m *gmail.Message) string {
 	if m.Payload == nil {
 		return "loading..."
 	}
-	return getBodyRecurse(m.Payload)
+	return strings.Trim(getBodyRecurse(m.Payload), " \n\r\t")
 }
 
 func prefixQuote(in []string) []string {

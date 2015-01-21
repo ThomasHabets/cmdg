@@ -405,6 +405,9 @@ s                 Search
 			if current >= len(msgs) {
 				current = len(msgs) - 1
 			}
+			if current < 0 {
+				current = 0
+			}
 		case m := <-msgUpdateCh:
 			for n := range msgs {
 				if msgs[n].Id == m.Id {
