@@ -61,7 +61,7 @@ func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked b
 		}
 	}()
 
-	w.Clear()
+	w.Move(0, 0)
 	height, width := w.MaxYX()
 
 	bodyLines := breakLines(strings.Split(getBody(m), "\n"))
@@ -146,10 +146,12 @@ Backspace         Page up
 		case gc.KEY_LEFT, '<', 'u':
 			return false
 		case 16, 'k': // CtrlP
+			scroll = 0
 			if current > 0 {
 				current--
 			}
 		case 14, 'j': // CtrlN
+			scroll = 0
 			if current < len(msgs)-1 {
 				current++
 			}

@@ -14,6 +14,7 @@
 //
 // TODO features (in rough prio order):
 //   * Unicode character support.
+//   * Smoother scrolling of messages.
 //   * Contacts
 //   * Attach file.
 //   * Mailbox pagination
