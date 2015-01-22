@@ -715,6 +715,11 @@ func main() {
 		log.Fatalf("Failed to create gmail client: %v", err)
 	}
 
+	// Make sure oauth keys are correct before setting up ncurses.
+	if _, err = gmailService.Users.GetProfile(email).Do(); err != nil {
+		log.Fatalf("Get profile: %v", err)
+	}
+
 	{
 		f, err := os.OpenFile(*logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
