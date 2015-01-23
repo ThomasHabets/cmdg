@@ -77,6 +77,9 @@ func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked b
 		bodyLines = bodyLines[scroll:]
 	}
 	body := strings.Join(bodyLines, "\n")
+	if len(bodyLines) < height {
+		body += strings.Repeat("\n", height-len(bodyLines))
+	}
 
 	mstr := ""
 	if marked {
