@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"log"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 	"syscall"
@@ -219,7 +220,7 @@ Backspace         Page up
 		case 'x':
 			// TODO; Mark message
 		case 'v':
-			openMessageCmdGPGVerify(msgs[current])
+			openMessageCmdGPGVerify(msgs[current], true)
 		case 'n': // Scroll down.
 			scroll++
 		case 'p': // Scroll up.
@@ -241,11 +242,25 @@ Backspace         Page up
 	}
 }
 
-func openMessageCmdGPGVerify(msg *gmail.Message) {
+var (
+	gpgKeyIDRE = regexp.MustCompile(`(?m)^gpg: Signature made (.+) using \w+ key ID (\w+)$`)
+	gpgErrorRE = regexp.MustCompile(`(?m)^gpg: ((?:Can't check signature|BAD ).*)$`)
+)
+
+func downloadKey(keyID string) {
+	cmd := exec.Command(*gpg, "--batch", "--no-tty", "--recv-keys", keyID)
+	if err := cmd.Run(); err != nil {
+		log.Printf("Failed to download GPG key %q: %v", keyID, err)
+	}
+}
+
+func openMessageCmdGPGVerify(msg *gmail.Message, doDownload bool) {
 	nc.Status("Verifying...")
 	in := bytes.NewBuffer([]byte(getBody(msg)))
-	cmd := exec.Command(*gpg, "-v")
+	var stderr bytes.Buffer
+	cmd := exec.Command(*gpg, "-v", "--batch", "--no-tty")
 	cmd.Stdin = in
+	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		nc.Status("[red]Verify failed to execute: %v", err)
 		return
@@ -256,6 +271,31 @@ func openMessageCmdGPGVerify(msg *gmail.Message) {
 			return
 		}
 	}
+
+	// Extract key ID.
+	keyID := "Unknown"
+	m := gpgKeyIDRE.FindStringSubmatch(stderr.String())
+	if len(m) == 3 {
+		keyID = m[2]
+	}
+
+	// Extract error message.
+	gpgError := "Unknown"
+	m = gpgErrorRE.FindStringSubmatch(stderr.String())
+	if len(m) == 2 {
+		gpgError = m[1]
+	}
+
+	switch gpgError {
+	case "Can't check signature: public key not found":
+		// TODO: do this async.
+		if doDownload {
+			downloadKey(keyID)
+			openMessageCmdGPGVerify(msg, false)
+			return
+		}
+	}
+
 	if cmd.ProcessState.Success() {
 		nc.Status("[green]Verify succeeded")
 	} else if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
@@ -263,7 +303,7 @@ func openMessageCmdGPGVerify(msg *gmail.Message) {
 		case 1:
 			nc.Status("[red]Signature found, but BAD")
 		default:
-			nc.Status("[red]Unable to verify anything")
+			nc.Status("[red]Unable to verify anything. Key ID: %s. Error: %s", keyID, gpgError)
 		}
 	} else {
 		nc.Status("[red]Verify failed: nc.Status %v", cmd.ProcessState.String())
