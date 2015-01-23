@@ -21,6 +21,7 @@ type NCWrap struct {
 	status chan string
 	main   chan func(*gc.Window)
 	redraw chan bool
+	done   chan chan bool
 
 	Input chan gc.Key
 }
@@ -159,12 +160,16 @@ func Start() (*NCWrap, error) {
 	nc.status = make(chan string, 100)
 	nc.main = make(chan func(*gc.Window))
 	nc.redraw = make(chan bool)
+	nc.done = make(chan chan bool)
 	nc.Input = make(chan gc.Key)
 	nc.whr.Print(strings.Repeat("-", w))
 	go func() {
 		// Output goroutine.
 		for {
 			select {
+			case d := <-nc.done:
+				d <- true
+				return
 			case s := <-nc.status:
 				nc.wstatus.Clear()
 				ColorPrint(nc.wstatus, "%s", Preformat(s))
@@ -185,11 +190,21 @@ func Start() (*NCWrap, error) {
 			}
 		}
 	}()
+	// TODO: instead of setting timeout to poll, select on the fd or something.
+	nc.root.Timeout(100)
 	go func() {
 		// Input goroutine.
 		for {
 			ch := nc.root.GetChar()
-			nc.Input <- ch
+			if ch != 0 {
+				nc.Input <- ch
+			}
+			select {
+			case d := <-nc.done:
+				d <- true
+				return
+			default:
+			}
 		}
 	}()
 	nc.wstatus.Clear()
@@ -201,8 +216,12 @@ func Start() (*NCWrap, error) {
 }
 
 func (nc *NCWrap) Stop() {
+	dc := make(chan bool)
+	nc.done <- dc
+	<-dc
+	nc.done <- dc
+	<-dc
 	gc.End()
-	// flush output somehow.
 }
 
 func (nc *NCWrap) Status(s string, args ...interface{}) {
