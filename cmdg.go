@@ -19,6 +19,7 @@
 //   * Attach file.
 //   * Mailbox pagination
 //   * Thread view (default: show only latest email in thread)
+//   * Periodic message view refresh.
 //   * Send all email asynchronously, with a local journal file for
 //     when there are network issues.
 //   * GPG sign.
@@ -78,6 +79,7 @@ var (
 	signature     = flag.String("signature", "Best regards", "End of all emails.")
 	logFile       = flag.String("log", "/dev/null", "Log non-sensitive data to this file.")
 	waitingLabel  = flag.String("waiting_label", "", "Label used for 'awaiting reply'. If empty disables feature.")
+	threadView    = flag.Bool("thread", false, "Use thread view.")
 
 	gmailService *gmail.Service
 
@@ -155,7 +157,7 @@ func getHeader(m *gmail.Message, header string) string {
 	return ""
 }
 
-func list(label, search string) ([]*gmail.Message, <-chan *gmail.Message) {
+func list(label, search string) ([]listEntry, <-chan listEntry) {
 	log.Printf("listing %q %q", label, search)
 	nres := 100
 	nres -= 2 + 3 // Bottom view and room for snippet.
@@ -201,7 +203,7 @@ func list(label, search string) ([]*gmail.Message, <-chan *gmail.Message) {
 
 	nc.Status("Total number of messages in folder: %d\n", res.ResultSizeEstimate)
 
-	msgChan := make(chan *gmail.Message)
+	msgChan := make(chan listEntry)
 	// Load messages async.
 	{
 		for _, m := range res.Messages {
@@ -215,7 +217,9 @@ func list(label, search string) ([]*gmail.Message, <-chan *gmail.Message) {
 						continue
 					}
 					log.Printf("Users.Messages.Get: %v", time.Since(st))
-					msgChan <- mres
+					msgChan <- listEntry{
+						msg: mres,
+					}
 					return
 				}
 			}()
@@ -223,7 +227,92 @@ func list(label, search string) ([]*gmail.Message, <-chan *gmail.Message) {
 	}
 	nc.Status("%s: Showing %d/%d. Total: %d emails, %d threads",
 		profile.EmailAddress, len(res.Messages), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
-	return res.Messages, msgChan
+	ret := []listEntry{}
+	for _, m := range res.Messages {
+		ret = append(ret, listEntry{
+			msg: m,
+		})
+	}
+	return ret, msgChan
+}
+
+func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
+	nres := 100
+	nres -= 2 + 3 // Bottom view and room for snippet.
+
+	syncP := parallel{} // Run the parts that can't wait in parallel.
+
+	// List messages.
+	var res *gmail.ListThreadsResponse
+	syncP.add(func(ch chan<- func()) {
+		defer close(ch)
+		var err error
+		st := time.Now()
+		q := gmailService.Users.Threads.List(email).
+			//		PageToken().
+			MaxResults(int64(nres)).
+			//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
+			Fields("threads,resultSizeEstimate")
+		if label != "" {
+			q = q.LabelIds(label)
+		}
+		if search != "" {
+			q = q.Q(search)
+		}
+		res, err = q.Do()
+		if err != nil {
+			log.Fatalf("Listing threads: %v", err)
+		}
+		log.Printf("Listing threads: %v", time.Since(st))
+	})
+
+	var profile *gmail.Profile
+	syncP.add(func(ch chan<- func()) {
+		defer close(ch)
+		st := time.Now()
+		var err error
+		profile, err = gmailService.Users.GetProfile(email).Do()
+		if err != nil {
+			log.Fatalf("Get profile: %v", err)
+		}
+		log.Printf("Users.GetProfile: %v", time.Since(st))
+	})
+	syncP.run()
+
+	nc.Status("Total number of threads in folder: %d\n", res.ResultSizeEstimate)
+
+	msgChan := make(chan listEntry)
+	// Load messages async.
+	{
+		for _, m := range res.Threads {
+			m2 := m
+			go func() {
+				st := time.Now()
+				for {
+					mres, err := gmailService.Users.Threads.Get(email, m2.Id).Format("full").Do()
+					if err != nil {
+						log.Printf("Get thread failed, retrying: %v", err)
+						continue
+					}
+					log.Printf("Users.Thread.Get: %v", time.Since(st))
+					msgChan <- listEntry{
+						thread: mres,
+					}
+					return
+				}
+			}()
+		}
+	}
+	nc.Status("%s: Showing %d/%d. Total: %d emails, %d threads",
+		profile.EmailAddress, len(res.Threads), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
+	ret := []listEntry{}
+	for _, m := range res.Threads {
+		log.Printf("Thread: %+v", m)
+		ret = append(ret, listEntry{
+			thread: m,
+		})
+	}
+	return ret, msgChan
 }
 
 func hasLabel(labels []string, needle string) bool {
@@ -317,6 +406,7 @@ func mimeEncode(s string) string {
 	return s
 }
 
+// Find plaintext body among all attachments.
 func getBodyRecurse(m *gmail.MessagePart) string {
 	if len(m.Parts) == 0 {
 		data, err := mimeDecode(string(m.Body.Data))
@@ -746,5 +836,5 @@ func main() {
 
 	getLabels()
 
-	messageListMain()
+	messageListMain(*threadView)
 }

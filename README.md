@@ -34,6 +34,7 @@ Benefits over the Gmail web UI
   a few things.
 * cmdg works without a graphic terminal.
 * cmdg uses less bandwidth (citation needed), and much less memory.
+* Local GPG integration.
 
 A security difference
 ---------------------
