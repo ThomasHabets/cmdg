@@ -122,6 +122,9 @@ Labels: [bold]%s[unbold]%s
 func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool, currentLabel string) bool {
 	nc.Status("Opening message")
 	scroll := 0
+	nc.ApplyMain(func(w *gc.Window) {
+		w.Clear()
+	})
 	for {
 		maxY, _ := winSize()
 		nc.ApplyMain(func(w *gc.Window) {
