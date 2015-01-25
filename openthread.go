@@ -36,6 +36,7 @@ x                 Mark thread (TODO)
 Space             Page down
 Backspace         Page up
 `)
+			nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 		case 'q':
 			return true
 		case gc.KEY_LEFT, '<', 'u':

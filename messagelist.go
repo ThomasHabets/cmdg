@@ -305,6 +305,7 @@ l                 Label marked emails
 L                 Unlabel marked emails
 s                 Search
 `)
+				nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 			case 'q':
 				return
 			case gc.KEY_UP, 'p', 16, 'k':
