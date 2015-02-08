@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"os/exec"
 	"regexp"
@@ -263,19 +264,27 @@ func downloadKey(keyID string) {
 
 func openMessageCmdGPGVerify(msg *gmail.Message, doDownload bool) {
 	nc.Status("Verifying...")
+	s, ok := doOpenMessageCmdGPGVerify(msg, doDownload)
+	if ok {
+		nc.Status("[green]%s", s)
+	} else {
+		nc.Status("[red]%s", s)
+	}
+}
+
+// return message and success.
+func doOpenMessageCmdGPGVerify(msg *gmail.Message, doDownload bool) (string, bool) {
 	in := bytes.NewBuffer([]byte(getBody(msg)))
 	var stderr bytes.Buffer
 	cmd := exec.Command(*gpg, "-v", "--batch", "--no-tty")
 	cmd.Stdin = in
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		nc.Status("[red]Verify failed to execute: %v", err)
-		return
+		return fmt.Sprintf("Verify failed to execute: %v", err), false
 	}
 	if err := cmd.Wait(); err != nil {
 		if _, normal := err.(*exec.ExitError); !normal {
-			nc.Status("[red]Verify failed, failed to run: %v", err)
-			return
+			return fmt.Sprintf("Verify failed, failed to run: %v", err), false
 		}
 	}
 
@@ -298,21 +307,22 @@ func openMessageCmdGPGVerify(msg *gmail.Message, doDownload bool) {
 		// TODO: do this async.
 		if doDownload {
 			downloadKey(keyID)
-			openMessageCmdGPGVerify(msg, false)
-			return
+			return doOpenMessageCmdGPGVerify(msg, false)
 		}
 	}
 
 	if cmd.ProcessState.Success() {
-		nc.Status("[green]Verify succeeded")
-	} else if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
+		return "Verify succeeded", true
+	}
+
+	if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
 		switch uint32(ws) {
 		case 1:
-			nc.Status("[red]Signature found, but BAD")
+			return "Signature found, but BAD", false
 		default:
-			nc.Status("[red]Unable to verify anything. Key ID: %s. Error: %s", keyID, gpgError)
+			return fmt.Sprintf("Unable to verify anything. Key ID: %s. Error: %s", keyID, gpgError), false
 		}
 	} else {
-		nc.Status("[red]Verify failed: nc.Status %v", cmd.ProcessState.String())
+		return fmt.Sprintf("Verify failed: %v", cmd.ProcessState.String()), false
 	}
 }

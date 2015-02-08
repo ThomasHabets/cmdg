@@ -225,6 +225,11 @@ func (nc *NCWrap) Stop() {
 }
 
 func (nc *NCWrap) Status(s string, args ...interface{}) {
+	if nc == nil {
+		// TODO: Instead of bailing out like this, make a fake
+		// UI for testing.
+		return
+	}
 	nc.status <- fmt.Sprintf(s, args...)
 }
 
