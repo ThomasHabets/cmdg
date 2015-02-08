@@ -175,6 +175,7 @@ func helpWin(s string) {
 	<-nc.Input
 }
 
+// markedMessages returns the messages/threads that are both in the current view, and marked.
 func markedMessages(msgs []listEntry, marked map[string]bool) []listEntry {
 	var ret []listEntry
 	for _, m := range msgs {
@@ -282,6 +283,9 @@ func messageListMain(thread bool) {
 		// Instead of reloading when there's a change, the state should be updated locally.
 		reloadTODO := false
 
+		// Messages that are both marked and in the current view.
+		mm := markedMessages(msgs, marked)
+
 		select {
 		case key := <-nc.Input:
 			switch key {
@@ -364,8 +368,12 @@ s                 Search
 				// We could be in sent folders or a search that sees this message.
 				reloadTODO = true
 			case 'd':
+				if len(mm) == 0 {
+					nc.Status("No messages marked")
+					break
+				}
 				allFine := true
-				for _, m := range markedMessages(msgs, marked) {
+				for _, m := range mm {
 					st := time.Now()
 					if _, err := gmailService.Users.Messages.Trash(email, m.ID()).Do(); err == nil {
 						reloadTODO = true
@@ -381,8 +389,12 @@ s                 Search
 				}
 
 			case 'e': // Archive.
+				if len(mm) == 0 {
+					nc.Status("No messages marked")
+					break
+				}
 				allFine := true
-				for _, m := range markedMessages(msgs, marked) {
+				for _, m := range mm {
 					st := time.Now()
 					if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
 						RemoveLabelIds: []string{inbox},
@@ -402,11 +414,15 @@ s                 Search
 				}
 
 			case 'l': // Add label.
+				if len(mm) == 0 {
+					nc.Status("No messages marked")
+					break
+				}
 				newLabel := getLabel("Add label>", sortedLabels())
 				if newLabel != "" {
 					id := labels[newLabel]
 					allFine := true
-					for _, m := range markedMessages(msgs, marked) {
+					for _, m := range mm {
 						st := time.Now()
 						if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
 							AddLabelIds: []string{id},
@@ -424,10 +440,16 @@ s                 Search
 				}
 
 			case 'L': // Remove label.
+				if len(mm) == 0 {
+					nc.Status("No messages marked")
+					break
+				}
+
+				// Labels to ask for.
 				ls := []string{}
 			nextLabel:
 				for l, lid := range labels {
-					for _, m := range markedMessages(msgs, marked) {
+					for _, m := range mm {
 						for _, hl := range m.LabelIds() {
 							if lid == hl {
 								ls = append(ls, l)
@@ -437,12 +459,14 @@ s                 Search
 					}
 				}
 				sort.Sort(sortLabels(ls))
+
+				// Ask for labels.
 				newLabel := getLabel("Remove label>", ls)
 				if newLabel != "" {
 					reloadTODO = true
 					id := labels[newLabel]
 					allFine := true
-					for _, m := range markedMessages(msgs, marked) {
+					for _, m := range mm {
 						st := time.Now()
 						if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
 							RemoveLabelIds: []string{id},

@@ -16,6 +16,7 @@ import (
 	"github.com/ThomasHabets/cmdg/ncwrap"
 )
 
+// notLabeled returns the labels (not IDs) that this message doesn't have.
 func notLabeled(m *gmail.Message) []string {
 	ls := []string{}
 nextLabel:
@@ -31,6 +32,7 @@ nextLabel:
 	return ls
 }
 
+// labeled returns the labels (not IDs) for this mesasge.
 func labeled(m *gmail.Message) []string {
 	ls := []string{}
 	for _, hl := range m.LabelIds {
