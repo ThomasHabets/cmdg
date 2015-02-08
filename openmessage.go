@@ -251,8 +251,9 @@ Backspace         Page up
 }
 
 var (
-	gpgKeyIDRE = regexp.MustCompile(`(?m)^gpg: Signature made (.+) using \w+ key ID (\w+)$`)
-	gpgErrorRE = regexp.MustCompile(`(?m)^gpg: ((?:Can't check signature|BAD ).*)$`)
+	gpgKeyIDRE     = regexp.MustCompile(`(?m)^gpg: Signature made (.+) using \w+ key ID (\w+)$`)
+	gpgErrorRE     = regexp.MustCompile(`(?m)^gpg: ((?:Can't check signature|BAD ).*)$`)
+	gpgUntrustedRE = regexp.MustCompile(`(?m)^gpg: WARNING: This key is not certified with a trusted signature`)
 )
 
 func downloadKey(keyID string) {
@@ -312,6 +313,9 @@ func doOpenMessageCmdGPGVerify(msg *gmail.Message, doDownload bool) (string, boo
 	}
 
 	if cmd.ProcessState.Success() {
+		if gpgUntrustedRE.MatchString(stderr.String()) {
+			return "Verify succeeded, but with untrusted key", true
+		}
 		return "Verify succeeded", true
 	}
 

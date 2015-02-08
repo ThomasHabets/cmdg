@@ -1,5 +1,5 @@
 #!/bin/sh
-cat <<EOF
+cat >&2 <<EOF
 gpg: armor header: Hash: SHA512
 gpg: armor header: Version: GnuPG v1
 gpg: original file name=''

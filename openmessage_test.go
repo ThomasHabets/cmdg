@@ -19,13 +19,31 @@ func TestGPGVerifyKeyNotFound(t *testing.T) {
 	if ok {
 		t.Errorf("Verify succeeded, expected fail")
 	}
-	if got, want := s, "Unable to verify anything. Key ID: Unknown. Error: Unknown"; got != want {
+	if got, want := s, "Unable to verify anything. Key ID: 1343CF44. Error: Can't check signature: public key not found"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
 func TestGPGVerifyNotTrusted(t *testing.T) {
-	*gpg = "./testdata/gpg_ok.sh"
+	*gpg = "./testdata/gpg_not_trusted.sh"
+	msg := gmail.Message{
+		Payload: &gmail.MessagePart{
+			Body: &gmail.MessagePartBody{
+				Data: mimeEncode("blaha"),
+			},
+		},
+	}
+	s, ok := doOpenMessageCmdGPGVerify(&msg, false)
+	if !ok {
+		t.Errorf("Verify failed, expected success")
+	}
+	if got, want := s, "Verify succeeded, but with untrusted key"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestGPGVerifyPerfect(t *testing.T) {
+	*gpg = "./testdata/gpg_perfect.sh"
 	msg := gmail.Message{
 		Payload: &gmail.MessagePart{
 			Body: &gmail.MessagePartBody{
