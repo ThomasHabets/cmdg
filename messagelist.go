@@ -426,10 +426,10 @@ s                 Search
 			case 'L': // Remove label.
 				ls := []string{}
 			nextLabel:
-				for l := range labels {
+				for l, lid := range labels {
 					for _, m := range markedMessages(msgs, marked) {
 						for _, hl := range m.LabelIds() {
-							if labelIDs[l] == hl {
+							if lid == hl {
 								ls = append(ls, l)
 								continue nextLabel
 							}
