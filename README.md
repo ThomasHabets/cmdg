@@ -53,7 +53,7 @@ Installing
 ```
 $ mkdir go
 $ cd go
-$ GOPATH=$(pwd) go get github.com/ThomasHabets/cmdg.git
+$ GOPATH=$(pwd) go get github.com/ThomasHabets/cmdg
 $ GOPATH=$(pwd) go build github.com/ThomasHabets/cmdg
 $ cp cmdg /usr/local/bin
 ```
