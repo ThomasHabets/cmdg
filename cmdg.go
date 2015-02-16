@@ -831,7 +831,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("ncurses fail: %v", err)
 	}
-	defer nc.Stop()
+	defer func() {
+		nc.Stop()
+	}()
 	nc.Status("Start[green]ing [red]up...")
 
 	getLabels()
