@@ -528,7 +528,7 @@ func getForward(openMessage *gmail.Message) (string, error) {
 	if !forwardRE.MatchString(subject) {
 		subject = *forwardPrefix + subject
 	}
-	head := fmt.Sprintf("To: %s\nSubject: \n\n--------- Forwarded message -----------\nDate: %s\nFrom: %s\nTo: %s\nSubject: %s\n\n",
+	head := fmt.Sprintf("To: \nSubject: %s\n\n--------- Forwarded message -----------\nDate: %s\nFrom: %s\nTo: %s\nSubject: %s\n\n",
 		subject,
 		getHeader(openMessage, "Date"),
 		getHeader(openMessage, "From"),
