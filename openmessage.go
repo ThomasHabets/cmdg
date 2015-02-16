@@ -103,6 +103,7 @@ func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked b
 	ncwrap.ColorPrint(w, `Email %d of %d%s
 From: %s
 To: %s
+CC: %s
 Date: %s
 Subject: [bold]%s[unbold]
 Labels: [bold]%s[unbold]%s
@@ -111,6 +112,7 @@ Labels: [bold]%s[unbold]%s
 		current+1, len(msgs), ncwrap.Preformat(mstr),
 		getHeader(m, "From"),
 		getHeader(m, "To"),
+		getHeader(m, "Cc"),
 		getHeader(m, "Date"),
 		getHeader(m, "Subject"),
 		labelIDs[currentLabel],

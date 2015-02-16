@@ -86,8 +86,9 @@ var (
 	nc *ncwrap.NCWrap
 
 	// State keepers.
-	labels   = make(map[string]string) // From name to ID.
-	labelIDs = make(map[string]string) // From ID to name.
+	labels       = make(map[string]string) // From name to ID.
+	labelIDs     = make(map[string]string) // From ID to name.
+	emailAddress string
 
 	replyRE   *regexp.Regexp
 	forwardRE *regexp.Regexp
@@ -227,6 +228,7 @@ func list(label, search string) ([]listEntry, <-chan listEntry) {
 	}
 	nc.Status("%s: Showing %d/%d. Total: %d emails, %d threads",
 		profile.EmailAddress, len(res.Messages), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
+	emailAddress = profile.EmailAddress
 	ret := []listEntry{}
 	for _, m := range res.Messages {
 		ret = append(ret, listEntry{
@@ -501,21 +503,30 @@ func getReplyAll(openMessage *gmail.Message) (string, error) {
 	if !replyRE.MatchString(subject) {
 		subject = *replyPrefix + subject
 	}
-	cc := getHeader(openMessage, "Cc")
+
+	cc := strings.Split(getHeader(openMessage, "Cc"), ",")
 	addr := getHeader(openMessage, "Reply-To")
 	if addr == "" {
 		addr = getHeader(openMessage, "From")
 	} else {
-		if cc == "" {
-			cc = getHeader(openMessage, "From")
-		} else {
-			cc = cc + "," + getHeader(openMessage, "From")
+		cc = append(cc, getHeader(openMessage, "From"))
+	}
+	cc = append(cc, strings.Split(getHeader(openMessage, "To"), ",")...)
+	var ncc []string
+	for _, a := range cc {
+		a = strings.Trim(a, " ")
+		if len(a) == 0 {
+			continue
 		}
+		if strings.Contains(a, "<"+emailAddress+">") {
+			continue
+		}
+		ncc = append(ncc, a)
 	}
 
 	head := fmt.Sprintf("To: %s\nCc: %s\nSubject: %s\n\nOn %s, %s said:\n",
 		addr,
-		cc,
+		strings.Join(ncc, ", "),
 		subject,
 		getHeader(openMessage, "Date"),
 		getHeader(openMessage, "From"))
