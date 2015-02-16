@@ -158,10 +158,10 @@ func Start() (*NCWrap, error) {
 	gc.StdScr().Keypad(true)
 
 	nc.status = make(chan string, 100)
-	nc.main = make(chan func(*gc.Window))
-	nc.redraw = make(chan bool)
+	nc.main = make(chan func(*gc.Window), 100)
+	nc.redraw = make(chan bool, 100)
 	nc.done = make(chan chan bool)
-	nc.Input = make(chan gc.Key)
+	nc.Input = make(chan gc.Key, 100)
 	nc.whr.Print(strings.Repeat("-", w))
 	go func() {
 		// Output goroutine.
@@ -216,10 +216,11 @@ func Start() (*NCWrap, error) {
 }
 
 func (nc *NCWrap) Stop() {
-	dc := make(chan bool)
+	dc := make(chan bool, 2)
+	// Shut down input and output goroutine.
+	nc.done <- dc
 	nc.done <- dc
 	<-dc
-	nc.done <- dc
 	<-dc
 	gc.End()
 }
