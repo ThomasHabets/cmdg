@@ -488,7 +488,7 @@ func getReply(openMessage *gmail.Message) (string, error) {
 
 	head := fmt.Sprintf("To: %s\nSubject: %s\n\nOn %s, %s said:\n",
 		addr,
-		getHeader(openMessage, "Subject"),
+		subject,
 		getHeader(openMessage, "Date"),
 		getHeader(openMessage, "From"),
 	)
@@ -516,7 +516,7 @@ func getReplyAll(openMessage *gmail.Message) (string, error) {
 	head := fmt.Sprintf("To: %s\nCc: %s\nSubject: %s\n\nOn %s, %s said:\n",
 		addr,
 		cc,
-		getHeader(openMessage, "Subject"),
+		subject,
 		getHeader(openMessage, "Date"),
 		getHeader(openMessage, "From"))
 	s, err := runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
