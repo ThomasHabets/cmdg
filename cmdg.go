@@ -607,7 +607,7 @@ func runEditor(input string) (string, error) {
 func createSend(thread, msg string) {
 	maxY, maxX := winSize()
 	height := 10
-	width := 40
+	width := 70
 	x, y := maxX/2-width/2, maxY/2-height/2
 	w, err := gc.NewWindow(height, width, y, x)
 	if err != nil {
@@ -620,7 +620,7 @@ func createSend(thread, msg string) {
 	w.Print("\n\n   s - Send\n   S - Send and Archive\n")
 	if *waitingLabel != "" {
 		w.Print("   w - Send and apply waiting label\n")
-		w.Print("   W - Send and apply waiting label, and archive\n")
+		w.Print("   W - Send, apply wait label, and archive\n")
 	}
 	w.Print("   d - Draft\n   a - Abort")
 	winBorder(w)
