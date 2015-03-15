@@ -304,6 +304,7 @@ e                 Archive marked emails
 l                 Label marked emails
 L                 Unlabel marked emails
 s                 Search
+1                 Go to inbox
 `)
 				nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 			case 'q':
@@ -347,6 +348,11 @@ s                 Search
 					}
 				}
 				reloadTODO = true
+			case '1':
+				marked = make(map[string]bool)
+				currentLabel = inbox
+				currentSearch = ""
+				go loadMsgs(currentLabel, currentSearch)
 			case 'g':
 				newLabel := getLabel("Go to label>", sortedLabels())
 				if newLabel != "" {
