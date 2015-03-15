@@ -235,10 +235,10 @@ Backspace         Page up
 			scroll += 2
 		case 'p', gc.KEY_UP: // Scroll up.
 			scroll -= 2
-		case ' ':
-			scroll += maxY - 4
-		case '\b', gc.KEY_BACKSPACE: // Page up..
-			scroll -= maxY - 4
+		case ' ', gc.KEY_PAGEDOWN:
+			scroll += maxY - 12 // TODO: this should be exactly one page, not this estimate.
+		case '\b', gc.KEY_BACKSPACE, gc.KEY_PAGEUP: // Page up..
+			scroll -= maxY - 12 // TODO: this should be exactly one page, not this estimate.
 		default:
 			nc.Status("unknown key: %v", gc.KeyString(key))
 		}
