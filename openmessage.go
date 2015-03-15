@@ -146,8 +146,8 @@ l                 Add label
 L                 Remove label
 x                 Mark message (TODO)
 v                 Verify GPG signature
-p                 Scroll up
-n                 Scroll down
+p, Up             Scroll up
+n, Down           Scroll down
 Space             Page down
 Backspace         Page up
 `)
@@ -231,10 +231,10 @@ Backspace         Page up
 			// TODO; Mark message
 		case 'v':
 			openMessageCmdGPGVerify(msgs[current], true)
-		case 'n': // Scroll down.
-			scroll++
-		case 'p': // Scroll up.
-			scroll--
+		case 'n', gc.KEY_DOWN: // Scroll down.
+			scroll += 2
+		case 'p', gc.KEY_UP: // Scroll up.
+			scroll -= 2
 		case ' ':
 			scroll += maxY - 4
 		case '\b', gc.KEY_BACKSPACE: // Page up..
