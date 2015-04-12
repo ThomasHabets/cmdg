@@ -10,8 +10,8 @@ import (
 	"unicode"
 
 	gc "code.google.com/p/goncurses"
-	gmail "code.google.com/p/google-api-go-client/gmail/v1"
 	"github.com/ThomasHabets/cmdg/ncwrap"
+	gmail "google.golang.org/api/gmail/v1"
 )
 
 func winSize() (int, int) {

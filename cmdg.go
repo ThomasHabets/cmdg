@@ -54,9 +54,9 @@ import (
 	"unicode/utf8"
 
 	gc "code.google.com/p/goncurses"
-	gmail "code.google.com/p/google-api-go-client/gmail/v1"
 	"github.com/ThomasHabets/cmdg/ncwrap"
 	"github.com/ThomasHabets/drive-du/lib"
+	gmail "google.golang.org/api/gmail/v1"
 )
 
 const (
