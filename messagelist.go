@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	gc "code.google.com/p/goncurses"
+	"github.com/ThomasHabets/cmdg/cmdglib"
 	"github.com/ThomasHabets/cmdg/ncwrap"
 	gmail "google.golang.org/api/gmail/v1"
 )
@@ -200,33 +201,33 @@ func (e *listEntry) ID() string {
 
 func (e *listEntry) Time() string {
 	if e.msg != nil {
-		return timestring(e.msg)
+		return cmdglib.TimeString(e.msg)
 	}
 	if len(e.thread.Messages) == 0 {
 		return "Loading"
 	}
-	return timestring(e.thread.Messages[len(e.thread.Messages)-1])
+	return cmdglib.TimeString(e.thread.Messages[len(e.thread.Messages)-1])
 }
 
 func (e *listEntry) From() string {
 	if e.msg != nil {
-		return fromString(e.msg)
+		return cmdglib.FromString(e.msg)
 	}
 	if len(e.thread.Messages) == 0 {
 		return "Loading"
 	}
 	// TODO: better fromstring.
-	return fromString(e.thread.Messages[0])
+	return cmdglib.FromString(e.thread.Messages[0])
 }
 
 func (e *listEntry) Subject() string {
 	if e.msg != nil {
-		return getHeader(e.msg, "Subject")
+		return cmdglib.GetHeader(e.msg, "Subject")
 	}
 	if len(e.thread.Messages) == 0 {
 		return "Loading"
 	}
-	return getHeader(e.thread.Messages[0], "Subject")
+	return cmdglib.GetHeader(e.thread.Messages[0], "Subject")
 }
 
 func (e *listEntry) Snippet() string {
@@ -251,7 +252,7 @@ func (e *listEntry) LabelIds() []string {
 }
 
 func messageListMain(thread bool) {
-	currentLabel := inbox // Label ID.
+	currentLabel := cmdglib.Inbox // Label ID.
 	currentSearch := ""
 	nc.ApplyMain(func(w *gc.Window) {
 		w.Clear()
@@ -304,7 +305,7 @@ e                 Archive marked emails
 l                 Label marked emails
 L                 Unlabel marked emails
 s                 Search
-1                 Go to inbox
+1                 Go to cmdglib.Inbox
 `)
 				nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 			case 'q':
@@ -350,7 +351,7 @@ s                 Search
 				reloadTODO = true
 			case '1':
 				marked = make(map[string]bool)
-				currentLabel = inbox
+				currentLabel = cmdglib.Inbox
 				currentSearch = ""
 				go loadMsgs(currentLabel, currentSearch)
 			case 'g':
@@ -404,11 +405,11 @@ s                 Search
 				for _, m := range mm {
 					st := time.Now()
 					if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
-						RemoveLabelIds: []string{inbox},
+						RemoveLabelIds: []string{cmdglib.Inbox},
 					}).Do(); err == nil {
 						reloadTODO = true
 						log.Printf("Users.Messages.Archive: %v", time.Since(st))
-						if currentLabel == inbox {
+						if currentLabel == cmdglib.Inbox {
 							delete(marked, m.ID())
 						}
 					} else {
@@ -553,7 +554,7 @@ func messageListPrint(w *gc.Window, msgs []listEntry, marked map[string]bool, cu
 			break
 		}
 		style := ""
-		if hasLabel(m.LabelIds(), unread) {
+		if cmdglib.HasLabel(m.LabelIds(), cmdglib.Unread) {
 			style = "[bold]"
 		}
 		s := fmt.Sprintf("%*.*s | %*.*s | %s",
@@ -562,7 +563,7 @@ func messageListPrint(w *gc.Window, msgs []listEntry, marked map[string]bool, cu
 			m.Subject())
 		if marked[m.ID()] {
 			s = "X" + s
-		} else if hasLabel(m.LabelIds(), unread) {
+		} else if cmdglib.HasLabel(m.LabelIds(), cmdglib.Unread) {
 			s = ">" + s
 		} else {
 			s = " " + s

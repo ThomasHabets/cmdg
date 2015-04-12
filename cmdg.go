@@ -44,16 +44,15 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net/mail"
 	"os"
 	"os/exec"
 	"path"
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	gc "code.google.com/p/goncurses"
+	"github.com/ThomasHabets/cmdg/cmdglib"
 	"github.com/ThomasHabets/cmdg/ncwrap"
 	"github.com/ThomasHabets/drive-du/lib"
 	gmail "google.golang.org/api/gmail/v1"
@@ -104,16 +103,6 @@ const (
 	publicClientID     = ""
 	publicClientSecret = ""
 
-	// Well known labels.
-	inbox     = "INBOX"
-	unread    = "UNREAD"
-	draft     = "DRAFT"
-	important = "IMPORTANT"
-	spam      = "SPAM"
-	starred   = "STARRED"
-	trash     = "TRASH"
-	sent      = "SENT"
-
 	maxLine = 80
 	spaces  = " \t\r"
 )
@@ -123,39 +112,13 @@ type sortLabels []string
 func (a sortLabels) Len() int      { return len(a) }
 func (a sortLabels) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a sortLabels) Less(i, j int) bool {
-	if a[i] == inbox && a[j] != inbox {
+	if a[i] == cmdglib.Inbox && a[j] != cmdglib.Inbox {
 		return true
 	}
-	if a[j] == inbox && a[i] != inbox {
+	if a[j] == cmdglib.Inbox && a[i] != cmdglib.Inbox {
 		return false
 	}
 	return strings.ToLower(a[i]) < strings.ToLower(a[j])
-}
-
-func utf8Decode(s string) string {
-	ret := ""
-	for len(s) > 0 {
-		r, size := utf8.DecodeRuneInString(s)
-		ret = fmt.Sprintf("%s%c", ret, r)
-		s = s[size:]
-	}
-	return ret
-}
-
-func getHeader(m *gmail.Message, header string) string {
-	if m.Payload == nil {
-		return "loading"
-	}
-	for _, h := range m.Payload.Headers {
-		if h.Name == header {
-			// TODO: How to decode correctly?
-			if false {
-				return utf8Decode(h.Value)
-			}
-			return h.Value
-		}
-	}
-	return ""
 }
 
 func list(label, search string) ([]listEntry, <-chan listEntry) {
@@ -317,67 +280,6 @@ func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
 	return ret, msgChan
 }
 
-func hasLabel(labels []string, needle string) bool {
-	for _, l := range labels {
-		if l == needle {
-			return true
-		}
-	}
-	return false
-}
-
-func parseTime(s string) (time.Time, error) {
-	var t time.Time
-	var err error
-	for _, layout := range []string{
-		"Mon, 2 Jan 2006 15:04:05 -0700",
-		"Mon, 2 Jan 2006 15:04:05 -0700 (MST)",
-		"Mon, 2 Jan 2006 15:04:05 MST",
-		"2 Jan 2006 15:04:05 -0700",
-		"Mon, 2 Jan 2006 15:04:05 -0700 (GMT-07:00)",
-		"Mon, _2 Jan 2006 15:04:05 -0700 (GMT-07:00)",
-		time.RFC1123Z,
-	} {
-		t, err = time.Parse(layout, s)
-		if err == nil {
-			break
-		}
-	}
-	return t, err
-}
-
-// Print "Date" header as a useful string. (e.g. mail from today shows hours)
-func timestring(m *gmail.Message) string {
-	s := getHeader(m, "Date")
-	ts, err := parseTime(s)
-	if err != nil {
-		return "Unknown"
-	}
-	if time.Since(ts) > 365*24*time.Hour {
-		return ts.Format("2006")
-	}
-	if !(time.Now().Month() == ts.Month() && time.Now().Day() == ts.Day()) {
-		return ts.Format("Jan 02")
-	}
-	return ts.Format("15:04")
-}
-
-// Get source address, unless mail is sent, in which case get destination.
-func fromString(m *gmail.Message) string {
-	s := getHeader(m, "From")
-	if hasLabel(m.LabelIds, sent) {
-		s = getHeader(m, "To")
-	}
-	a, err := mail.ParseAddress(s)
-	if err != nil {
-		return s
-	}
-	if len(a.Name) > 0 {
-		return a.Name
-	}
-	return a.Address
-}
-
 func getLabels() {
 	st := time.Now()
 	res, err := gmailService.Users.Labels.List(email).Do()
@@ -478,40 +380,40 @@ func standardHeaders() string {
 }
 
 func getReply(openMessage *gmail.Message) (string, error) {
-	subject := getHeader(openMessage, "Subject")
+	subject := cmdglib.GetHeader(openMessage, "Subject")
 	if !replyRE.MatchString(subject) {
 		subject = *replyPrefix + subject
 	}
 
-	addr := getHeader(openMessage, "Reply-To")
+	addr := cmdglib.GetHeader(openMessage, "Reply-To")
 	if addr == "" {
-		addr = getHeader(openMessage, "From")
+		addr = cmdglib.GetHeader(openMessage, "From")
 	}
 
 	head := fmt.Sprintf("To: %s\nSubject: %s\n\nOn %s, %s said:\n",
 		addr,
 		subject,
-		getHeader(openMessage, "Date"),
-		getHeader(openMessage, "From"),
+		cmdglib.GetHeader(openMessage, "Date"),
+		cmdglib.GetHeader(openMessage, "From"),
 	)
 	s, err := runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
 	return standardHeaders() + s, err
 }
 
 func getReplyAll(openMessage *gmail.Message) (string, error) {
-	subject := getHeader(openMessage, "Subject")
+	subject := cmdglib.GetHeader(openMessage, "Subject")
 	if !replyRE.MatchString(subject) {
 		subject = *replyPrefix + subject
 	}
 
-	cc := strings.Split(getHeader(openMessage, "Cc"), ",")
-	addr := getHeader(openMessage, "Reply-To")
+	cc := strings.Split(cmdglib.GetHeader(openMessage, "Cc"), ",")
+	addr := cmdglib.GetHeader(openMessage, "Reply-To")
 	if addr == "" {
-		addr = getHeader(openMessage, "From")
+		addr = cmdglib.GetHeader(openMessage, "From")
 	} else {
-		cc = append(cc, getHeader(openMessage, "From"))
+		cc = append(cc, cmdglib.GetHeader(openMessage, "From"))
 	}
-	cc = append(cc, strings.Split(getHeader(openMessage, "To"), ",")...)
+	cc = append(cc, strings.Split(cmdglib.GetHeader(openMessage, "To"), ",")...)
 	var ncc []string
 	for _, a := range cc {
 		a = strings.Trim(a, " ")
@@ -528,23 +430,23 @@ func getReplyAll(openMessage *gmail.Message) (string, error) {
 		addr,
 		strings.Join(ncc, ", "),
 		subject,
-		getHeader(openMessage, "Date"),
-		getHeader(openMessage, "From"))
+		cmdglib.GetHeader(openMessage, "Date"),
+		cmdglib.GetHeader(openMessage, "From"))
 	s, err := runEditorHeadersOK(head + strings.Join(prefixQuote(breakLines(strings.Split(getBody(openMessage), "\n"))), "\n"))
 	return standardHeaders() + s, err
 }
 
 func getForward(openMessage *gmail.Message) (string, error) {
-	subject := getHeader(openMessage, "Subject")
+	subject := cmdglib.GetHeader(openMessage, "Subject")
 	if !forwardRE.MatchString(subject) {
 		subject = *forwardPrefix + subject
 	}
 	head := fmt.Sprintf("To: \nSubject: %s\n\n--------- Forwarded message -----------\nDate: %s\nFrom: %s\nTo: %s\nSubject: %s\n\n",
 		subject,
-		getHeader(openMessage, "Date"),
-		getHeader(openMessage, "From"),
-		getHeader(openMessage, "To"),
-		getHeader(openMessage, "Subject"),
+		cmdglib.GetHeader(openMessage, "Date"),
+		cmdglib.GetHeader(openMessage, "From"),
+		cmdglib.GetHeader(openMessage, "To"),
+		cmdglib.GetHeader(openMessage, "Subject"),
 	)
 	s, err := runEditorHeadersOK(head + strings.Join(breakLines(strings.Split(getBody(openMessage), "\n")), "\n"))
 	return standardHeaders() + s, err

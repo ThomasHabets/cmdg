@@ -13,6 +13,7 @@ import (
 	"time"
 
 	gc "code.google.com/p/goncurses"
+	"github.com/ThomasHabets/cmdg/cmdglib"
 	"github.com/ThomasHabets/cmdg/ncwrap"
 	gmail "google.golang.org/api/gmail/v1"
 )
@@ -50,13 +51,13 @@ func maxScroll(lines, height int) int {
 func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked bool, currentLabel string, scroll int) {
 	m := msgs[current]
 	go func() {
-		if !hasLabel(m.LabelIds, unread) {
+		if !cmdglib.HasLabel(m.LabelIds, cmdglib.Unread) {
 			return
 		}
 		id := m.Id
 		st := time.Now()
 		_, err := gmailService.Users.Messages.Modify(email, id, &gmail.ModifyMessageRequest{
-			RemoveLabelIds: []string{unread},
+			RemoveLabelIds: []string{cmdglib.Unread},
 		}).Do()
 		if err != nil {
 			// TODO: log to file or something.
@@ -110,11 +111,11 @@ Labels: [bold]%s[unbold]%s
 %s
 %s`,
 		current+1, len(msgs), ncwrap.Preformat(mstr),
-		getHeader(m, "From"),
-		getHeader(m, "To"),
-		getHeader(m, "Cc"),
-		getHeader(m, "Date"),
-		getHeader(m, "Subject"),
+		cmdglib.GetHeader(m, "From"),
+		cmdglib.GetHeader(m, "To"),
+		cmdglib.GetHeader(m, "Cc"),
+		cmdglib.GetHeader(m, "Date"),
+		cmdglib.GetHeader(m, "Subject"),
 		labelIDs[currentLabel],
 		lsstr,
 		strings.Repeat("-", width),
@@ -193,7 +194,7 @@ Backspace         Page up
 		case 'e':
 			st := time.Now()
 			if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
-				RemoveLabelIds: []string{inbox},
+				RemoveLabelIds: []string{cmdglib.Inbox},
 			}).Do(); err == nil {
 				log.Printf("Users.Messages.Modify(archive): %v", time.Since(st))
 				nc.Status("[green]OK, archived")

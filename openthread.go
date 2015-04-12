@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	gc "code.google.com/p/goncurses"
+	"github.com/ThomasHabets/cmdg/cmdglib"
 	"github.com/ThomasHabets/cmdg/ncwrap"
 	gmail "google.golang.org/api/gmail/v1"
 )
@@ -64,11 +65,11 @@ func openThreadPrint(w *gc.Window, ts []*gmail.Thread, current int, marked bool,
 	//height, width := w.MaxYX()
 	tswidth := 7
 
-	ncwrap.ColorPrint(w, "Thread: [bold]%s[unbold] (%d messages)\n", getHeader(t.Messages[0], "Subject"), len(t.Messages))
+	ncwrap.ColorPrint(w, "Thread: [bold]%s[unbold] (%d messages)\n", cmdglib.GetHeader(t.Messages[0], "Subject"), len(t.Messages))
 	for n, m := range t.Messages {
-		ncwrap.ColorPrint(w, "[green]%*.*s - %s\n", tswidth, tswidth, timestring(m), getHeader(m, "From"))
+		ncwrap.ColorPrint(w, "[green]%*.*s - %s\n", tswidth, tswidth, cmdglib.TimeString(m), cmdglib.GetHeader(m, "From"))
 
-		if hasLabel(m.LabelIds, unread) || n == len(t.Messages)-1 {
+		if cmdglib.HasLabel(m.LabelIds, cmdglib.Unread) || n == len(t.Messages)-1 {
 			bodyLines := breakLines(strings.Split(getBody(m), "\n"))
 			body := strings.Join(bodyLines, "\n")
 			ncwrap.ColorPrint(w, "%s\n", body)
