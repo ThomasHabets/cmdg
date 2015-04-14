@@ -32,6 +32,7 @@ func mailTail(g *gmail.Service, historyID uint64) uint64 {
 		res, err := g.Users.History.List(email).MaxResults(pageSize).StartHistoryId(historyID).PageToken(pageToken).Do()
 		if err != nil {
 			glog.Errorf("Listing history since %v: %v", historyID, err)
+			continue
 		}
 		pageToken = res.NextPageToken
 		for _, h := range res.History {
@@ -44,7 +45,7 @@ func mailTail(g *gmail.Service, historyID uint64) uint64 {
 					defer wg.Done()
 					mres, err := g.Users.Messages.Get(email, m.Message.Id).Format("full").Do()
 					if err != nil {
-						glog.Errorf("Getting message %q: %v", m.Message.Id, err)
+						glog.Errorf("Getting message %q, skipping: %v", m.Message.Id, err)
 					} else {
 						msgs[n] = mres
 					}
