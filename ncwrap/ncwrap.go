@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	gc "code.google.com/p/goncurses"
+	gc "github.com/rthornton128/goncurses"
 )
 
 type NCWrap struct {

@@ -51,10 +51,10 @@ import (
 	"strings"
 	"time"
 
-	gc "code.google.com/p/goncurses"
 	"github.com/ThomasHabets/cmdg/cmdglib"
 	"github.com/ThomasHabets/cmdg/ncwrap"
 	"github.com/ThomasHabets/drive-du/lib"
+	gc "github.com/rthornton128/goncurses"
 	gmail "google.golang.org/api/gmail/v1"
 )
 

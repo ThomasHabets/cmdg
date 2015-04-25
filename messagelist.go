@@ -9,9 +9,9 @@ import (
 	"time"
 	"unicode"
 
-	gc "code.google.com/p/goncurses"
 	"github.com/ThomasHabets/cmdg/cmdglib"
 	"github.com/ThomasHabets/cmdg/ncwrap"
+	gc "github.com/rthornton128/goncurses"
 	gmail "google.golang.org/api/gmail/v1"
 )
 
