@@ -5,5 +5,5 @@ go:
   - tip
 install:
   - go get github.com/golang/glog
-  - go get -d github.com/ThomasHabets/drive-du
+  - go get github.com/ThomasHabets/drive-du/lib
   - go get code.google.com/p/goauth2/oauth
