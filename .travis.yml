@@ -7,3 +7,5 @@ install:
   - go get github.com/golang/glog
   - go get github.com/ThomasHabets/drive-du/lib
   - go get code.google.com/p/goauth2/oauth
+  - go get code.google.com/p/goncurses
+  - go get google.golang.org/api/gmail/v1
