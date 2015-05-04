@@ -1,9 +1,5 @@
 // cmdg is a command line client to Gmail.
 //
-// Copyright Thomas Habets <thomas@habets.se> 2015
-//
-// TODO: license
-//
 // The major reason for its existence is that the Gmail web UI is not
 // friendly to proper quoting.
 //
@@ -35,6 +31,23 @@
 //   * Loading animations to show it's not stuck.
 //   * In-memory cache for messages (all but labels for messages is immutable)
 //   * On disk (encrypted) cache for messages.
+/*
+ *  Copyright (C) 2015 Thomas Habets <thomas@habets.se>
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
 package main
 
 import (
