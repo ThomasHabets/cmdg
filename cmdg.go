@@ -333,6 +333,13 @@ func getBodyRecurse(m *gmail.MessagePart) string {
 		if err != nil {
 			return fmt.Sprintf("mime decoding error: %v", err)
 		}
+		if strings.HasPrefix(cmdglib.GetHeaderPart(m, "Content-Type"), "text/html") {
+			if data, err := html2txt(data); err != nil {
+				log.Printf("Rendering HTML: %v", err)
+			} else {
+				return data
+			}
+		}
 		return data
 	}
 	body := ""
@@ -371,6 +378,13 @@ func getBodyRecurse(m *gmail.MessagePart) string {
 	return "Error extracting content: none found."
 }
 
+func getBody(m *gmail.Message) string {
+	if m.Payload == nil {
+		return "loading..."
+	}
+	return strings.Trim(getBodyRecurse(m.Payload), " \n\r\t")
+}
+
 // html2txt uses lynx to render HTML to plain text.
 func html2txt(s string) (string, error) {
 	var stdout bytes.Buffer
@@ -382,13 +396,6 @@ func html2txt(s string) (string, error) {
 		return "", err
 	}
 	return stdout.String(), nil
-}
-
-func getBody(m *gmail.Message) string {
-	if m.Payload == nil {
-		return "loading..."
-	}
-	return strings.Trim(getBodyRecurse(m.Payload), " \n\r\t")
 }
 
 func prefixQuote(in []string) []string {

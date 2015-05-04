@@ -53,7 +53,11 @@ func GetHeader(m *gmail.Message, header string) string {
 	if m.Payload == nil {
 		return "loading"
 	}
-	for _, h := range m.Payload.Headers {
+	return GetHeaderPart(m.Payload, header)
+}
+
+func GetHeaderPart(p *gmail.MessagePart, header string) string {
+	for _, h := range p.Headers {
 		if h.Name == header {
 			// TODO: How to decode correctly?
 			if false {
