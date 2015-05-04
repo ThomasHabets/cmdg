@@ -50,6 +50,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/ThomasHabets/cmdg/cmdglib"
 	"github.com/ThomasHabets/cmdg/ncwrap"
@@ -358,19 +359,56 @@ func prefixQuote(in []string) []string {
 	return out
 }
 
+// getWord returns the first word and the remaining string.
+func getWord(s string) (string, string) {
+	seenChar := false
+	for i, r := range s {
+		if !unicode.IsSpace(r) {
+			seenChar = true
+		}
+		if seenChar && unicode.IsSpace(r) {
+			return s[0:i], s[i:]
+		}
+	}
+	return s, ""
+}
+
+func getWords(s string) []string {
+	ret := []string{}
+	for len(s) > 0 {
+		var w string
+		w, s = getWord(s)
+		ret = append(ret, w)
+	}
+	return ret
+}
+
+// breakLines takes a bunch of lines and breaks them on word boundary.
+// TODO: How should it handle quoted (indented) lines?
 func breakLines(in []string) []string {
-	var out []string
+	out := []string{}
 	for _, line := range in {
 		line = strings.TrimRight(line, spaces)
-		// TODO: break on rune boundary.
-		if len(line) > maxLine {
-			for n := 0; len(line) > maxLine; n++ {
-				out = append(out, strings.TrimRight(line[:maxLine], spaces))
-				line = strings.TrimLeft(line[maxLine:], spaces)
+		if line == "" {
+			out = append(out, line)
+			continue
+		}
+
+		var newLine string
+		for _, word := range getWords(line) {
+			t := newLine + word
+			if newLine == "" {
+				newLine = t
+			} else if len(t) < maxLine {
+				newLine = t
+			} else {
+				out = append(out, newLine)
+				newLine = strings.TrimLeft(word, spaces)
 			}
 		}
-		// TODO: There's probably an off-by-one here whe line is multiple of maxLine.
-		out = append(out, line)
+		if newLine != "" {
+			out = append(out, newLine)
+		}
 	}
 	return out
 }

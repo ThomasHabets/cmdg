@@ -1,5 +1,6 @@
-// Copyright Thomas Habets <thomas@habets.se> 2015
 package main
+
+// Copyright Thomas Habets <thomas@habets.se> 2015
 
 import (
 	"bytes"
