@@ -382,7 +382,7 @@ s                 Search
 				}
 			case 'c':
 				nc.Status("Running editor")
-				input := "To: \nSubject: \n\n" + *signature
+				input := fmt.Sprintf("To: \nSubject: \n\n%s\n", *signature)
 				sendMessage, err := runEditor(input)
 				if err != nil {
 					nc.Status("Running editor: %v", err)
