@@ -51,6 +51,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -93,6 +94,7 @@ var (
 	logFile       = flag.String("log", "/dev/null", "Log non-sensitive data to this file.")
 	waitingLabel  = flag.String("waiting_label", "", "Label used for 'awaiting reply'. If empty disables feature.")
 	threadView    = flag.Bool("thread", false, "Use thread view.")
+	lynx          = flag.String("lynx", "lynx", "Path to 'lynx' browser. Used to render HTML email.")
 
 	gmailService *gmail.Service
 
@@ -329,20 +331,25 @@ func getBodyRecurse(m *gmail.MessagePart) string {
 	if len(m.Parts) == 0 {
 		data, err := mimeDecode(string(m.Body.Data))
 		if err != nil {
-			return fmt.Sprintf("TODO content error: %v", err)
+			return fmt.Sprintf("mime decoding error: %v", err)
 		}
 		return data
 	}
 	body := ""
+	htmlBody := "" // Used only if there's no plaintext version.
 	for _, p := range m.Parts {
 		if p.MimeType == "text/plain" {
 			data, err := mimeDecode(p.Body.Data)
 			if err != nil {
-				return fmt.Sprintf("TODO Content error: %v", err)
+				return fmt.Sprintf("mime decoding error for text/plain: %v", err)
 			}
 			body += string(data)
 		} else if p.MimeType == "text/html" {
-			// Skip.
+			data, err := mimeDecode(p.Body.Data)
+			if err != nil {
+				return fmt.Sprintf("mime decoding error for text/html: %v", err)
+			}
+			htmlBody += string(data)
 		} else if p.MimeType == "multipart/alternative" {
 			body += getBodyRecurse(p)
 		} else {
@@ -350,7 +357,31 @@ func getBodyRecurse(m *gmail.MessagePart) string {
 			log.Printf("Unknown mimetype skipped: %q", p.MimeType)
 		}
 	}
-	return body
+	if body != "" {
+		return body
+	}
+	if htmlBody != "" {
+		b, err := html2txt(htmlBody)
+		if err != nil {
+			log.Printf("Rendering HTML: %v", err)
+			return htmlBody
+		}
+		return b
+	}
+	return "Error extracting content: none found."
+}
+
+// html2txt uses lynx to render HTML to plain text.
+func html2txt(s string) (string, error) {
+	var stdout bytes.Buffer
+	// TODO: Sandbox lynx.
+	cmd := exec.Command(*lynx, "-dump", "-stdin")
+	cmd.Stdin = bytes.NewBufferString(s)
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	return stdout.String(), nil
 }
 
 func getBody(m *gmail.Message) string {
