@@ -63,6 +63,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 
@@ -752,6 +753,7 @@ Usage: %s [...options...]
 }
 
 func main() {
+	syscall.Umask(0077)
 	flag.Usage = func() { usage(os.Stderr) }
 	flag.Parse()
 	if flag.NArg() > 0 {
