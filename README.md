@@ -1,4 +1,5 @@
-cmdg - A command line client to Gmail.
+cmdg - A command line client to Gmail
+=====================================
 
 Copyright Thomas Habets <thomas@habets.se> 2015
 
@@ -53,6 +54,7 @@ A security difference
 Installing
 ==========
 ```
+$ sudo apt-get install libncurses-dev pkg-config
 $ mkdir go
 $ cd go
 $ GOPATH=$(pwd) go get github.com/ThomasHabets/cmdg
