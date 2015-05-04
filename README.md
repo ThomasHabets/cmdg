@@ -66,6 +66,8 @@ Configuring
 ===========
 ```
 $ cmdg -configure
+[It will ask about ClientID and ClientSecret.
+For now you have create those at https://console.developers.google.com]
 Cut and paste this URL into your browser:
   https://long-url....
 Returned code: <paste code here>
