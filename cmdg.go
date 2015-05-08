@@ -63,6 +63,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode"
@@ -150,10 +151,10 @@ func profileAPI(op string, d time.Duration) {
 	log.Printf("API call %v: %v", op, d)
 }
 
-func backoff(bo time.Duration) time.Duration {
+func backoff(n int) (int, bool) {
 	// TODO: exponential backoff.
-	time.Sleep(bo)
-	return bo
+	time.Sleep(backoffTime)
+	return n, true
 }
 
 // list returns some initial message stubs, with the full message coming later on the returned channel.
@@ -213,19 +214,28 @@ func list(label, search, pageToken string, nres int) ([]listEntry, <-chan listEn
 
 	nc.Status("Total number of messages in folder: %d", res.ResultSizeEstimate)
 
-	msgChan := make(chan listEntry)
+	msgChan := make(chan listEntry, len(res.Messages))
+	var wg sync.WaitGroup
 	{
 		// Load message bodies async and in parallel.
 		for _, m := range res.Messages {
+			wg.Add(1)
 			m2 := m
 			go func() {
+				defer wg.Done()
 				st := time.Now()
-				bo := backoffTime
+				bo := 0
 				for {
+					log.Printf("Attempting to get message")
 					mres, err := gmailService.Users.Messages.Get(email, m2.Id).Format("full").Do()
 					if err != nil {
+						var done bool
+						bo, done = backoff(bo)
+						if done {
+							log.Printf("Get message failed, backoff expired, giving up: %v", err)
+							return
+						}
 						log.Printf("Get message failed, retrying: %v", err)
-						bo = backoff(bo)
 						continue
 					}
 					profileAPI("Users.Messages.Get", time.Since(st))
@@ -236,6 +246,10 @@ func list(label, search, pageToken string, nres int) ([]listEntry, <-chan listEn
 				}
 			}()
 		}
+		go func() {
+			wg.Wait()
+			close(msgChan)
+		}()
 	}
 	nc.Status("%s: Showing %d/%d. Total: %d emails, %d threads",
 		profile.EmailAddress, len(res.Messages), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
