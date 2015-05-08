@@ -75,7 +75,8 @@ import (
 )
 
 const (
-	version = "0.0.2"
+	version   = "0.0.2"
+	userAgent = "cmdg " + version
 
 	// Initial backoff time for API calls.
 	backoffTime = 50 * time.Millisecond
@@ -247,6 +248,7 @@ func list(label, search, pageToken string, nres int) ([]listEntry, <-chan listEn
 	return ret, msgChan, nil
 }
 
+// TODO: clean this up to look more like list().
 func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
 	nres := 100
 	nres -= 2 + 3 // Bottom view and room for snippet.
@@ -327,15 +329,16 @@ func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
 }
 
 func getLabels() {
+	labels = make(map[string]string)
+	labelIDs = make(map[string]string)
+
 	st := time.Now()
 	res, err := gmailService.Users.Labels.List(email).Do()
 	if err != nil {
-		log.Fatalf("listing labels: %v", err)
-	} else {
-		log.Printf("Users.Labels.List: %v", time.Since(st))
+		nc.Status("[red]Listing labels: %v", err)
+		return
 	}
-	labels = make(map[string]string)
-	labelIDs = make(map[string]string)
+	profileAPI("Users.Labels.List", time.Since(st))
 	for _, l := range res.Labels {
 		labels[l.Name] = l.Id
 		labelIDs[l.Id] = l.Name
@@ -609,6 +612,8 @@ func runEditor(input string) (string, error) {
 
 	// Restore terminal for editors use.
 	nc.Stop()
+
+	// Re-acquire terminal when done.
 	defer func() {
 		var err error
 		nc, err = ncwrap.Start()
@@ -691,20 +696,25 @@ func createSend(thread, msg string) {
 				nc.Input <- 'e'
 			}()
 			return
-		case 'w':
+		case 'w': // Send with label.
 			st := time.Now()
-			l, ok := labels[*waitingLabel]
-			if !ok {
-				log.Fatalf("Waiting label %q does not exist!", *waitingLabel)
-			}
-
+			l, hasLabel := labels[*waitingLabel]
 			nc.Status("Sending with label...")
-			if gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+
+			// Send.
+			gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
 				ThreadId: thread,
 				Raw:      mimeEncode(msg),
-			}).Do(); err != nil {
+			}).Do()
+			if err != nil {
 				nc.Status("Error sending: %v", err)
+				break
+			}
+
+			if !hasLabel {
+				nc.Status("Sent OK, [red]but label %q doesn't exist, so can't add it.", *waitingLabel)
 			} else {
+				// Add label.
 				if _, err := gmailService.Users.Messages.Modify(email, gmsg.Id, &gmail.ModifyMessageRequest{
 					AddLabelIds: []string{l},
 				}).Do(); err != nil {
@@ -714,23 +724,27 @@ func createSend(thread, msg string) {
 					nc.Status("Successfully sent (with waiting label %q)", l)
 					log.Printf("Users.Messages.Send+Add waiting: %v", time.Since(st))
 				}
+				nc.Status("[green]Sent with label")
 			}
-			nc.Status("[green]Sent with label")
 			return
-		case 'W':
+		case 'W': // Send with label and archive.
 			st := time.Now()
-			l, ok := labels[*waitingLabel]
-			if !ok {
-				log.Fatalf("Waiting label %q does not exist!", *waitingLabel)
-			}
+			l, hasLabel := labels[*waitingLabel]
 
 			nc.Status("Sending with label...")
-			if gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+			gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
 				ThreadId: thread,
 				Raw:      mimeEncode(msg),
-			}).Do(); err != nil {
+			}).Do()
+			if err != nil {
 				nc.Status("Error sending: %v", err)
+				break
+			}
+
+			if !hasLabel {
+				nc.Status("Sent OK, [red]but label %q doesn't exist, so can't add it.", *waitingLabel)
 			} else {
+				// Add label.
 				if _, err := gmailService.Users.Messages.Modify(email, gmsg.Id, &gmail.ModifyMessageRequest{
 					AddLabelIds: []string{l},
 				}).Do(); err != nil {
@@ -744,8 +758,12 @@ func createSend(thread, msg string) {
 						nc.Input <- 'e'
 					}()
 				}
+				nc.Status("[green]Sent with label")
 			}
-			nc.Status("[green]Sent with label")
+			go func() {
+				// TODO: Archive in a better way.
+				nc.Input <- 'e'
+			}()
 			return
 		case 'a':
 			nc.Status("Aborted send")
@@ -849,6 +867,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create gmail client: %v", err)
 	}
+	gmailService.UserAgent = userAgent
 
 	// Make sure oauth keys are correct before setting up ncurses.
 	{
@@ -872,7 +891,7 @@ func main() {
 
 	nc, err = ncwrap.Start()
 	if err != nil {
-		log.Fatalf("ncurses fail: %v", err)
+		log.Fatalf("ncurses failed to start: %v", err)
 	}
 	defer func() {
 		nc.Stop()
