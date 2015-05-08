@@ -232,3 +232,21 @@ func TestListMessages(t *testing.T) {
 		}
 	}
 }
+
+func TestBackoff(t *testing.T) {
+	for n := 0; ; n++ {
+		n2, d, done := backoff(n)
+		if got, want := n2, n+1; got != want {
+			t.Errorf("Backoff should increase by 1, got %d, want %d", got, want)
+		}
+		if int64(d) < 0 {
+			t.Errorf("backoff %d: sleep time must be postive. Was %v", n, d)
+		}
+		if got, want := d, 10; int64(got)/1000000000 > int64(want) {
+			t.Errorf("backoff %d: too long: got %v, want max %ds", n, got, want)
+		}
+		if done {
+			break
+		}
+	}
+}

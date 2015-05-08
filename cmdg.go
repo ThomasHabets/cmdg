@@ -58,6 +58,8 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -79,8 +81,10 @@ const (
 	version   = "0.0.2"
 	userAgent = "cmdg " + version
 
-	// Initial backoff time for API calls.
-	backoffTime = 50 * time.Millisecond
+	backoffTime = 50 * time.Millisecond // Initial backoff time for API calls.
+	backoffBase = 1.7
+	maxRetries  = 20
+	maxTimeout  = 5 * time.Second
 
 	// Relative to $HOME.
 	defaultConfigFile    = ".cmdg.conf"
@@ -151,10 +155,23 @@ func profileAPI(op string, d time.Duration) {
 	log.Printf("API call %v: %v", op, d)
 }
 
-func backoff(n int) (int, bool) {
-	// TODO: exponential backoff.
-	time.Sleep(backoffTime)
-	return n, true
+func backoff(n int) (int, time.Duration, bool) {
+	f := func(n int) float64 {
+		return float64(backoffTime.Nanoseconds()) * math.Pow(backoffBase, float64(n))
+	}
+	ns := int64(f(n))
+	if true {
+		// Randomize backoff a bit.
+		ns = int64(f(n) + (f(n+1)-f(n))*rand.Float64())
+	}
+	done := false
+	if ns > maxTimeout.Nanoseconds() {
+		ns = maxTimeout.Nanoseconds()
+	}
+	if n > maxRetries {
+		done = true
+	}
+	return n + 1, time.Duration(ns), done
 }
 
 // list returns some initial message stubs, with the full message coming later on the returned channel.
@@ -230,11 +247,13 @@ func list(label, search, pageToken string, nres int) ([]listEntry, <-chan listEn
 					mres, err := gmailService.Users.Messages.Get(email, m2.Id).Format("full").Do()
 					if err != nil {
 						var done bool
-						bo, done = backoff(bo)
+						var s time.Duration
+						bo, s, done = backoff(bo)
 						if done {
 							log.Printf("Get message failed, backoff expired, giving up: %v", err)
 							return
 						}
+						time.Sleep(s)
 						log.Printf("Get message failed, retrying: %v", err)
 						continue
 					}
