@@ -76,6 +76,9 @@ import (
 
 const (
 	version = "0.0.2"
+
+	// Initial backoff time for API calls.
+	backoffTime = 50 * time.Millisecond
 )
 
 var (
@@ -138,13 +141,24 @@ func (a sortLabels) Less(i, j int) bool {
 	return strings.ToLower(a[i]) < strings.ToLower(a[j])
 }
 
-func list(label, search string) ([]listEntry, <-chan listEntry) {
-	log.Printf("listing %q %q", label, search)
-	nres := 100
-	nres -= 2 + 3 // Bottom view and room for snippet.
+func profileAPI(op string, d time.Duration) {
+	log.Printf("API call %v: %v", op, d)
+}
 
+func backoff(bo time.Duration) time.Duration {
+	// TODO: exponential backoff.
+	time.Sleep(bo)
+	return bo
+}
+
+// list returns some initial message stubs, with the full message coming later on the returned channel.
+// label is the label ID ("" means all mail).
+// search is the search query ("" means match all).
+func list(label, search, pageToken string, nres int) ([]listEntry, <-chan listEntry, []error) {
+	log.Printf("listing %q %q", label, search)
 	syncP := parallel{} // Run the parts that can't wait in parallel.
 
+	var funcErr []error
 	// List messages.
 	var res *gmail.ListMessagesResponse
 	syncP.add(func(ch chan<- func()) {
@@ -152,7 +166,7 @@ func list(label, search string) ([]listEntry, <-chan listEntry) {
 		var err error
 		st := time.Now()
 		q := gmailService.Users.Messages.List(email).
-			//		PageToken().
+			PageToken(pageToken).
 			MaxResults(int64(nres)).
 			//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
 			Fields("messages,resultSizeEstimate")
@@ -164,11 +178,15 @@ func list(label, search string) ([]listEntry, <-chan listEntry) {
 		}
 		res, err = q.Do()
 		if err != nil {
-			log.Fatalf("Listing: %v", err)
+			ch <- func() {
+				funcErr = append(funcErr, fmt.Errorf("Users.Messages.List: %v", err))
+			}
+			return
 		}
-		log.Printf("Listing: %v", time.Since(st))
+		profileAPI("Users.Messages.List", time.Since(st))
 	})
 
+	// Get Profile to update status line.
 	var profile *gmail.Profile
 	syncP.add(func(ch chan<- func()) {
 		defer close(ch)
@@ -176,28 +194,36 @@ func list(label, search string) ([]listEntry, <-chan listEntry) {
 		var err error
 		profile, err = gmailService.Users.GetProfile(email).Do()
 		if err != nil {
-			log.Fatalf("Get profile: %v", err)
+			ch <- func() {
+				funcErr = append(funcErr, fmt.Errorf("Users.GetProfile: %v", err))
+			}
+			return
 		}
-		log.Printf("Users.GetProfile: %v", time.Since(st))
+		profileAPI("Users.GetProfile", time.Since(st))
 	})
 	syncP.run()
+	if len(funcErr) != 0 {
+		return nil, nil, funcErr
+	}
 
-	nc.Status("Total number of messages in folder: %d\n", res.ResultSizeEstimate)
+	nc.Status("Total number of messages in folder: %d", res.ResultSizeEstimate)
 
 	msgChan := make(chan listEntry)
-	// Load messages async.
 	{
+		// Load message bodies async and in parallel.
 		for _, m := range res.Messages {
 			m2 := m
 			go func() {
 				st := time.Now()
+				bo := backoffTime
 				for {
 					mres, err := gmailService.Users.Messages.Get(email, m2.Id).Format("full").Do()
 					if err != nil {
 						log.Printf("Get message failed, retrying: %v", err)
+						bo = backoff(bo)
 						continue
 					}
-					log.Printf("Users.Messages.Get: %v", time.Since(st))
+					profileAPI("Users.Messages.Get", time.Since(st))
 					msgChan <- listEntry{
 						msg: mres,
 					}
@@ -208,14 +234,13 @@ func list(label, search string) ([]listEntry, <-chan listEntry) {
 	}
 	nc.Status("%s: Showing %d/%d. Total: %d emails, %d threads",
 		profile.EmailAddress, len(res.Messages), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
-	emailAddress = profile.EmailAddress
 	ret := []listEntry{}
 	for _, m := range res.Messages {
 		ret = append(ret, listEntry{
 			msg: m,
 		})
 	}
-	return ret, msgChan
+	return ret, msgChan, nil
 }
 
 func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
@@ -510,7 +535,9 @@ func getReplyAll(openMessage *gmail.Message) (string, error) {
 		if len(a) == 0 {
 			continue
 		}
-		if strings.Contains(a, "<"+emailAddress+">") {
+
+		// Don't CC self, that would be silly.
+		if strings.Contains(a, "<"+emailAddress+">") || a == emailAddress {
 			continue
 		}
 		ncc = append(ncc, a)
@@ -817,10 +844,15 @@ func main() {
 	}
 
 	// Make sure oauth keys are correct before setting up ncurses.
-	if _, err = gmailService.Users.GetProfile(email).Do(); err != nil {
-		log.Fatalf("Get profile: %v", err)
+	{
+		profile, err := gmailService.Users.GetProfile(email).Do()
+		if err != nil {
+			log.Fatalf("Get profile: %v", err)
+		}
+		emailAddress = profile.EmailAddress
 	}
 
+	// Redirect logging.
 	{
 		f, err := os.OpenFile(*logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {

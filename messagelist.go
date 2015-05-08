@@ -277,18 +277,34 @@ func messageListMain(thread bool) {
 	})
 	msgsCh := make(chan []listEntry)
 	msgUpdateCh := make(chan listEntry)
+	msgDo := make(chan func())
+
+	// Synchronous function to list messages / threads.
+	// To be called in a goroutine.
 	loadMsgs := func(label, search string) {
 		log.Printf("Loading %s", label)
 		var l []listEntry
 		var lch <-chan listEntry
+		var errs []error
 		if thread {
 			l, lch = listThreads(label, search)
 		} else {
-			l, lch = list(label, search)
+			l, lch, errs = list(label, search, "", 100)
 		}
-		msgsCh <- l
-		for m := range lch {
-			msgUpdateCh <- m
+		if len(errs) != 0 {
+			msgDo <- func() {
+				e := []string{}
+				for _, ee := range errs {
+					e = append(e, ee.Error())
+				}
+				helpWin(fmt.Sprintf("[red]ERROR listing:\n%v", strings.Join(e, "\n")))
+				nc.ApplyMain(func(w *gc.Window) { w.Clear() })
+			}
+		} else {
+			msgsCh <- l
+			for m := range lch {
+				msgUpdateCh <- m
+			}
 		}
 	}
 	go loadMsgs(currentLabel, currentSearch)
@@ -546,6 +562,8 @@ s                 Search
 					msgs[n] = m
 				}
 			}
+		case f := <-msgDo:
+			f()
 		}
 		if reloadTODO {
 			go loadMsgs(currentLabel, currentSearch)
