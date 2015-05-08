@@ -79,13 +79,17 @@ const (
 
 	// Initial backoff time for API calls.
 	backoffTime = 50 * time.Millisecond
+
+	// Relative to $HOME.
+	defaultConfigFile    = ".cmdg.conf"
+	defaultSignatureFile = ".signature"
 )
 
 var (
 	license       = flag.Bool("license", false, "Show program license.")
 	help          = flag.Bool("help", false, "Show usage text and exit.")
 	help2         = flag.Bool("h", false, "Show usage text and exit.")
-	config        = flag.String("config", "", "Config file. If empty will default to ~/cmdg.conf.")
+	config        = flag.String("config", "", "Config file. If empty will default to ~/"+defaultConfigFile)
 	configure     = flag.Bool("configure", false, "Configure OAuth and write config file.")
 	readonly      = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
 	editor        = flag.String("editor", "/usr/bin/emacs", "Default editor to use if EDITOR is not set.")
@@ -94,7 +98,7 @@ var (
 	replyPrefix   = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
 	forwardRegex  = flag.String("forward_regexp", `(?i)^(Fwd): `, "If subject matches, there's no need to add a Fwd: prefix.")
 	forwardPrefix = flag.String("forward_prefix", "Fwd: ", "String to prepend to subject in forwards.")
-	signature     = flag.String("signature", "Best regards", "End of all emails.")
+	signature     = flag.String("signature", "", "File containing end of all emails. Defaults to ~/"+defaultSignatureFile)
 	logFile       = flag.String("log", "/dev/null", "Log non-sensitive data to this file.")
 	waitingLabel  = flag.String("waiting_label", "", "Label used for 'awaiting reply'. If empty disables feature.")
 	threadView    = flag.Bool("thread", false, "Use thread view.")
@@ -804,7 +808,10 @@ func main() {
 		log.Fatalf("-forward_regexp %q is not a valid regex: %v", *forwardRegex, err)
 	}
 	if *config == "" {
-		*config = path.Join(os.Getenv("HOME"), ".cmdg.conf")
+		*config = path.Join(os.Getenv("HOME"), defaultConfigFile)
+	}
+	if *signature == "" {
+		*signature = path.Join(os.Getenv("HOME"), defaultSignatureFile)
 	}
 
 	scope := scopeModify

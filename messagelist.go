@@ -20,6 +20,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"sort"
 	"strings"
@@ -31,6 +32,14 @@ import (
 	gc "github.com/rthornton128/goncurses"
 	gmail "google.golang.org/api/gmail/v1"
 )
+
+func getSignature() string {
+	b, err := ioutil.ReadFile(*signature)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
 
 func winSize() (int, int) {
 	var maxX, maxY int
@@ -398,7 +407,7 @@ s                 Search
 				}
 			case 'c':
 				nc.Status("Running editor")
-				input := fmt.Sprintf("To: \nSubject: \n\n%s\n", *signature)
+				input := fmt.Sprintf("To: \nSubject: \n\n%s\n", getSignature())
 				sendMessage, err := runEditor(input)
 				if err != nil {
 					nc.Status("Running editor: %v", err)
