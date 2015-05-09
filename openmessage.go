@@ -307,7 +307,7 @@ func doOpenMessageCmdGPGVerify(msg *gmail.Message, doDownload bool) (string, boo
 	}
 	if err := cmd.Wait(); err != nil {
 		if _, normal := err.(*exec.ExitError); !normal {
-			return fmt.Sprintf("Verify failed, failed to run: %v", err), false
+			return fmt.Sprintf("Verify failed, failed to run: %v. Stderr: %q", err, stderr.String()), false
 		}
 	}
 
