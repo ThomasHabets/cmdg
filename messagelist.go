@@ -315,6 +315,20 @@ func messageListMain(thread bool) {
 				msgUpdateCh <- m
 			}
 		}
+		if c, err := getContacts(); err != nil {
+			log.Printf("Getting contacts: %v", err)
+		} else {
+			msgDo <- func() {
+				contacts = c
+			}
+		}
+		if c, err := getLabels(); err != nil {
+			log.Printf("Getting labels: %v", err)
+		} else {
+			msgDo <- func() {
+				updateLabels(c)
+			}
+		}
 	}
 	go loadMsgs(currentLabel, currentSearch)
 	marked := make(map[string]bool)

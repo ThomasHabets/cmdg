@@ -367,21 +367,24 @@ func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
 	return ret, msgChan
 }
 
-func getLabels() {
+func updateLabels(ls []*gmail.Label) {
 	labels = make(map[string]string)
 	labelIDs = make(map[string]string)
+	for _, l := range ls {
+		labels[l.Name] = l.Id
+		labelIDs[l.Id] = l.Name
+	}
+}
 
+func getLabels() ([]*gmail.Label, error) {
 	st := time.Now()
 	res, err := gmailService.Users.Labels.List(email).Do()
 	if err != nil {
 		nc.Status("[red]Listing labels: %v", err)
-		return
+		return nil, err
 	}
 	profileAPI("Users.Labels.List", time.Since(st))
-	for _, l := range res.Labels {
-		labels[l.Name] = l.Id
-		labelIDs[l.Id] = l.Name
-	}
+	return res.Labels, nil
 }
 
 func mimeDecode(s string) (string, error) {
@@ -918,7 +921,11 @@ func main() {
 	}
 
 	// Get some initial data that should always succeed.
-	getLabels()
+	if c, err := getLabels(); err != nil {
+		log.Fatalf("Getting contacts: %v", err)
+	} else {
+		updateLabels(c)
+	}
 	if err := updateContacts(); err != nil {
 		log.Fatalf("Getting contacts: %v", err)
 	}
