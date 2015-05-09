@@ -121,6 +121,8 @@ var (
 	contacts     contactsT
 	emailAddress string
 
+	logRedirected bool // Don't write API measurements to log until it's been redirected.
+
 	replyRE   *regexp.Regexp
 	forwardRE *regexp.Regexp
 )
@@ -154,7 +156,9 @@ func (a sortLabels) Less(i, j int) bool {
 }
 
 func profileAPI(op string, d time.Duration) {
-	log.Printf("API call %v: %v", op, d)
+	if logRedirected {
+		log.Printf("API call %v: %v", op, d)
+	}
 }
 
 func backoff(n int) (int, time.Duration, bool) {
@@ -929,6 +933,7 @@ func main() {
 		defer f.Close()
 		log.SetOutput(f)
 		log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+		logRedirected = true
 	}
 
 	nc, err = ncwrap.Start()

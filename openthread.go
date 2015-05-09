@@ -74,7 +74,6 @@ Backspace         Page up
 			nc.Status("unknown key: %v", gc.KeyString(key))
 		}
 	}
-	return false
 }
 
 func openThreadPrint(w *gc.Window, ts []*gmail.Thread, current int, marked bool, currentLabel string, scroll int) {
