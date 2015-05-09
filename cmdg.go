@@ -60,6 +60,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -110,6 +111,7 @@ var (
 	threadView    = flag.Bool("thread", false, "Use thread view.")
 	lynx          = flag.String("lynx", "lynx", "Path to 'lynx' browser. Used to render HTML email.")
 
+	authedClient *http.Client
 	gmailService *gmail.Service
 
 	nc *ncwrap.NCWrap
@@ -117,6 +119,7 @@ var (
 	// State keepers.
 	labels       = make(map[string]string) // From name to ID.
 	labelIDs     = make(map[string]string) // From ID to name.
+	contacts     contactsT
 	emailAddress string
 
 	replyRE   *regexp.Regexp
@@ -124,8 +127,8 @@ var (
 )
 
 const (
-	scopeReadonly = "https://www.googleapis.com/auth/gmail.readonly"
-	scopeModify   = "https://www.googleapis.com/auth/gmail.modify"
+	scopeReadonly = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/contacts.readonly"
+	scopeModify   = "https://www.googleapis.com/auth/gmail.modify https://www.google.com/m8/feeds"
 	accessType    = "offline"
 	email         = "me"
 
@@ -896,7 +899,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to gmail: %v", err)
 	}
-	gmailService, err = gmail.New(t.Client())
+	authedClient = t.Client()
+	gmailService, err = gmail.New(authedClient)
 	if err != nil {
 		log.Fatalf("Failed to create gmail client: %v", err)
 	}
@@ -909,6 +913,12 @@ func main() {
 			log.Fatalf("Get profile: %v", err)
 		}
 		emailAddress = profile.EmailAddress
+	}
+
+	// Get some initial data that should always succeed.
+	getLabels()
+	if err := updateContacts(); err != nil {
+		log.Fatalf("Getting contacts: %v", err)
 	}
 
 	// Redirect logging.
@@ -930,8 +940,6 @@ func main() {
 		nc.Stop()
 	}()
 	nc.Status("Start[green]ing [red]up...")
-
-	getLabels()
 
 	messageListMain(*threadView)
 }
