@@ -14,6 +14,7 @@ type contactEmail struct {
 }
 type contactEntry struct {
 	ID    string         `xml:"id"`
+	Title string         `xml:"title"`
 	Email []contactEmail `xml:"email"`
 }
 type contactsT struct {
@@ -29,6 +30,20 @@ func updateContacts() error {
 	}
 	contacts = c
 	return nil
+}
+
+func contactAddresses() []string {
+	var ret []string
+	for _, c := range contacts.Entry {
+		for _, e := range c.Email {
+			if c.Title != "" {
+				ret = append(ret, fmt.Sprintf("%s <%s>", c.Title, e.Email))
+			} else {
+				ret = append(ret, e.Email)
+			}
+		}
+	}
+	return ret
 }
 
 func getContacts() (contactsT, error) {

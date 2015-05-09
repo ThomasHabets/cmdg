@@ -70,13 +70,13 @@ func winBorder(w *gc.Window) {
 	}
 }
 
-// getLabel interactively asks the user for a label, and returns the label ID.
-func getLabel(prompt string, ls []string) string {
+// stringChoice interactively asks the user for a label or email or something, and returns it.
+func stringChoice(prompt string, ls []string) string {
 	maxY, maxX := winSize()
 
 	w, err := gc.NewWindow(maxY-5, maxX-4, 2, 2)
 	if err != nil {
-		log.Fatalf("Creating label window: %v", err)
+		log.Fatalf("Creating stringChoice window: %v", err)
 	}
 	defer w.Delete()
 
@@ -127,7 +127,7 @@ func getLabel(prompt string, ls []string) string {
 				if seenLabels == 0 {
 					return ""
 				}
-				return labels[curLabel]
+				return curLabel
 			default:
 				cur = 0
 				if unicode.IsPrint(rune(key)) {
@@ -397,24 +397,25 @@ s                 Search
 				currentSearch = ""
 				go loadMsgs(currentLabel, currentSearch)
 			case 'g':
-				newLabel := getLabel("Go to label>", sortedLabels())
+				newLabel := stringChoice("Go to label>", sortedLabels())
 				if newLabel != "" {
+					newLabel = labels[newLabel]
 					log.Printf("Going to label %q (%q)", newLabel, labelIDs[newLabel])
 					marked = make(map[string]bool)
 					currentLabel = newLabel
 					currentSearch = ""
 					go loadMsgs(currentLabel, currentSearch)
 				}
-			case 'c':
+			case 'c': // Compose.
+				to := stringChoice("To: ", contactAddresses())
 				nc.Status("Running editor")
-				input := fmt.Sprintf("To: \nSubject: \n\n%s\n", getSignature())
+				input := fmt.Sprintf("To: %s\nSubject: \n\n%s\n", to, getSignature())
 				sendMessage, err := runEditor(input)
 				if err != nil {
 					nc.Status("Running editor: %v", err)
 				}
 				createSend("", sendMessage)
 				nc.Status("Sent email")
-
 				// We could be in sent folders or a search that sees this message.
 				reloadTODO = true
 			case 'd':
@@ -468,7 +469,7 @@ s                 Search
 					nc.Status("No messages marked")
 					break
 				}
-				newLabel := getLabel("Add label>", sortedLabels())
+				newLabel := stringChoice("Add label>", sortedLabels())
 				if newLabel != "" {
 					id := labels[newLabel]
 					allFine := true
@@ -511,7 +512,7 @@ s                 Search
 				sort.Sort(sortLabels(ls))
 
 				// Ask for labels.
-				newLabel := getLabel("Remove label>", ls)
+				newLabel := stringChoice("Remove label>", ls)
 				if newLabel != "" {
 					reloadTODO = true
 					id := labels[newLabel]
