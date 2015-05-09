@@ -70,7 +70,7 @@ func TestParallelMulticallback(t *testing.T) {
 	p.add(func(ch chan<- func()) {
 		defer close(ch)
 		ch <- func() {
-			i += 1
+			i++
 		}
 		ch <- func() {
 			i += 2

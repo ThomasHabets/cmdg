@@ -11,11 +11,11 @@ import (
 	gmail "google.golang.org/api/gmail/v1"
 )
 
-type sortUpdatesById []listEntry
+type sortUpdatesByID []listEntry
 
-func (a sortUpdatesById) Len() int      { return len(a) }
-func (a sortUpdatesById) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a sortUpdatesById) Less(i, j int) bool {
+func (a sortUpdatesByID) Len() int      { return len(a) }
+func (a sortUpdatesByID) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a sortUpdatesByID) Less(i, j int) bool {
 	return a[i].msg.Id < a[j].msg.Id
 }
 
@@ -224,7 +224,7 @@ func TestListMessages(t *testing.T) {
 	if got, want := len(updates), len(want); got != want {
 		t.Fatalf("got %d updates, want %d", got, want)
 	}
-	sort.Sort(sortUpdatesById(updates))
+	sort.Sort(sortUpdatesByID(updates))
 	for n := range updates {
 		updates[n].msg.Payload = nil
 		if got, want := updates[n].msg, want[n]; !reflect.DeepEqual(got, want) {

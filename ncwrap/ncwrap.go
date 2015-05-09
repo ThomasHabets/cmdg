@@ -28,6 +28,7 @@ import (
 	gc "github.com/rthornton128/goncurses"
 )
 
+// NCWrap wraps ncurses with cmdg-specific windows and thread safe input handling.
 type NCWrap struct {
 	root    *gc.Window
 	wmain   *gc.Window
@@ -60,10 +61,11 @@ func formatUnescape(s string) string {
 	return s
 }
 
+// ColorPrint prints something with color codes embedded.
 func ColorPrint(w *gc.Window, f string, args ...interface{}) {
 	newargs := []interface{}{}
 	for n := range args {
-		if s, ok := args[n].(*preformat); ok {
+		if s, ok := args[n].(*Preformated); ok {
 			newargs = append(newargs, s.s)
 		} else if s, ok := args[n].(string); ok {
 			newargs = append(newargs, formatEscape(s))
@@ -102,14 +104,17 @@ func ColorPrint(w *gc.Window, f string, args ...interface{}) {
 	}
 }
 
-type preformat struct {
+// Preformated data is already formatted, and shouldn't be inspected for escape codes.
+type Preformated struct {
 	s string
 }
 
-func Preformat(s string) *preformat {
-	return &preformat{s}
+// Preformat tells the output routines that something is already formatted.
+func Preformat(s string) *Preformated {
+	return &Preformated{s}
 }
 
+// Start sets up ncurses and takes over the terminal.
 func Start() (*NCWrap, error) {
 	nc := &NCWrap{}
 	var err error
@@ -231,6 +236,7 @@ func Start() (*NCWrap, error) {
 	return nc, nil
 }
 
+// Stop shuts down ncurses and hands back the terminal.
 func (nc *NCWrap) Stop() {
 	dc := make(chan bool, 2)
 	// Shut down input and output goroutine.
@@ -241,6 +247,7 @@ func (nc *NCWrap) Stop() {
 	gc.End()
 }
 
+// Status prints a message to the status line.
 func (nc *NCWrap) Status(s string, args ...interface{}) {
 	if nc == nil {
 		// TODO: Instead of bailing out like this, make a fake
@@ -250,9 +257,12 @@ func (nc *NCWrap) Status(s string, args ...interface{}) {
 	nc.status <- fmt.Sprintf(s, args...)
 }
 
+// Redraw orders a screen redrawing.
 func (nc *NCWrap) Redraw() {
 	nc.redraw <- true
 }
+
+// ApplyMain applies a function synchronously to the main window.
 func (nc *NCWrap) ApplyMain(f func(*gc.Window)) {
 	s := make(chan bool)
 	nc.main <- func(w *gc.Window) {

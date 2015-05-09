@@ -27,8 +27,8 @@ import (
 	gmail "google.golang.org/api/gmail/v1"
 )
 
+// Well known labels.
 const (
-	// Well known labels.
 	Inbox     = "INBOX"
 	Unread    = "UNREAD"
 	Draft     = "DRAFT"
@@ -49,6 +49,7 @@ func utf8Decode(s string) string {
 	return ret
 }
 
+// GetHeader gets the value for a given header from a Message.
 func GetHeader(m *gmail.Message, header string) string {
 	if m.Payload == nil {
 		return "loading"
@@ -56,6 +57,7 @@ func GetHeader(m *gmail.Message, header string) string {
 	return GetHeaderPart(m.Payload, header)
 }
 
+// GetHeaderPart gets the value for a given header from a MessagePart.
 func GetHeaderPart(p *gmail.MessagePart, header string) string {
 	for _, h := range p.Headers {
 		if h.Name == header {
@@ -69,6 +71,7 @@ func GetHeaderPart(p *gmail.MessagePart, header string) string {
 	return ""
 }
 
+// ParseTime tries a few time formats and returns the one that works.
 func ParseTime(s string) (time.Time, error) {
 	var t time.Time
 	var err error
@@ -89,7 +92,7 @@ func ParseTime(s string) (time.Time, error) {
 	return t, err
 }
 
-// Print "Date" header as a useful string. (e.g. mail from today shows hours)
+// TimeString returns "Date" header as a useful string. (e.g. mail from today shows hours)
 func TimeString(m *gmail.Message) string {
 	s := GetHeader(m, "Date")
 	ts, err := ParseTime(s)
@@ -105,7 +108,7 @@ func TimeString(m *gmail.Message) string {
 	return ts.Format("15:04")
 }
 
-// Get source address, unless mail is sent, in which case get destination.
+// FromString gets the source address, unless mail is sent, in which case get destination.
 func FromString(m *gmail.Message) string {
 	s := GetHeader(m, "From")
 	if HasLabel(m.LabelIds, Sent) {
@@ -121,6 +124,7 @@ func FromString(m *gmail.Message) string {
 	return a.Address
 }
 
+// HasLabel checks if the given label is in the slice.
 func HasLabel(labels []string, needle string) bool {
 	for _, l := range labels {
 		if l == needle {

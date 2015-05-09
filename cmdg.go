@@ -818,9 +818,8 @@ func createSend(thread, msg string) {
 				nc.Status("[red]Error saving as draft: %v", err)
 				// TODO: data loss!
 				return
-			} else {
-				nc.Status("Saved draft")
 			}
+			nc.Status("Saved draft")
 			log.Printf("Users.Drafts.Create: %v", time.Since(st))
 			return
 		}
