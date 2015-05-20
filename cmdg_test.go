@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -138,6 +139,26 @@ func fakeAPIMeMessages(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func fakeAPIMeHistory(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	t.Logf("Requested history message: %v", r.URL)
+	historyID, err := strconv.Atoi(r.FormValue("startHistoryId"))
+	if err != nil {
+		t.Fatalf("historyID not uint64: %v", err)
+	}
+	if historyID == 0 {
+		t.Errorf("Got historyID=%v, want !=0", historyID)
+	}
+	if _, err := w.Write([]byte(`{
+  "history": [
+    { "id": "1" },
+    { "id": "12345", "messages": [ {"id": "id-message-1" } ] }
+  ],
+  "historyId": "12346"
+}`)); err != nil {
+		t.Errorf("Failed to write profile response: %v", err)
+	}
+}
+
 func TestListMessages(t *testing.T) {
 	var err error
 	gmailService, err = gmail.New(http.DefaultClient)
@@ -183,52 +204,65 @@ func TestListMessages(t *testing.T) {
 		}
 	})
 	mux.HandleFunc("/me/messages/", func(w http.ResponseWriter, r *http.Request) { fakeAPIMeMessages(t, w, r) })
+	mux.HandleFunc("/me/history", func(w http.ResponseWriter, r *http.Request) { fakeAPIMeHistory(t, w, r) })
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	gmailService.BasePath = ts.URL
-	msgs, more, errs := list("", "", "", 100)
-	if len(errs) != 0 {
-		t.Fatalf("Listing emails: %+v", errs)
-	}
-	if got, want := len(msgs), 2; got != want {
-		t.Fatalf("got %d messages, want %d", got, want)
-	}
-	if got, want := msgs[0].msg, (&gmail.Message{
-		HistoryId: 0,
-		Id:        "id-message-1",
-		ThreadId:  "thread-id-1",
-	}); !reflect.DeepEqual(got, want) {
-		t.Fatalf("Message 0: got %+v messages, want %+v", got, want)
-	}
-	var updates []listEntry
-	for m := range more {
-		updates = append(updates, m)
-	}
-
-	want := []*gmail.Message{
-		&gmail.Message{
-			HistoryId: 12345,
-			LabelIds:  []string{"CATEGORY_FORUMS", "UNREAD", "Label_31"},
+	for _, historyID := range []uint64{0, 100} {
+		gmailService.BasePath = ts.URL
+		newHistoryID, msgs, more, errs := list("", "", "", 100, historyID)
+		if len(errs) != 0 {
+			t.Fatalf("Listing emails: %+v", errs)
+		}
+		// History API not called when historyID is 0
+		if historyID == 0 {
+			if got, want := newHistoryID, uint64(0); got != want {
+				t.Errorf("history ID: got %v, want %v", got, want)
+			}
+		} else {
+			if got, want := newHistoryID, uint64(12346); got != want {
+				t.Errorf("history ID: got %v, want %v", got, want)
+			}
+		}
+		if got, want := len(msgs), 2; got != want {
+			t.Fatalf("got %d messages, want %d", got, want)
+		}
+		if got, want := msgs[0].msg, (&gmail.Message{
+			HistoryId: 0,
 			Id:        "id-message-1",
 			ThreadId:  "thread-id-1",
-		},
-		&gmail.Message{
-			HistoryId: 12346,
-			LabelIds:  []string{"CATEGORY_FORUMS", "UNREAD", "Label_31"},
-			Id:        "id-message-2",
-			ThreadId:  "thread-id-1",
-		},
-	}
-	if got, want := len(updates), len(want); got != want {
-		t.Fatalf("got %d updates, want %d", got, want)
-	}
-	sort.Sort(sortUpdatesByID(updates))
-	for n := range updates {
-		updates[n].msg.Payload = nil
-		if got, want := updates[n].msg, want[n]; !reflect.DeepEqual(got, want) {
-			t.Errorf("update %d: got %+v, want %+v", n, got, want)
+		}); !reflect.DeepEqual(got, want) {
+			t.Fatalf("Message 0: got %+v messages, want %+v", got, want)
+		}
+		var updates []listEntry
+		for m := range more {
+			updates = append(updates, m)
+		}
+
+		want := []*gmail.Message{
+			&gmail.Message{
+				HistoryId: 12345,
+				LabelIds:  []string{"CATEGORY_FORUMS", "UNREAD", "Label_31"},
+				Id:        "id-message-1",
+				ThreadId:  "thread-id-1",
+			},
+			&gmail.Message{
+				HistoryId: 12346,
+				LabelIds:  []string{"CATEGORY_FORUMS", "UNREAD", "Label_31"},
+				Id:        "id-message-2",
+				ThreadId:  "thread-id-1",
+			},
+		}
+		if got, want := len(updates), len(want); got != want {
+			t.Fatalf("got %d updates, want %d", got, want)
+		}
+		sort.Sort(sortUpdatesByID(updates))
+		for n := range updates {
+			updates[n].msg.Payload = nil
+			if got, want := updates[n].msg, want[n]; !reflect.DeepEqual(got, want) {
+				t.Errorf("update %d: got %+v, want %+v", n, got, want)
+			}
 		}
 	}
 }

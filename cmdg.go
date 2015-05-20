@@ -52,6 +52,7 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -125,6 +126,8 @@ var (
 
 	replyRE   *regexp.Regexp
 	forwardRE *regexp.Regexp
+
+	errNoHistory = errors.New("nothing new since last check")
 )
 
 const (
@@ -183,9 +186,26 @@ func backoff(n int) (int, time.Duration, bool) {
 // list returns some initial message stubs, with the full message coming later on the returned channel.
 // label is the label ID ("" means all mail).
 // search is the search query ("" means match all).
-func list(label, search, pageToken string, nres int) ([]listEntry, <-chan listEntry, []error) {
-	log.Printf("listing %q %q", label, search)
+func list(label, search, pageToken string, nres int, historyID uint64) (uint64, []listEntry, <-chan listEntry, []error) {
+	log.Printf("Listing label %q, search %q. HistoryID %v", label, search, historyID)
 	syncP := parallel{} // Run the parts that can't wait in parallel.
+
+	var newHistoryID uint64
+	if historyID > 0 {
+		st := time.Now()
+		res, err := gmailService.Users.History.List(email).MaxResults(1).StartHistoryId(historyID).Do()
+		if err == nil {
+			profileAPI("History.List", time.Since(st))
+		}
+		if err != nil {
+			log.Printf("Failed to check history: %v", err)
+		} else if len(res.History) == 0 {
+			return res.HistoryId, nil, nil, []error{errNoHistory}
+		} else {
+			newHistoryID = res.HistoryId
+			log.Printf("New history ID: %v", newHistoryID)
+		}
+	}
 
 	var funcErr []error
 	// List messages.
@@ -232,7 +252,7 @@ func list(label, search, pageToken string, nres int) ([]listEntry, <-chan listEn
 	})
 	syncP.run()
 	if len(funcErr) != 0 {
-		return nil, nil, funcErr
+		return 0, nil, nil, funcErr
 	}
 
 	nc.Status("Total number of messages in folder: %d", res.ResultSizeEstimate)
@@ -284,7 +304,7 @@ func list(label, search, pageToken string, nres int) ([]listEntry, <-chan listEn
 			msg: m,
 		})
 	}
-	return ret, msgChan, nil
+	return newHistoryID, ret, msgChan, nil
 }
 
 // TODO: clean this up to look more like list().
@@ -498,6 +518,8 @@ func prefixQuote(in []string) []string {
 	for _, line := range in {
 		if len(line) == 0 {
 			out = append(out, ">")
+		} else if line[0] == '>' {
+			out = append(out, ">"+line)
 		} else {
 			out = append(out, "> "+line)
 		}

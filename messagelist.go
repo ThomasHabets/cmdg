@@ -33,6 +33,13 @@ import (
 	gmail "google.golang.org/api/gmail/v1"
 )
 
+const (
+	refreshDuration = 30 * time.Second
+	ctrlR           = 18
+	ctrlP           = 16
+	ctrlN           = 14
+)
+
 func getSignature() string {
 	b, err := ioutil.ReadFile(*signature)
 	if err != nil {
@@ -281,77 +288,115 @@ func (e *listEntry) LabelIds() []string {
 	return l
 }
 
-func messageListMain(thread bool) {
-	currentLabel := cmdglib.Inbox // Label ID.
-	currentSearch := ""
-	nc.ApplyMain(func(w *gc.Window) {
-		w.Clear()
-		w.Print("Loading...")
-	})
-	msgsCh := make(chan []listEntry)
-	msgUpdateCh := make(chan listEntry)
-	msgDo := make(chan func())
+type messageListState struct {
+	thread        bool                         // Thread or message view.
+	quit          bool                         // All done.
+	historyID     uint64                       // Last seen historyID.
+	current       int                          // Index of current email/thread.
+	showDetails   bool                         // Show snippets.
+	currentLabel  string                       // Current label/folder.
+	currentSearch string                       // Current search expression.
+	msgs          []listEntry                  // Current messages.
+	marked        map[string]bool              // Marked message/thread IDs.
+	msgDo         chan func(*messageListState) // Do things in sync handler.
+	msgsCh        chan []listEntry             // Full list of messages/threads, possibly only initial data.
+	msgUpdateCh   chan listEntry               // Send back updated/full messages/threads.
+}
 
-	// Synchronous function to list messages / threads.
-	// To be called in a goroutine.
-	loadMsgs := func(label, search string) {
-		log.Printf("Loading %s", label)
-		var l []listEntry
-		var lch <-chan listEntry
-		var errs []error
-		if thread {
-			l, lch = listThreads(label, search)
-		} else {
-			l, lch, errs = list(label, search, "", 100)
-		}
-		if len(errs) != 0 {
-			msgDo <- func() {
-				e := []string{}
-				for _, ee := range errs {
-					e = append(e, ee.Error())
+// bgLoadMsgs loads messages asynchronously and sends that info back to the main thread via channels.
+func bgLoadMsgs(msgDo chan<- func(*messageListState), msgsCh chan<- []listEntry, msgUpdateCh chan<- listEntry, thread bool, historyID uint64, label, search string) {
+	log.Printf("Loading label %q, search %q", label, search)
+	var l []listEntry
+	var lch <-chan listEntry
+	var errs []error
+
+	// Get messages/threads.
+	if thread {
+		l, lch = listThreads(label, search)
+	} else {
+		var newHistoryID uint64
+		var lch2 <-chan listEntry
+		c := make(chan listEntry)
+		lch = c
+		newHistoryID, l, lch2, errs = list(label, search, "", 100, historyID)
+		go func() {
+			goodHistoryID := true
+			var nh uint64
+			// Get the *lowest* history ID. That's the safest bet.
+			for m := range lch2 {
+				if nh == 0 || m.msg.HistoryId < nh {
+					nh = m.msg.HistoryId
 				}
-				helpWin(fmt.Sprintf("[red]ERROR listing:\n%v", strings.Join(e, "\n")))
-				nc.ApplyMain(func(w *gc.Window) { w.Clear() })
+				c <- m
 			}
-		} else {
-			msgsCh <- l
-			for m := range lch {
-				msgUpdateCh <- m
+			if newHistoryID == 0 {
+				newHistoryID = nh
+				goodHistoryID = false
 			}
+			msgDo <- func(state *messageListState) {
+				if goodHistoryID || state.historyID == 0 {
+					state.historyID = newHistoryID
+				}
+			}
+		}()
+	}
+	if len(errs) == 1 && errs[0] == errNoHistory {
+		// Nothing changed, and that's fine.
+		log.Printf("No changes since last reload.")
+	} else if len(errs) != 0 {
+		msgDo <- func(*messageListState) {
+			e := []string{}
+			for _, ee := range errs {
+				e = append(e, ee.Error())
+			}
+			helpWin(fmt.Sprintf("[red]ERROR listing:\n%v", strings.Join(e, "\n")))
+			nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 		}
-		if c, err := getContacts(); err != nil {
-			log.Printf("Getting contacts: %v", err)
-		} else {
-			msgDo <- func() {
-				contacts = c
-			}
-		}
-		if c, err := getLabels(); err != nil {
-			log.Printf("Getting labels: %v", err)
-		} else {
-			msgDo <- func() {
-				updateLabels(c)
-			}
+	} else {
+		msgsCh <- l
+		for m := range lch {
+			msgUpdateCh <- m
 		}
 	}
-	go loadMsgs(currentLabel, currentSearch)
-	marked := make(map[string]bool)
-	showDetails := false
-	current := 0
 
-	var msgs []listEntry
-	for {
-		// Instead of reloading when there's a change, the state should be updated locally.
-		reloadTODO := false
+	// Get contacts.
+	if c, err := getContacts(); err != nil {
+		log.Printf("Getting contacts: %v", err)
+	} else {
+		msgDo <- func(state *messageListState) {
+			contacts = c
+		}
+	}
 
-		// Messages that are both marked and in the current view.
-		mm := markedMessages(msgs, marked)
+	// Get labels.
+	if c, err := getLabels(); err != nil {
+		log.Printf("Getting labels: %v", err)
+	} else {
+		msgDo <- func(state *messageListState) {
+			updateLabels(c)
+		}
+	}
+}
 
-		select {
-		case key := <-nc.Input:
-			switch key {
-			case '?':
-				helpWin(`q                 Quit
+func (m *messageListState) goLoadMsgs() {
+	go bgLoadMsgs(m.msgDo, m.msgsCh, m.msgUpdateCh, m.thread, m.historyID, m.currentLabel, m.currentSearch)
+}
+
+func (m *messageListState) changeLabel(label, search string) {
+	m.historyID = 0
+	m.marked = make(map[string]bool)
+	m.currentLabel = label
+	m.currentSearch = search
+	m.goLoadMsgs()
+}
+
+// messageListInput handles input. It's run synchronously in the main thread.
+func messageListInput(key gc.Key, state *messageListState) {
+	// Messages that are both marked and in the current view.
+	mm := markedMessages(state.msgs, state.marked)
+	switch key {
+	case '?':
+		helpWin(`q                 Quit
 Up, p, ^P, k      Previous
 Down, n, ^N, j    Next
 r, ^R             Reload
@@ -365,239 +410,250 @@ e                 Archive marked emails
 l                 Label marked emails
 L                 Unlabel marked emails
 s                 Search
-1                 Go to cmdglib.Inbox
+1                 Go to inbox
 `)
-				nc.ApplyMain(func(w *gc.Window) { w.Clear() })
-			case 'q':
+		nc.ApplyMain(func(w *gc.Window) { w.Clear() })
+	case 'q':
+		state.quit = true
+	case gc.KEY_UP, 'p', ctrlP, 'k':
+		if state.current > 0 {
+			state.current--
+		}
+	case gc.KEY_DOWN, 'n', ctrlN, 'j':
+		if state.current < len(state.msgs)-1 {
+			state.current++
+		}
+	case gc.KEY_TAB:
+		state.showDetails = !state.showDetails
+	case 'r', ctrlR:
+		state.goLoadMsgs()
+	case 'x':
+		if len(state.msgs) > 0 {
+			id := state.msgs[state.current].ID()
+			if state.marked[id] {
+				delete(state.marked, id)
+			} else {
+				state.marked[id] = true
+			}
+		}
+	case gc.KEY_RIGHT, '\n', '\r', '>':
+		if state.thread {
+			var ms []*gmail.Thread
+			for _, m := range state.msgs {
+				ms = append(ms, m.thread)
+			}
+			if openThreadMain(ms, state.current, state.marked, state.currentLabel) {
 				return
-			case gc.KEY_UP, 'p', 16, 'k':
-				if current > 0 {
-					current--
+			}
+		} else {
+			var ms []*gmail.Message
+			for _, m := range state.msgs {
+				ms = append(ms, m.msg)
+			}
+			if openMessageMain(ms, state.current, state.marked, state.currentLabel) {
+				return
+			}
+		}
+		state.goLoadMsgs()
+	case '1':
+		state.changeLabel(cmdglib.Inbox, "")
+	case 'g':
+		newLabel := stringChoice("Go to label>", sortedLabels(), false)
+		if newLabel != "" {
+			newLabel = labels[newLabel]
+			log.Printf("Going to label %q (%q)", newLabel, labelIDs[newLabel])
+			state.changeLabel(newLabel, "")
+		}
+	case 'c': // Compose.
+		to := stringChoice("To: ", contactAddresses(), true)
+		nc.Status("Running editor")
+		input := fmt.Sprintf("To: %s\nSubject: \n\n%s\n", to, getSignature())
+		sendMessage, err := runEditor(input)
+		if err != nil {
+			nc.Status("Running editor: %v", err)
+		}
+		createSend("", sendMessage)
+		nc.Status("Sent email")
+		// We could be in sent folders or a search that sees this message.
+		state.goLoadMsgs()
+	case 'd':
+		if len(mm) == 0 {
+			nc.Status("No messages marked")
+			break
+		}
+		allFine := true
+		for _, m := range mm {
+			st := time.Now()
+			if _, err := gmailService.Users.Messages.Trash(email, m.ID()).Do(); err == nil {
+				state.goLoadMsgs()
+				log.Printf("Users.Messages.Trash: %v", time.Since(st))
+				delete(state.marked, m.ID())
+			} else {
+				nc.Status("[red]Failed to trash message %s: %v", m, err)
+				allFine = false
+			}
+		}
+		if allFine {
+			nc.Status("[green]Trashed messages")
+		}
+
+	case 'e': // Archive.
+		if len(mm) == 0 {
+			nc.Status("No messages marked")
+			break
+		}
+		allFine := true
+		for _, m := range mm {
+			st := time.Now()
+			if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
+				RemoveLabelIds: []string{cmdglib.Inbox},
+			}).Do(); err == nil {
+				state.goLoadMsgs()
+				log.Printf("Users.Messages.Archive: %v", time.Since(st))
+				if state.currentLabel == cmdglib.Inbox {
+					delete(state.marked, m.ID())
 				}
-			case gc.KEY_DOWN, 'n', 14, 'j':
-				if current < len(msgs)-1 {
-					current++
+			} else {
+				nc.Status("[red]Failed to archive message %s: %v", m, err)
+				allFine = false
+			}
+		}
+		if allFine {
+			nc.Status("[green]Archived messages")
+		}
+
+	case 'l': // Add label.
+		if len(mm) == 0 {
+			nc.Status("No messages marked")
+			break
+		}
+		newLabel := stringChoice("Add label>", sortedLabels(), false)
+		if newLabel != "" {
+			id := labels[newLabel]
+			allFine := true
+			for _, m := range mm {
+				st := time.Now()
+				if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
+					AddLabelIds: []string{id},
+				}).Do(); err == nil {
+					state.goLoadMsgs()
+					log.Printf("Users.Messages.Label: %v", time.Since(st))
+				} else {
+					nc.Status("[red]Failed to label message %s: %v", m, err)
+					allFine = false
 				}
-			case gc.KEY_TAB:
-				showDetails = !showDetails
-			case 'r', 18: // CtrlR
-				go loadMsgs(currentLabel, currentSearch)
-			case 'x':
-				if len(msgs) > 0 {
-					if marked[msgs[current].ID()] {
-						delete(marked, msgs[current].ID())
-					} else {
-						marked[msgs[current].ID()] = true
+			}
+			if allFine {
+				nc.Status("[green]Labelled messages")
+			}
+		}
+
+	case 'L': // Remove label.
+		if len(mm) == 0 {
+			nc.Status("No messages marked")
+			break
+		}
+
+		// Labels to ask for.
+		ls := []string{}
+	nextLabel:
+		for l, lid := range labels {
+			for _, m := range mm {
+				for _, hl := range m.LabelIds() {
+					if lid == hl {
+						ls = append(ls, l)
+						continue nextLabel
 					}
 				}
-			case gc.KEY_RIGHT, '\n', '\r', '>':
-				if thread {
-					var ms []*gmail.Thread
-					for _, m := range msgs {
-						ms = append(ms, m.thread)
-					}
-					if openThreadMain(ms, current, marked, currentLabel) {
-						return
+			}
+		}
+		sort.Sort(sortLabels(ls))
+
+		// Ask for labels.
+		newLabel := stringChoice("Remove label>", ls, false)
+		if newLabel != "" {
+			state.goLoadMsgs()
+			id := labels[newLabel]
+			allFine := true
+			for _, m := range mm {
+				st := time.Now()
+				if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
+					RemoveLabelIds: []string{id},
+				}).Do(); err == nil {
+					state.goLoadMsgs()
+					log.Printf("Users.Messages.Unlabel: %v", time.Since(st))
+					if state.currentLabel == newLabel {
+						delete(state.marked, m.ID())
 					}
 				} else {
-					var ms []*gmail.Message
-					for _, m := range msgs {
-						ms = append(ms, m.msg)
-					}
-					if openMessageMain(ms, current, marked, currentLabel) {
-						return
-					}
+					nc.Status("[red]Failed to unlabel message %s: %v", m, err)
+					allFine = false
 				}
-				reloadTODO = true
-			case '1':
-				marked = make(map[string]bool)
-				currentLabel = cmdglib.Inbox
-				currentSearch = ""
-				go loadMsgs(currentLabel, currentSearch)
-			case 'g':
-				newLabel := stringChoice("Go to label>", sortedLabels(), false)
-				if newLabel != "" {
-					newLabel = labels[newLabel]
-					log.Printf("Going to label %q (%q)", newLabel, labelIDs[newLabel])
-					marked = make(map[string]bool)
-					currentLabel = newLabel
-					currentSearch = ""
-					go loadMsgs(currentLabel, currentSearch)
-				}
-			case 'c': // Compose.
-				to := stringChoice("To: ", contactAddresses(), true)
-				nc.Status("Running editor")
-				input := fmt.Sprintf("To: %s\nSubject: \n\n%s\n", to, getSignature())
-				sendMessage, err := runEditor(input)
-				if err != nil {
-					nc.Status("Running editor: %v", err)
-				}
-				createSend("", sendMessage)
-				nc.Status("Sent email")
-				// We could be in sent folders or a search that sees this message.
-				reloadTODO = true
-			case 'd':
-				if len(mm) == 0 {
-					nc.Status("No messages marked")
-					break
-				}
-				allFine := true
-				for _, m := range mm {
-					st := time.Now()
-					if _, err := gmailService.Users.Messages.Trash(email, m.ID()).Do(); err == nil {
-						reloadTODO = true
-						log.Printf("Users.Messages.Trash: %v", time.Since(st))
-						delete(marked, m.ID())
-					} else {
-						nc.Status("[red]Failed to trash message %s: %v", m, err)
-						allFine = false
-					}
-				}
-				if allFine {
-					nc.Status("[green]Trashed messages")
-				}
-
-			case 'e': // Archive.
-				if len(mm) == 0 {
-					nc.Status("No messages marked")
-					break
-				}
-				allFine := true
-				for _, m := range mm {
-					st := time.Now()
-					if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
-						RemoveLabelIds: []string{cmdglib.Inbox},
-					}).Do(); err == nil {
-						reloadTODO = true
-						log.Printf("Users.Messages.Archive: %v", time.Since(st))
-						if currentLabel == cmdglib.Inbox {
-							delete(marked, m.ID())
-						}
-					} else {
-						nc.Status("[red]Failed to archive message %s: %v", m, err)
-						allFine = false
-					}
-				}
-				if allFine {
-					nc.Status("[green]Archived messages")
-				}
-
-			case 'l': // Add label.
-				if len(mm) == 0 {
-					nc.Status("No messages marked")
-					break
-				}
-				newLabel := stringChoice("Add label>", sortedLabels(), false)
-				if newLabel != "" {
-					id := labels[newLabel]
-					allFine := true
-					for _, m := range mm {
-						st := time.Now()
-						if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
-							AddLabelIds: []string{id},
-						}).Do(); err == nil {
-							reloadTODO = true
-							log.Printf("Users.Messages.Label: %v", time.Since(st))
-						} else {
-							nc.Status("[red]Failed to label message %s: %v", m, err)
-							allFine = false
-						}
-					}
-					if allFine {
-						nc.Status("[green]Labelled messages")
-					}
-				}
-
-			case 'L': // Remove label.
-				if len(mm) == 0 {
-					nc.Status("No messages marked")
-					break
-				}
-
-				// Labels to ask for.
-				ls := []string{}
-			nextLabel:
-				for l, lid := range labels {
-					for _, m := range mm {
-						for _, hl := range m.LabelIds() {
-							if lid == hl {
-								ls = append(ls, l)
-								continue nextLabel
-							}
-						}
-					}
-				}
-				sort.Sort(sortLabels(ls))
-
-				// Ask for labels.
-				newLabel := stringChoice("Remove label>", ls, false)
-				if newLabel != "" {
-					reloadTODO = true
-					id := labels[newLabel]
-					allFine := true
-					for _, m := range mm {
-						st := time.Now()
-						if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
-							RemoveLabelIds: []string{id},
-						}).Do(); err == nil {
-							reloadTODO = true
-							log.Printf("Users.Messages.Unlabel: %v", time.Since(st))
-							if currentLabel == newLabel {
-								delete(marked, m.ID())
-							}
-						} else {
-							nc.Status("[red]Failed to unlabel message %s: %v", m, err)
-							allFine = false
-						}
-					}
-					if allFine {
-						nc.Status("[green]Unlabel messages")
-					}
-				}
-
-			case 's':
-				cs := getText("Search: ")
-				if cs != "" {
-					currentLabel = ""
-					currentSearch = cs
-					marked = make(map[string]bool)
-					go loadMsgs(currentLabel, currentSearch)
-				}
-			default:
-				nc.Status("Unknown key %v (%v)", key, gc.KeyString(key))
-				continue
 			}
-		case newMsgs := <-msgsCh:
+			if allFine {
+				nc.Status("[green]Unlabel messages")
+			}
+		}
+
+	case 's':
+		cs := getText("Search: ")
+		if cs != "" {
+			state.changeLabel("", cs)
+		}
+	default:
+		nc.Status("Unknown key %v (%v)", key, gc.KeyString(key))
+	}
+}
+
+func messageListMain(thread bool) {
+	nc.ApplyMain(func(w *gc.Window) {
+		w.Clear()
+		w.Print("Loading...")
+	})
+	state := messageListState{
+		thread:      thread,
+		msgDo:       make(chan func(*messageListState)),
+		msgsCh:      make(chan []listEntry),
+		msgUpdateCh: make(chan listEntry),
+	}
+	state.changeLabel(cmdglib.Inbox, "")
+
+	refreshTicker := time.NewTicker(refreshDuration)
+	defer refreshTicker.Stop()
+	for !state.quit {
+		select {
+		case <-refreshTicker.C:
+			state.goLoadMsgs()
+		case key := <-nc.Input:
+			messageListInput(key, &state)
+		case newMsgs := <-state.msgsCh:
 			old := make(map[string]listEntry)
-			for _, m := range msgs {
+			for _, m := range state.msgs {
 				old[m.ID()] = m
 			}
-			msgs = newMsgs
-			for n := range msgs {
-				if m, found := old[msgs[n].ID()]; found {
-					msgs[n] = m
+			state.msgs = newMsgs
+			for n := range state.msgs {
+				if m, found := old[state.msgs[n].ID()]; found {
+					state.msgs[n] = m
 				}
 			}
-			if current >= len(msgs) {
-				current = len(msgs) - 1
+			if state.current >= len(state.msgs) {
+				state.current = len(state.msgs) - 1
 			}
-			if current < 0 {
-				current = 0
+			if state.current < 0 {
+				state.current = 0
 			}
-		case m := <-msgUpdateCh:
-			for n := range msgs {
-				if msgs[n].ID() == m.ID() {
-					msgs[n] = m
+		case m := <-state.msgUpdateCh:
+			for n := range state.msgs {
+				if state.msgs[n].ID() == m.ID() {
+					state.msgs[n] = m
 				}
 			}
-		case f := <-msgDo:
-			f()
-		}
-		if reloadTODO {
-			go loadMsgs(currentLabel, currentSearch)
+		case f := <-state.msgDo:
+			f(&state)
 		}
 		nc.ApplyMain(func(w *gc.Window) {
-			messageListPrint(w, msgs, marked, current, showDetails, currentLabel, currentSearch)
+			messageListPrint(w, state.msgs, state.marked, state.current, state.showDetails, state.currentLabel, state.currentSearch)
 		})
 	}
 }
