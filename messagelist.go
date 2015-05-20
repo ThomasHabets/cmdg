@@ -71,7 +71,8 @@ func winBorder(w *gc.Window) {
 }
 
 // stringChoice interactively asks the user for a label or email or something, and returns it.
-func stringChoice(prompt string, ls []string) string {
+// if 'free' is true, allow 'write-ins'. Else 'write-ins' become empty string.
+func stringChoice(prompt string, ls []string, free bool) string {
 	maxY, maxX := winSize()
 
 	w, err := gc.NewWindow(maxY-5, maxX-4, 2, 2)
@@ -125,6 +126,9 @@ func stringChoice(prompt string, ls []string) string {
 				}
 			case '\n', '\r':
 				if seenLabels == 0 {
+					if free {
+						return s
+					}
 					return ""
 				}
 				return curLabel
@@ -411,7 +415,7 @@ s                 Search
 				currentSearch = ""
 				go loadMsgs(currentLabel, currentSearch)
 			case 'g':
-				newLabel := stringChoice("Go to label>", sortedLabels())
+				newLabel := stringChoice("Go to label>", sortedLabels(), false)
 				if newLabel != "" {
 					newLabel = labels[newLabel]
 					log.Printf("Going to label %q (%q)", newLabel, labelIDs[newLabel])
@@ -421,7 +425,7 @@ s                 Search
 					go loadMsgs(currentLabel, currentSearch)
 				}
 			case 'c': // Compose.
-				to := stringChoice("To: ", contactAddresses())
+				to := stringChoice("To: ", contactAddresses(), true)
 				nc.Status("Running editor")
 				input := fmt.Sprintf("To: %s\nSubject: \n\n%s\n", to, getSignature())
 				sendMessage, err := runEditor(input)
@@ -483,7 +487,7 @@ s                 Search
 					nc.Status("No messages marked")
 					break
 				}
-				newLabel := stringChoice("Add label>", sortedLabels())
+				newLabel := stringChoice("Add label>", sortedLabels(), false)
 				if newLabel != "" {
 					id := labels[newLabel]
 					allFine := true
@@ -526,7 +530,7 @@ s                 Search
 				sort.Sort(sortLabels(ls))
 
 				// Ask for labels.
-				newLabel := stringChoice("Remove label>", ls)
+				newLabel := stringChoice("Remove label>", ls, false)
 				if newLabel != "" {
 					reloadTODO = true
 					id := labels[newLabel]
