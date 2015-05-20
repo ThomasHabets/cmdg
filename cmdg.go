@@ -420,21 +420,22 @@ func getBodyRecurse(m *gmail.MessagePart) string {
 	body := ""
 	htmlBody := "" // Used only if there's no plaintext version.
 	for _, p := range m.Parts {
-		if p.MimeType == "text/plain" {
+		switch p.MimeType {
+		case "text/plain":
 			data, err := mimeDecode(p.Body.Data)
 			if err != nil {
 				return fmt.Sprintf("mime decoding error for text/plain: %v", err)
 			}
 			body += string(data)
-		} else if p.MimeType == "text/html" {
+		case "text/html":
 			data, err := mimeDecode(p.Body.Data)
 			if err != nil {
 				return fmt.Sprintf("mime decoding error for text/html: %v", err)
 			}
 			htmlBody += string(data)
-		} else if p.MimeType == "multipart/alternative" {
+		case "multipart/alternative", "multipart/related":
 			body += getBodyRecurse(p)
-		} else {
+		default:
 			// Skip.
 			log.Printf("Unknown mimetype skipped: %q", p.MimeType)
 		}
