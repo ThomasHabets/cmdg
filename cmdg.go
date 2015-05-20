@@ -461,16 +461,35 @@ func getBody(m *gmail.Message) string {
 	return strings.Trim(getBodyRecurse(m.Payload), " \n\r\t")
 }
 
+var (
+	html2txtCacheLock sync.Mutex
+	html2txtCache     = make(map[string]string)
+)
+
 // html2txt uses lynx to render HTML to plain text.
 func html2txt(s string) (string, error) {
+	html2txtCacheLock.Lock()
+	defer html2txtCacheLock.Unlock()
+	if r, found := html2txtCache[s]; found {
+		return r, nil
+	}
 	var stdout bytes.Buffer
-	// TODO: Sandbox lynx.
+	st := time.Now()
 	cmd := exec.Command(*lynx, "-dump", "-stdin")
 	cmd.Stdin = bytes.NewBufferString(s)
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
 		return "", err
 	}
+	profileAPI("lynx", time.Since(st))
+	for len(html2txtCache) > 10 {
+		// Delete a random cached entry.
+		for k := range html2txtCache {
+			delete(html2txtCache, k)
+			break
+		}
+	}
+	html2txtCache[s] = stdout.String()
 	return stdout.String(), nil
 }
 
