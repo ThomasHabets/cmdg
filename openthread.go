@@ -28,12 +28,13 @@ import (
 )
 
 // Return true if cmdg should quit.
-func openThreadMain(ts []*gmail.Thread, current int, marked map[string]bool, currentLabel string) bool {
+func openThreadMain(ts []*gmail.Thread, currentThread int, marked map[string]bool, currentLabel string) bool {
 	nc.Status("Opening thread")
 	scroll := 0
+	currentMessage := 0
 	for {
 		nc.ApplyMain(func(w *gc.Window) {
-			openThreadPrint(w, ts, current, marked[ts[current].Id], currentLabel, scroll)
+			openThreadPrint(w, ts, currentThread, currentMessage, marked[ts[currentThread].Id], currentLabel, scroll)
 		})
 		key := <-nc.Input
 		switch key {
@@ -60,15 +61,25 @@ Backspace         Page up
 			return true
 		case gc.KEY_LEFT, '<', 'u':
 			return false
-		case gc.KEY_RIGHT, '>', '\n':
-			// TODO
+		case gc.KEY_RIGHT, '>', '\n', '\r':
+			if openMessageMain(ts[currentThread].Messages, currentMessage, marked, currentLabel) {
+				return true
+			}
+		case ctrlP:
+			if currentThread > 0 {
+				currentThread--
+			}
+		case ctrlN:
+			if currentThread < len(ts)-1 {
+				currentThread++
+			}
 		case 'p', 'k':
-			if current > 0 {
-				current--
+			if currentMessage > 0 {
+				currentMessage--
 			}
 		case 'n', 'j':
-			if current < len(ts)-1 {
-				current++
+			if currentMessage < len(ts[currentThread].Messages)-1 {
+				currentMessage++
 			}
 		default:
 			nc.Status("unknown key: %v", gc.KeyString(key))
@@ -76,16 +87,28 @@ Backspace         Page up
 	}
 }
 
-func openThreadPrint(w *gc.Window, ts []*gmail.Thread, current int, marked bool, currentLabel string, scroll int) {
-	t := ts[current]
+// openThreadPrint redraws the thread list.
+// It's run in the UI goroutine.
+func openThreadPrint(w *gc.Window, ts []*gmail.Thread, currentThread, currentMessage int, marked bool, currentLabel string, scroll int) {
+	w.Clear()
+	t := ts[currentThread]
 	w.Move(0, 0)
 	//height, width := w.MaxYX()
 	tswidth := 7
 
-	ncwrap.ColorPrint(w, "Thread: [bold]%s[unbold] (%d messages)\n", cmdglib.GetHeader(t.Messages[0], "Subject"), len(t.Messages))
+	if len(t.Messages) == 0 {
+		ncwrap.ColorPrint(w, "Thread: [bold]UNKNOWN[unbold] (??? messages)\n")
+	} else {
+		ncwrap.ColorPrint(w, "Thread: [bold]%s[unbold] (%d messages)\n", cmdglib.GetHeader(t.Messages[0], "Subject"), len(t.Messages))
+	}
 	for n, m := range t.Messages {
-		ncwrap.ColorPrint(w, "[green]%*.*s - %s\n", tswidth, tswidth, cmdglib.TimeString(m), cmdglib.GetHeader(m, "From"))
+		prefix := "  "
+		if n == currentMessage {
+			prefix = "> "
+		}
+		ncwrap.ColorPrint(w, "%s[green]%*.*s - %s\n", prefix, tswidth, tswidth, cmdglib.TimeString(m), cmdglib.GetHeader(m, "From"))
 
+		// Expand unread and the last email.
 		if cmdglib.HasLabel(m.LabelIds, cmdglib.Unread) || n == len(t.Messages)-1 {
 			bodyLines := breakLines(strings.Split(getBody(m), "\n"))
 			body := strings.Join(bodyLines, "\n")

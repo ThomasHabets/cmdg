@@ -312,7 +312,7 @@ func bgLoadMsgs(msgDo chan<- func(*messageListState), msgsCh chan<- []listEntry,
 
 	// Get messages/threads.
 	if thread {
-		l, lch = listThreads(label, search)
+		l, lch = listThreads(label, search, "", 100, historyID)
 	} else {
 		var newHistoryID uint64
 		var lch2 <-chan listEntry

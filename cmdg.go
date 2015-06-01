@@ -164,7 +164,7 @@ func profileAPI(op string, d time.Duration) {
 	}
 }
 
-func backoff(n int) (int, time.Duration, bool) {
+func backoff(n int) (time.Duration, bool) {
 	f := func(n int) float64 {
 		return float64(backoffTime.Nanoseconds()) * math.Pow(backoffBase, float64(n))
 	}
@@ -180,7 +180,7 @@ func backoff(n int) (int, time.Duration, bool) {
 	if n > maxRetries {
 		done = true
 	}
-	return n + 1, time.Duration(ns), done
+	return time.Duration(ns), done
 }
 
 // list returns some initial message stubs, with the full message coming later on the returned channel.
@@ -267,14 +267,10 @@ func list(label, search, pageToken string, nres int, historyID uint64) (uint64, 
 			go func() {
 				defer wg.Done()
 				st := time.Now()
-				bo := 0
-				for {
-					log.Printf("Attempting to get message")
+				for bo := 0; ; bo++ {
 					mres, err := gmailService.Users.Messages.Get(email, m2.Id).Format("full").Do()
 					if err != nil {
-						var done bool
-						var s time.Duration
-						bo, s, done = backoff(bo)
+						s, done := backoff(bo)
 						if done {
 							log.Printf("Get message failed, backoff expired, giving up: %v", err)
 							return
@@ -308,12 +304,14 @@ func list(label, search, pageToken string, nres int, historyID uint64) (uint64, 
 }
 
 // TODO: clean this up to look more like list().
-func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
-	nres := 100
-	nres -= 2 + 3 // Bottom view and room for snippet.
-
+func listThreads(label, search, pageToken string, nres int, historyID uint64) ([]listEntry, <-chan listEntry) {
+	log.Printf("Listing thread label %q, search %q. historyID %v", label, search, historyID)
 	syncP := parallel{} // Run the parts that can't wait in parallel.
 
+	// Check if there are any new messages.
+	// TODO
+
+	var funcErr []error
 	// List messages.
 	var res *gmail.ListThreadsResponse
 	syncP.add(func(ch chan<- func()) {
@@ -321,9 +319,8 @@ func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
 		var err error
 		st := time.Now()
 		q := gmailService.Users.Threads.List(email).
-			//		PageToken().
+			PageToken(pageToken).
 			MaxResults(int64(nres)).
-			//Fields("messages(id,payload,snippet,raw,sizeEstimate),resultSizeEstimate").
 			Fields("threads,resultSizeEstimate")
 		if label != "" {
 			q = q.LabelIds(label)
@@ -333,11 +330,15 @@ func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
 		}
 		res, err = q.Do()
 		if err != nil {
-			log.Fatalf("Listing threads: %v", err)
+			ch <- func() {
+				funcErr = append(funcErr, fmt.Errorf("Listing threads: %v", err))
+			}
 		}
-		log.Printf("Listing threads: %v", time.Since(st))
+		profileAPI("Users.Threads.List", time.Since(st))
 	})
 
+	// Get Profile to update status line.
+	// TODO: merge with list()
 	var profile *gmail.Profile
 	syncP.add(func(ch chan<- func()) {
 		defer close(ch)
@@ -354,19 +355,28 @@ func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
 	nc.Status("Total number of threads in folder: %d\n", res.ResultSizeEstimate)
 
 	msgChan := make(chan listEntry)
-	// Load messages async.
+	var wg sync.WaitGroup
+	// Load thread message bodies async.
 	{
 		for _, m := range res.Threads {
+			wg.Add(1)
 			m2 := m
 			go func() {
+				defer wg.Done()
 				st := time.Now()
-				for {
+				for bo := 0; ; bo++ {
 					mres, err := gmailService.Users.Threads.Get(email, m2.Id).Format("full").Do()
 					if err != nil {
-						log.Printf("Get thread failed, retrying: %v", err)
+						s, done := backoff(bo)
+						if done {
+							log.Printf("Get thread failed, retrying: %v", err)
+							return
+						}
+						log.Printf("Get thread %q failed, retrying after %v: %v", m2.Id, s, err)
+						time.Sleep(s)
 						continue
 					}
-					log.Printf("Users.Thread.Get: %v", time.Since(st))
+					profileAPI("Users.Thread.Get", time.Since(st))
 					msgChan <- listEntry{
 						thread: mres,
 					}
@@ -374,6 +384,10 @@ func listThreads(label, search string) ([]listEntry, <-chan listEntry) {
 				}
 			}()
 		}
+		go func() {
+			wg.Wait()
+			close(msgChan)
+		}()
 	}
 	nc.Status("%s: Showing %d/%d. Total: %d emails, %d threads",
 		profile.EmailAddress, len(res.Threads), res.ResultSizeEstimate, profile.MessagesTotal, profile.ThreadsTotal)
