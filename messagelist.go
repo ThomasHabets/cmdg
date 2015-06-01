@@ -443,6 +443,7 @@ s                 Search
 				ms = append(ms, m.thread)
 			}
 			if openThreadMain(ms, state.current, state.marked, state.currentLabel) {
+				state.quit = true
 				return
 			}
 		} else {
@@ -451,6 +452,7 @@ s                 Search
 				ms = append(ms, m.msg)
 			}
 			if openMessageMain(ms, state.current, state.marked, state.currentLabel) {
+				state.quit = true
 				return
 			}
 		}
