@@ -411,10 +411,17 @@ l                 Label marked emails
 L                 Unlabel marked emails
 s                 Search
 1                 Go to inbox
+0                 Re-read config.
 `)
 		nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 	case 'q':
 		state.quit = true
+	case '0':
+		if err := reconnect(); err != nil {
+			nc.Status("Failed to reconnect: %v", err)
+		} else {
+			nc.Status("Reconnected successfully")
+		}
 	case gc.KEY_UP, 'p', ctrlP, 'k':
 		if state.current > 0 {
 			state.current--

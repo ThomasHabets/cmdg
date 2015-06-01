@@ -110,9 +110,11 @@ var (
 	waitingLabel  = flag.String("waiting_label", "", "Label used for 'awaiting reply'. If empty disables feature.")
 	threadView    = flag.Bool("thread", false, "Use thread view.")
 	lynx          = flag.String("lynx", "lynx", "Path to 'lynx' browser. Used to render HTML email.")
+	preConfig     = flag.String("preconfig", "", "Command to run before reading config. Used if config is generated.")
 
 	authedClient *http.Client
 	gmailService *gmail.Service
+	scope        string // OAuth scope
 
 	nc *ncwrap.NCWrap
 
@@ -131,6 +133,7 @@ var (
 )
 
 const (
+	// Scopes. Gmail and contacts.
 	scopeReadonly = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/contacts.readonly"
 	scopeModify   = "https://www.googleapis.com/auth/gmail.modify https://www.google.com/m8/feeds"
 	accessType    = "offline"
@@ -898,6 +901,30 @@ Usage: %s [...options...]
 	})
 }
 
+func reconnect() error {
+	if *preConfig != "" {
+		cmd := exec.Command(*preConfig)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to run preconfig %q: %v", *preConfig, err)
+		}
+	}
+	conf, err := lib.ReadConfig(*config)
+	if err != nil {
+		return fmt.Errorf("failed to read config %q: %v", *config, err)
+	}
+	t, err := lib.Connect(conf.OAuth, scope, accessType)
+	if err != nil {
+		return fmt.Errorf("failed to connect to gmail: %v", err)
+	}
+	authedClient = t.Client()
+	gmailService, err = gmail.New(authedClient)
+	if err != nil {
+		return err
+	}
+	gmailService.UserAgent = userAgent
+	return nil
+}
+
 func main() {
 	syscall.Umask(0077)
 	flag.Usage = func() { usage(os.Stderr) }
@@ -929,7 +956,7 @@ func main() {
 		*signature = path.Join(os.Getenv("HOME"), defaultSignatureFile)
 	}
 
-	scope := scopeModify
+	scope = scopeModify
 	if *readonly {
 		scope = scopeReadonly
 	}
@@ -951,21 +978,9 @@ func main() {
 		log.Fatalf("Config file (%q) permissions must be 0600 or better, was 0%o", *config, fi.Mode()&os.ModePerm)
 	}
 
-	conf, err := lib.ReadConfig(*config)
-	if err != nil {
-		log.Fatalf("Failed to read config: %v", err)
-	}
-
-	t, err := lib.Connect(conf.OAuth, scope, accessType)
-	if err != nil {
-		log.Fatalf("Failed to connect to gmail: %v", err)
-	}
-	authedClient = t.Client()
-	gmailService, err = gmail.New(authedClient)
-	if err != nil {
+	if err := reconnect(); err != nil {
 		log.Fatalf("Failed to create gmail client: %v", err)
 	}
-	gmailService.UserAgent = userAgent
 
 	// Make sure oauth keys are correct before setting up ncurses.
 	{
