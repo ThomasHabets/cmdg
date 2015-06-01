@@ -298,10 +298,11 @@ func openMessageCmdGPGVerify(msg *gmail.Message, doDownload bool) {
 // return message and success.
 func doOpenMessageCmdGPGVerify(msg *gmail.Message, doDownload bool) (string, bool) {
 	in := bytes.NewBuffer([]byte(getBody(msg)))
-	var stderr bytes.Buffer
+	var stderr, stdout bytes.Buffer
 	cmd := exec.Command(*gpg, "-v", "--batch", "--no-tty")
 	cmd.Stdin = in
 	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
 	if err := cmd.Start(); err != nil {
 		return fmt.Sprintf("Verify failed to execute: %v", err), false
 	}
