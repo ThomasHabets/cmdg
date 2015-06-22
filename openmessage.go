@@ -35,6 +35,10 @@ import (
 	gmail "google.golang.org/api/gmail/v1"
 )
 
+const (
+	preferredTimeFormat = "Mon, 2 Jan 2006 15:04:05 -0700"
+)
+
 // notLabeled returns the labels (not IDs) that this message doesn't have.
 func notLabeled(m *gmail.Message) []string {
 	ls := []string{}
@@ -118,6 +122,13 @@ func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked b
 	if len(lsstr) > 0 {
 		lsstr = ", " + lsstr
 	}
+	var tss string
+	ts, err := cmdglib.ParseTime(cmdglib.GetHeader(m, "Date"))
+	if err != nil {
+		tss = fmt.Sprintf("Unknown: %q", err)
+	} else {
+		tss = ts.Local().Format(preferredTimeFormat)
+	}
 	ncwrap.ColorPrint(w, `Email %d of %d%s
 From: %s
 To: %s
@@ -131,7 +142,7 @@ Labels: [bold]%s[unbold]%s
 		cmdglib.GetHeader(m, "From"),
 		cmdglib.GetHeader(m, "To"),
 		cmdglib.GetHeader(m, "Cc"),
-		cmdglib.GetHeader(m, "Date"),
+		tss,
 		cmdglib.GetHeader(m, "Subject"),
 		labelIDs[currentLabel],
 		lsstr,

@@ -100,6 +100,7 @@ func TimeString(m *gmail.Message) string {
 	if err != nil {
 		return "Unknown"
 	}
+	ts = ts.Local()
 	if time.Since(ts) > 365*24*time.Hour {
 		return ts.Format("2006")
 	}
