@@ -21,6 +21,7 @@ package cmdglib
 import (
 	"fmt"
 	"net/mail"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -60,7 +61,7 @@ func GetHeader(m *gmail.Message, header string) string {
 // GetHeaderPart gets the value for a given header from a MessagePart.
 func GetHeaderPart(p *gmail.MessagePart, header string) string {
 	for _, h := range p.Headers {
-		if h.Name == header {
+		if strings.ToLower(h.Name) == strings.ToLower(header) {
 			// TODO: How to decode correctly?
 			if false {
 				return utf8Decode(h.Value)
