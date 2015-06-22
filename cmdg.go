@@ -111,6 +111,7 @@ var (
 	threadView    = flag.Bool("thread", false, "Use thread view.")
 	lynx          = flag.String("lynx", "lynx", "Path to 'lynx' browser. Used to render HTML email.")
 	preConfig     = flag.String("preconfig", "", "Command to run before reading config. Used if config is generated.")
+	enableHistory = flag.Bool("history", true, "Enable history API to optimize network use. Seems to be a bit unreliable on the server side.")
 
 	authedClient *http.Client
 	gmailService *gmail.Service
@@ -194,7 +195,7 @@ func list(label, search, pageToken string, nres int, historyID uint64) (uint64, 
 	syncP := parallel{} // Run the parts that can't wait in parallel.
 
 	var newHistoryID uint64
-	if historyID > 0 {
+	if *enableHistory && historyID > 0 {
 		st := time.Now()
 		res, err := gmailService.Users.History.List(email).MaxResults(1).StartHistoryId(historyID).Do()
 		if err == nil {
