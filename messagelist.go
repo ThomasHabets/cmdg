@@ -835,19 +835,25 @@ func messageListPrint(w *gc.Window, msgs []listEntry, marked map[string]bool, cu
 			tsWidth, tsWidth, m.Time(),
 			fromMax, fromMax, m.From(),
 			m.Subject())
-		if marked[m.ID()] {
-			s = "X" + s
-		} else if cmdglib.HasLabel(m.LabelIds(), cmdglib.Unread) {
-			s = ">" + s
-		} else {
-			s = " " + s
-		}
+
+		// Selector, mark, unread.
+		prefix := []string{" ", " ", " "}
+
 		if n == current {
-			s = "*" + s
+			prefix[0] = "*"
 			style = "[reverse]" + style
-		} else {
-			s = " " + s
 		}
+
+		if marked[m.ID()] {
+			prefix[1] = "X"
+		}
+
+		if cmdglib.HasLabel(m.LabelIds(), cmdglib.Unread) {
+			prefix[2] = ">"
+		}
+
+		s = strings.Join(prefix, "") + s
+
 		// TODO: #runes, not #bytes.
 		if len(s) > maxX-4 {
 			s = s[:maxX-4]
