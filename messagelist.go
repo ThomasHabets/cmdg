@@ -22,12 +22,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/ThomasHabets/cmdg/cmdglib"
+	"github.com/ThomasHabets/cmdg/messagegetter"
 	"github.com/ThomasHabets/cmdg/ncwrap"
 	gc "github.com/rthornton128/goncurses"
 	gmail "google.golang.org/api/gmail/v1"
@@ -38,6 +41,8 @@ const (
 	ctrlR           = 18
 	ctrlP           = 16
 	ctrlN           = 14
+
+	draftListBatchSize = 100
 )
 
 func getSignature() string {
@@ -390,6 +395,77 @@ func (m *messageListState) changeLabel(label, search string) {
 	m.goLoadMsgs()
 }
 
+func getDrafts() ([]*gmail.Message, error) {
+	var page string
+	mg := messagegetter.New(gmailService, email, profileAPI, backoff)
+	for {
+		ts := time.Now()
+		l, err := gmailService.Users.Drafts.List(email).MaxResults(draftListBatchSize).PageToken(page).Do()
+		if err != nil {
+			return nil, err
+		}
+		profileAPI("Users.Drafts.List", time.Since(ts))
+		page = l.NextPageToken
+		for _, d := range l.Drafts {
+			mg.Add(d.Message.Id)
+		}
+		if page == "" {
+			break
+		}
+	}
+	mg.Done()
+	var drafts []*gmail.Message
+	for d := range mg.Get() {
+		drafts = append(drafts, d)
+	}
+	// TODO: Sort drafts.
+	return drafts, nil
+}
+
+func continueDraft() {
+	drafts, err := getDrafts()
+	if err != nil {
+		nc.Status("Getting drafts: %v", err)
+	}
+	var ss []string
+	for n, d := range drafts {
+		ss = append(ss, fmt.Sprintf("To:%s %s %d", cmdglib.GetHeader(d, "To"), d.Snippet, n))
+	}
+	dn := stringChoice("Draft> ", ss, false)
+	re := regexp.MustCompile(` (\d+)$`)
+	m := re.FindStringSubmatch(dn)
+	if len(m) != 2 {
+		nc.Status("Selecting draft failed!")
+		return
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		nc.Status("Internal error selecting draft: %v", err)
+		return
+	}
+	msg := drafts[n]
+	input := fmt.Sprintf("To: %s\nCc: %s\nBcc: %s\nSubject: %s\n\n%s",
+		cmdglib.GetHeader(msg, "To"),
+		cmdglib.GetHeader(msg, "Cc"),
+		cmdglib.GetHeader(msg, "Bcc"),
+		cmdglib.GetHeader(msg, "Subject"),
+		getBody(msg),
+	)
+	runEditor(input)
+}
+
+func compose() {
+	to := stringChoice("To: ", contactAddresses(), true)
+	nc.Status("Running editor")
+	input := fmt.Sprintf("To: %s\nSubject: \n\n%s\n", to, getSignature())
+	sendMessage, err := runEditor(input)
+	if err != nil {
+		nc.Status("Running editor: %v", err)
+		return
+	}
+	createSend("", sendMessage)
+}
+
 // messageListInput handles input. It's run synchronously in the main thread.
 func messageListInput(key gc.Key, state *messageListState) {
 	// Messages that are both marked and in the current view.
@@ -405,6 +481,7 @@ Tab               Show/hide snippets
 Right, Enter, >   Open message
 g                 Go to label
 c                 Compose
+C                 Continue draft
 d                 Delete marked emails
 e                 Archive marked emails
 l                 Label marked emails
@@ -474,17 +551,12 @@ s                 Search
 			state.changeLabel(newLabel, "")
 		}
 	case 'c': // Compose.
-		to := stringChoice("To: ", contactAddresses(), true)
-		nc.Status("Running editor")
-		input := fmt.Sprintf("To: %s\nSubject: \n\n%s\n", to, getSignature())
-		sendMessage, err := runEditor(input)
-		if err != nil {
-			nc.Status("Running editor: %v", err)
-		}
-		createSend("", sendMessage)
+		compose()
 		nc.Status("Sent email")
 		// We could be in sent folders or a search that sees this message.
 		state.goLoadMsgs()
+	case 'C':
+		continueDraft()
 	case 'd':
 		if len(mm) == 0 {
 			nc.Status("No messages marked")
