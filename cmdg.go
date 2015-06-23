@@ -24,7 +24,6 @@
 //   * Make Goto work from message view.
 //   * History API for refreshing (?).
 //   * Delayed sending.
-//   * Continuing drafts.
 //   * Special shortcuts for labelling 'important', 'starred' and 'unread'.
 //   * The Gmail API supports batch. Does the Go library?
 //   * Loading animations to show it's not stuck.
@@ -748,6 +747,10 @@ func runEditor(input string) (string, error) {
 	return string(data), nil
 }
 
+// createSend asks how to send the message just composed.
+// thread is the thread id, and may be empty.
+// msg is the string representation of the message.
+// TODO: Break out the choice dialog.
 func createSend(thread, msg string) {
 	maxY, maxX := winSize()
 	height := 10

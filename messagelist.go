@@ -395,9 +395,13 @@ func (m *messageListState) changeLabel(label, search string) {
 	m.goLoadMsgs()
 }
 
-func getDrafts() ([]*gmail.Message, error) {
+// getDrafts returns all the drafts, with full message content.
+func getDrafts() ([]*gmail.Draft, error) {
 	var page string
 	mg := messagegetter.New(gmailService, email, profileAPI, backoff)
+
+	var drafts []*gmail.Draft
+	dmap := make(map[string]int)
 	for {
 		ts := time.Now()
 		l, err := gmailService.Users.Drafts.List(email).MaxResults(draftListBatchSize).PageToken(page).Do()
@@ -408,18 +412,55 @@ func getDrafts() ([]*gmail.Message, error) {
 		page = l.NextPageToken
 		for _, d := range l.Drafts {
 			mg.Add(d.Message.Id)
+			dmap[d.Message.Id] = len(drafts)
+			drafts = append(drafts, d)
 		}
 		if page == "" {
 			break
 		}
 	}
 	mg.Done()
-	var drafts []*gmail.Message
-	for d := range mg.Get() {
-		drafts = append(drafts, d)
+	for m := range mg.Get() {
+		drafts[dmap[m.Id]].Message = m
 	}
 	// TODO: Sort drafts.
 	return drafts, nil
+}
+
+type keyChoice struct {
+	key  gc.Key
+	help string
+}
+
+func keyMenu(choices []keyChoice) gc.Key {
+	maxY, maxX := winSize()
+	height := len(choices) + 4
+	width := 70
+	x, y := maxX/2-width/2, maxY/2-height/2
+	w, err := gc.NewWindow(height, width, y, x)
+	if err != nil {
+		log.Fatalf("Failed to create send dialog: %v", err)
+	}
+	defer w.Delete()
+	log.Printf("send window: %d %d %d %d", height, width, y, x)
+
+	w.Clear()
+	w.Print("\n\n")
+	for _, c := range choices {
+		w.Printf("   %s - %s\n", gc.KeyString(c.key), c.help)
+	}
+	winBorder(w)
+	for {
+		w.Refresh()
+		gc.Cursor(0)
+		key := <-nc.Input
+		for _, c := range choices {
+			if key == c.key {
+				return c.key
+			}
+			log.Printf("Invalid choice %v", key)
+		}
+	}
 }
 
 func continueDraft() {
@@ -429,7 +470,7 @@ func continueDraft() {
 	}
 	var ss []string
 	for n, d := range drafts {
-		ss = append(ss, fmt.Sprintf("To:%s %s %d", cmdglib.GetHeader(d, "To"), d.Snippet, n))
+		ss = append(ss, fmt.Sprintf("To:%s %s %d", cmdglib.GetHeader(d.Message, "To"), d.Message.Snippet, n))
 	}
 	dn := stringChoice("Draft", ss, false)
 	re := regexp.MustCompile(` (\d+)$`)
@@ -443,15 +484,48 @@ func continueDraft() {
 		nc.Status("Internal error selecting draft: %v", err)
 		return
 	}
-	msg := drafts[n]
+	oldDraft := drafts[n]
 	input := fmt.Sprintf("To: %s\nCc: %s\nBcc: %s\nSubject: %s\n\n%s",
-		cmdglib.GetHeader(msg, "To"),
-		cmdglib.GetHeader(msg, "Cc"),
-		cmdglib.GetHeader(msg, "Bcc"),
-		cmdglib.GetHeader(msg, "Subject"),
-		getBody(msg),
+		cmdglib.GetHeader(oldDraft.Message, "To"),
+		cmdglib.GetHeader(oldDraft.Message, "Cc"),
+		cmdglib.GetHeader(oldDraft.Message, "Bcc"),
+		cmdglib.GetHeader(oldDraft.Message, "Subject"),
+		getBody(oldDraft.Message),
 	)
-	runEditor(input)
+	newDraft, err := runEditor(input)
+	if err != nil {
+		nc.Status("Running editor: %v", err)
+		return
+	}
+	choice := keyMenu([]keyChoice{
+		// Don't use 's', since it could mean save or send.
+		{'d', "Discard changes"},
+		{'D', "Discard draft"},
+		{'u', "Update draft"},
+		{'S', "Send"},
+	})
+	switch choice {
+	case 'd': // Discard changes.
+		nc.Status("Discarded change to draft")
+	case 'D': // Discard draft.
+		nc.Status("TODO: Discard draft")
+	case 'u': // Update draft.
+		// TODO: Retry.
+		st := time.Now()
+		if _, err := gmailService.Users.Drafts.Update(email, oldDraft.Id, &gmail.Draft{
+			Message: &gmail.Message{
+				ThreadId: oldDraft.Message.ThreadId,
+				Raw:      mimeEncode(newDraft),
+			},
+		}).Do(); err != nil {
+			nc.Status("[red]Error updating draft %s: %v", oldDraft.Id, err)
+			return
+		}
+		profileAPI("Users.Drafts.Update", time.Since(st))
+		nc.Status("[green]Updated draft")
+	case 'S': // Send.
+		nc.Status("TODO: Send draft.")
+	}
 }
 
 func compose() {
