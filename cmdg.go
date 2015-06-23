@@ -247,14 +247,14 @@ func list(label, search, pageToken string, nres int, historyID uint64) (uint64, 
 	syncP.add(func(ch chan<- func()) {
 		defer close(ch)
 		st := time.Now()
-		var err error
-		profile, err = gmailService.Users.GetProfile(email).Do()
+		p, err := gmailService.Users.GetProfile(email).Do()
 		if err != nil {
 			ch <- func() {
 				funcErr = append(funcErr, fmt.Errorf("Users.GetProfile: %v", err))
 			}
 			return
 		}
+		profile = p
 		profileAPI("Users.GetProfile", time.Since(st))
 	})
 	syncP.run()
