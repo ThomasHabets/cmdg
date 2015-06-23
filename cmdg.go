@@ -750,148 +750,142 @@ func runEditor(input string) (string, error) {
 // createSend asks how to send the message just composed.
 // thread is the thread id, and may be empty.
 // msg is the string representation of the message.
-// TODO: Break out the choice dialog.
 func createSend(thread, msg string) {
-	maxY, maxX := winSize()
-	height := 10
-	width := 70
-	x, y := maxX/2-width/2, maxY/2-height/2
-	w, err := gc.NewWindow(height, width, y, x)
-	if err != nil {
-		log.Fatalf("Failed to create send dialog: %v", err)
+	// Run menu.
+	var choice gc.Key
+	{
+		cs := []keyChoice{
+			{'s', "Send"},
+			{'S', "Send and archive"},
+		}
+		if *waitingLabel != "" {
+			cs = append(cs,
+				keyChoice{'w', "Send and apply waiting label"},
+				keyChoice{'W', "Send, apply waiting label, and archive"},
+			)
+		}
+		cs = append(cs,
+			keyChoice{'d', "Save as draft"},
+			keyChoice{'a', "Abort, discarding draft"},
+		)
+		choice = keyMenu(cs)
 	}
-	defer w.Delete()
-	log.Printf("send window: %d %d %d %d", height, width, y, x)
-
-	w.Clear()
-	w.Print("\n\n   s - Send\n   S - Send and Archive\n")
-	if *waitingLabel != "" {
-		w.Print("   w - Send and apply waiting label\n")
-		w.Print("   W - Send, apply wait label, and archive\n")
-	}
-	w.Print("   d - Draft\n   a - Abort")
-	winBorder(w)
-	for {
-		w.Refresh()
-		gc.Cursor(0)
-		key := <-nc.Input
-		switch key {
-		case 's':
-			st := time.Now()
-			if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
-				ThreadId: thread,
-				Raw:      mimeEncode(msg),
-			}).Do(); err != nil {
-				nc.Status("Error sending: %v", err)
-				return
-			}
-			log.Printf("Users.Messages.Send: %v", time.Since(st))
-			nc.Status("[green]Successfully sent")
-			return
-		case 'S':
-			st := time.Now()
-			if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
-				ThreadId: thread,
-				Raw:      mimeEncode(msg),
-			}).Do(); err != nil {
-				nc.Status("Error sending: %v", err)
-				return
-			}
-			log.Printf("Users.Messages.Send: %v", time.Since(st))
-			nc.Status("[green]Successfully sent")
-			go func() {
-				// TODO: Do this in a better way.
-				nc.Input <- 'e'
-			}()
-			return
-		case 'w': // Send with label.
-			st := time.Now()
-			l, hasLabel := labels[*waitingLabel]
-			nc.Status("Sending with label...")
-
-			// Send.
-			gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
-				ThreadId: thread,
-				Raw:      mimeEncode(msg),
-			}).Do()
-			if err != nil {
-				nc.Status("Error sending: %v", err)
-				break
-			}
-
-			if !hasLabel {
-				nc.Status("Sent OK, [red]but label %q doesn't exist, so can't add it.", *waitingLabel)
-			} else {
-				// Add label.
-				if _, err := gmailService.Users.Messages.Modify(email, gmsg.Id, &gmail.ModifyMessageRequest{
-					AddLabelIds: []string{l},
-				}).Do(); err != nil {
-					nc.Status("Error labelling: %v", err)
-					log.Printf("Error labelling: %v", err)
-				} else {
-					nc.Status("Successfully sent (with waiting label %q)", l)
-					log.Printf("Users.Messages.Send+Add waiting: %v", time.Since(st))
-				}
-				nc.Status("[green]Sent with label")
-			}
-			return
-		case 'W': // Send with label and archive.
-			st := time.Now()
-			l, hasLabel := labels[*waitingLabel]
-
-			nc.Status("Sending with label...")
-			gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
-				ThreadId: thread,
-				Raw:      mimeEncode(msg),
-			}).Do()
-			if err != nil {
-				nc.Status("Error sending: %v", err)
-				break
-			}
-
-			if !hasLabel {
-				nc.Status("Sent OK, [red]but label %q doesn't exist, so can't add it.", *waitingLabel)
-			} else {
-				// Add label.
-				if _, err := gmailService.Users.Messages.Modify(email, gmsg.Id, &gmail.ModifyMessageRequest{
-					AddLabelIds: []string{l},
-				}).Do(); err != nil {
-					nc.Status("Error labelling: %v", err)
-					log.Printf("Error labelling: %v", err)
-				} else {
-					nc.Status("Successfully sent (with waiting label %q)", l)
-					log.Printf("Users.Messages.Send+Add waiting: %v", time.Since(st))
-					go func() {
-						// TODO: Do this in a better way.
-						nc.Input <- 'e'
-					}()
-				}
-				nc.Status("[green]Sent with label")
-			}
-			go func() {
-				// TODO: Archive in a better way.
-				nc.Input <- 'e'
-			}()
-			return
-		case 'a':
-			nc.Status("Aborted send")
-			return
-		case 'd':
-			st := time.Now()
-			if _, err := gmailService.Users.Drafts.Create(email, &gmail.Draft{
-				Message: &gmail.Message{
-					ThreadId: thread,
-					Raw:      mimeEncode(msg),
-				},
-			}).Do(); err != nil {
-				nc.Status("[red]Error saving as draft: %v", err)
-				// TODO: data loss!
-				return
-			}
-			nc.Status("Saved draft")
-			log.Printf("Users.Drafts.Create: %v", time.Since(st))
+	switch choice {
+	case 's':
+		st := time.Now()
+		if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+			ThreadId: thread,
+			Raw:      mimeEncode(msg),
+		}).Do(); err != nil {
+			nc.Status("Error sending: %v", err)
 			return
 		}
+		log.Printf("Users.Messages.Send: %v", time.Since(st))
+		nc.Status("[green]Successfully sent")
+		return
+	case 'S':
+		st := time.Now()
+		if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+			ThreadId: thread,
+			Raw:      mimeEncode(msg),
+		}).Do(); err != nil {
+			nc.Status("Error sending: %v", err)
+			return
+		}
+		log.Printf("Users.Messages.Send: %v", time.Since(st))
+		nc.Status("[green]Successfully sent")
+		go func() {
+			// TODO: Do this in a better way.
+			nc.Input <- 'e'
+		}()
+		return
+	case 'w': // Send with label.
+		st := time.Now()
+		l, hasLabel := labels[*waitingLabel]
+		nc.Status("Sending with label...")
+
+		// Send.
+		gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+			ThreadId: thread,
+			Raw:      mimeEncode(msg),
+		}).Do()
+		if err != nil {
+			nc.Status("Error sending: %v", err)
+			break
+		}
+
+		if !hasLabel {
+			nc.Status("Sent OK, [red]but label %q doesn't exist, so can't add it.", *waitingLabel)
+		} else {
+			// Add label.
+			if _, err := gmailService.Users.Messages.Modify(email, gmsg.Id, &gmail.ModifyMessageRequest{
+				AddLabelIds: []string{l},
+			}).Do(); err != nil {
+				nc.Status("Error labelling: %v", err)
+				log.Printf("Error labelling: %v", err)
+			} else {
+				nc.Status("Successfully sent (with waiting label %q)", l)
+				log.Printf("Users.Messages.Send+Add waiting: %v", time.Since(st))
+			}
+			nc.Status("[green]Sent with label")
+		}
+		return
+	case 'W': // Send with label and archive.
+		st := time.Now()
+		l, hasLabel := labels[*waitingLabel]
+
+		nc.Status("Sending with label...")
+		gmsg, err := gmailService.Users.Messages.Send(email, &gmail.Message{
+			ThreadId: thread,
+			Raw:      mimeEncode(msg),
+		}).Do()
+		if err != nil {
+			nc.Status("Error sending: %v", err)
+			break
+		}
+
+		if !hasLabel {
+			nc.Status("Sent OK, [red]but label %q doesn't exist, so can't add it.", *waitingLabel)
+		} else {
+			// Add label.
+			if _, err := gmailService.Users.Messages.Modify(email, gmsg.Id, &gmail.ModifyMessageRequest{
+				AddLabelIds: []string{l},
+			}).Do(); err != nil {
+				nc.Status("Error labelling: %v", err)
+				log.Printf("Error labelling: %v", err)
+			} else {
+				nc.Status("Successfully sent (with waiting label %q)", l)
+				log.Printf("Users.Messages.Send+Add waiting: %v", time.Since(st))
+				go func() {
+					// TODO: Do this in a better way.
+					nc.Input <- 'e'
+				}()
+			}
+			nc.Status("[green]Sent with label")
+		}
+		go func() {
+			// TODO: Archive in a better way.
+			nc.Input <- 'e'
+		}()
+		return
+	case 'a':
+		nc.Status("Aborted send")
+		return
+	case 'd':
+		st := time.Now()
+		if _, err := gmailService.Users.Drafts.Create(email, &gmail.Draft{
+			Message: &gmail.Message{
+				ThreadId: thread,
+				Raw:      mimeEncode(msg),
+			},
+		}).Do(); err != nil {
+			nc.Status("[red]Error saving as draft: %v", err)
+			// TODO: data loss!
+			return
+		}
+		nc.Status("Saved draft")
+		log.Printf("Users.Drafts.Create: %v", time.Since(st))
+		return
 	}
 }
 
