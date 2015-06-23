@@ -52,7 +52,7 @@ import (
 )
 
 const (
-	version   = "0.0.2"
+	version   = "0.3"
 	userAgent = "cmdg " + version
 
 	backoffTime = 50 * time.Millisecond // Initial backoff time for API calls.
