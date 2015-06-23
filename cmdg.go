@@ -33,6 +33,9 @@
 /*
  *  Copyright (C) 2015 Thomas Habets <thomas@habets.se>
  *
+ *  This software is dual-licensed GPL and "Thomas is allowed to release a
+ *  binary version that adds shared API keys and nothing else".
+ *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or

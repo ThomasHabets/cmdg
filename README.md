@@ -5,7 +5,9 @@ Copyright Thomas Habets <thomas@habets.se> 2015
 
 https://github.com/ThomasHabets/cmdg
 
-Licence: GPL.
+Licence:
+  This software is dual-licensed GPL and "Thomas is allowed to release a
+  binary version that adds shared API keys and nothing else".
 
 Introduction
 ============
