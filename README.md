@@ -32,7 +32,9 @@ Benefits over IMAP
 
 Benefits over the Gmail web UI
 ------------------------------
-* Emacs keys. (or compose emails in Vim, if you prefer)
+* Emacs keys.
+* Uses a real $EDITOR.
+* Really fast. No browser, CSS, or javascript gettin in the way.
 * Proper quoting. The Gmail web UI encourages top-posting. Ugh.
 * It uses 100% keyboard navigation. Gmail web UI has very good
   keyboard navigation for a web app, but still requires mouse for

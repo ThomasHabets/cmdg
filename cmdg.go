@@ -1,34 +1,5 @@
 // cmdg is a command line client to Gmail.
 //
-// The major reason for its existence is that the Gmail web UI is not
-// friendly to proper quoting.
-//
-// Main benefits over Gmail web:
-//   * Really fast. No browser, CSS or javascript getting in the way.
-//   * Low bandwidth.
-//   * Uses your EDITOR for composing (emacs keys, yay!)
-//
-// TODO features (in rough prio order):
-//   * Unicode character support.
-//   * Smoother scrolling of messages.
-//   * Attach file.
-//   * Mailbox pagination
-//   * Thread view (default: show only latest email in thread)
-//   * Periodic message view refresh.
-//   * Send all email asynchronously, with a local journal file for
-//     when there are network issues.
-//   * GPG sign.
-//   * If sending fails, optionally re-open.
-//   * GPG encrypt.
-//   * GPG decrypt.
-//   * Make Goto work from message view.
-//   * History API for refreshing (?).
-//   * Delayed sending.
-//   * Special shortcuts for labelling 'important', 'starred' and 'unread'.
-//   * The Gmail API supports batch. Does the Go library?
-//   * Loading animations to show it's not stuck.
-//   * In-memory cache for messages (all but labels for messages is immutable)
-//   * On disk (encrypted) cache for messages.
 /*
  *  Copyright (C) 2015 Thomas Habets <thomas@habets.se>
  *
