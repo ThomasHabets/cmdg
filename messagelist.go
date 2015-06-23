@@ -819,7 +819,7 @@ func messageListPrint(w *gc.Window, msgs []listEntry, marked map[string]bool, cu
 	maxY, maxX := w.MaxYX()
 
 	fromMax := 20
-	tsWidth := 7
+	tsWidth := 6
 	if len(msgs) == 0 {
 		ncwrap.ColorPrint(w, "<empty for label %q, search query %q>", currentLabel, currentSearch)
 	}
@@ -836,8 +836,8 @@ func messageListPrint(w *gc.Window, msgs []listEntry, marked map[string]bool, cu
 			fromMax, fromMax, m.From(),
 			m.Subject())
 
-		// Selector, mark, unread.
-		prefix := []string{" ", " ", " "}
+		// Selector, mark, unread, starred.
+		prefix := []string{" ", " ", " ", " "}
 
 		if n == current {
 			prefix[0] = "*"
@@ -850,6 +850,10 @@ func messageListPrint(w *gc.Window, msgs []listEntry, marked map[string]bool, cu
 
 		if cmdglib.HasLabel(m.LabelIds(), cmdglib.Unread) {
 			prefix[2] = ">"
+		}
+
+		if cmdglib.HasLabel(m.LabelIds(), cmdglib.Starred) {
+			prefix[3] = "*"
 		}
 
 		s = strings.Join(prefix, "") + s
