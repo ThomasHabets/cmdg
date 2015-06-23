@@ -232,7 +232,7 @@ Backspace         Page up
 			return false
 		case 'l':
 			ls := notLabeled(msgs[current])
-			label := stringChoice("Add label>", ls, false)
+			label := stringChoice("Add label", ls, false)
 			if label != "" {
 				id := labels[label]
 				if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
@@ -246,7 +246,7 @@ Backspace         Page up
 
 		case 'L':
 			ls := labeled(msgs[current])
-			label := stringChoice("Remove label>", ls, false)
+			label := stringChoice("Remove label", ls, false)
 			if label != "" {
 				id := labels[label]
 				if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{

@@ -98,7 +98,7 @@ func stringChoice(prompt string, ls []string, free bool) string {
 
 	for {
 		w.Clear()
-		w.Print(fmt.Sprintf("\n %s %s\n", prompt, s))
+		w.Print(fmt.Sprintf("\n %s> %s\n", prompt, s))
 		seenLabels := 0
 		curLabel := ""
 		for _, l := range ls {
@@ -431,7 +431,7 @@ func continueDraft() {
 	for n, d := range drafts {
 		ss = append(ss, fmt.Sprintf("To:%s %s %d", cmdglib.GetHeader(d, "To"), d.Snippet, n))
 	}
-	dn := stringChoice("Draft> ", ss, false)
+	dn := stringChoice("Draft", ss, false)
 	re := regexp.MustCompile(` (\d+)$`)
 	m := re.FindStringSubmatch(dn)
 	if len(m) != 2 {
@@ -455,7 +455,7 @@ func continueDraft() {
 }
 
 func compose() {
-	to := stringChoice("To: ", contactAddresses(), true)
+	to := stringChoice("To", contactAddresses(), true)
 	nc.Status("Running editor")
 	input := fmt.Sprintf("To: %s\nSubject: \n\n%s\n", to, getSignature())
 	sendMessage, err := runEditor(input)
@@ -544,7 +544,7 @@ s                 Search
 	case '1':
 		state.changeLabel(cmdglib.Inbox, "")
 	case 'g':
-		newLabel := stringChoice("Go to label>", sortedLabels(), false)
+		newLabel := stringChoice("Go to label", sortedLabels(), false)
 		if newLabel != "" {
 			newLabel = labels[newLabel]
 			log.Printf("Going to label %q (%q)", newLabel, labelIDs[newLabel])
@@ -608,7 +608,7 @@ s                 Search
 			nc.Status("No messages marked")
 			break
 		}
-		newLabel := stringChoice("Add label>", sortedLabels(), false)
+		newLabel := stringChoice("Add label", sortedLabels(), false)
 		if newLabel != "" {
 			id := labels[newLabel]
 			allFine := true
@@ -651,7 +651,7 @@ s                 Search
 		sort.Sort(sortLabels(ls))
 
 		// Ask for labels.
-		newLabel := stringChoice("Remove label>", ls, false)
+		newLabel := stringChoice("Remove label", ls, false)
 		if newLabel != "" {
 			state.goLoadMsgs()
 			id := labels[newLabel]
