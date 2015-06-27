@@ -72,7 +72,7 @@ var (
 	config        = flag.String("config", "", "Config file. If empty will default to ~/"+defaultConfigFile)
 	configure     = flag.Bool("configure", false, "Configure OAuth and write config file.")
 	readonly      = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
-	editor        = flag.String("editor", "/usr/bin/emacs", "Default editor to use if EDITOR is not set.")
+	editor        = flag.String("editor", "/usr/bin/emacs", "Default editor to use if VISUAL/EDITOR is not set.")
 	gpg           = flag.String("gpg", "/usr/bin/gpg", "Path to GnuPG.")
 	replyRegex    = flag.String("reply_regexp", `(?i)^(Re|Sv|Aw|AW): `, "If subject matches, there's no need to add a Re: prefix.")
 	replyPrefix   = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
@@ -700,6 +700,9 @@ func runEditor(input string) (string, error) {
 	// Run editor.
 	bin := *editor
 	if e := os.Getenv("EDITOR"); len(e) > 0 {
+		bin = e
+	}
+	if e := os.Getenv("VISUAL"); len(e) > 0 {
 		bin = e
 	}
 	cmd := exec.Command(bin, f.Name())
