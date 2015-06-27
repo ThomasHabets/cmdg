@@ -193,7 +193,7 @@ U                 Mark message unread and close.
 					nc.Status("Mime decode of RAW message failed: %v", err)
 				} else {
 					dec = strings.Replace(dec, "\r", "", -1)
-					helpWin(dec)
+					runPager(dec)
 					nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 				}
 			}

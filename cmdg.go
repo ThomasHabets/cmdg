@@ -72,7 +72,6 @@ var (
 	config        = flag.String("config", "", "Config file. If empty will default to ~/"+defaultConfigFile)
 	configure     = flag.Bool("configure", false, "Configure OAuth and write config file.")
 	readonly      = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
-	editor        = flag.String("editor", "/usr/bin/emacs", "Default editor to use if VISUAL/EDITOR is not set.")
 	gpg           = flag.String("gpg", "/usr/bin/gpg", "Path to GnuPG.")
 	replyRegex    = flag.String("reply_regexp", `(?i)^(Re|Sv|Aw|AW): `, "If subject matches, there's no need to add a Re: prefix.")
 	replyPrefix   = flag.String("reply_prefix", "Re: ", "String to prepend to subject in replies.")
@@ -673,6 +672,36 @@ func runEditorHeadersOK(input string) (string, error) {
 	return s, nil
 }
 
+func runPager(input string) error {
+	bin := ""
+	if e := os.Getenv("PAGER"); len(e) > 0 {
+		bin = e
+	}
+	// Re-acquire terminal when done.
+	defer runSomething()()
+	cmd := exec.Command(bin)
+	cmd.Stdin = bytes.NewBufferString(input)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run pager %q: %v", bin, err)
+	}
+	return nil
+}
+
+func runSomething() func() {
+	// Restore terminal for editors use.
+	nc.Stop()
+
+	return func() {
+		var err error
+		nc, err = ncwrap.Start()
+		if err != nil {
+			log.Fatalf("ncurses failed to re-init: %v", err)
+		}
+	}
+}
+
 func runEditor(input string) (string, error) {
 	f, err := ioutil.TempFile("", "cmdg-")
 	if err != nil {
@@ -685,20 +714,11 @@ func runEditor(input string) (string, error) {
 		return "", err
 	}
 
-	// Restore terminal for editors use.
-	nc.Stop()
-
 	// Re-acquire terminal when done.
-	defer func() {
-		var err error
-		nc, err = ncwrap.Start()
-		if err != nil {
-			log.Fatalf("ncurses failed to re-init: %v", err)
-		}
-	}()
+	defer runSomething()()
 
 	// Run editor.
-	bin := *editor
+	bin := ""
 	if e := os.Getenv("EDITOR"); len(e) > 0 {
 		bin = e
 	}
