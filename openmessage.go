@@ -179,12 +179,25 @@ p, Up             Scroll up
 n, Down           Scroll down
 Space             Page down
 Backspace         Page up
+u, <, Left        Close message.
+U                 Mark message unread and close.
 `)
 			nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 		case 'q':
 			state.quit = true
 			return
 		case gc.KEY_LEFT, '<', 'u':
+			return
+		case 'U':
+			st := time.Now()
+			if _, err := gmailService.Users.Messages.Modify(email, msgs[state.current].Id, &gmail.ModifyMessageRequest{
+				AddLabelIds: []string{cmdglib.Unread},
+			}).Do(); err == nil {
+				log.Printf("Users.Messages.Modify(mark unread): %v", time.Since(st))
+				nc.Status("[green]OK, marked unread")
+			} else {
+				nc.Status("Failed to marked unread: %v", err)
+			}
 			return
 		case 16, 'k': // CtrlP
 			scroll = 0
