@@ -181,8 +181,22 @@ Space             Page down
 Backspace         Page up
 u, <, Left        Close message.
 U                 Mark message unread and close.
+\                 Show raw message.
 `)
 			nc.ApplyMain(func(w *gc.Window) { w.Clear() })
+		case '\\':
+			if m, err := gmailService.Users.Messages.Get(email, msgs[state.current].Id).Format("RAW").Do(); err != nil {
+				nc.Status("Failed to retrieve RAW message: %v", err)
+			} else {
+				dec, err := mimeDecode(m.Raw)
+				if err != nil {
+					nc.Status("Mime decode of RAW message failed: %v", err)
+				} else {
+					dec = strings.Replace(dec, "\r", "", -1)
+					helpWin(dec)
+					nc.ApplyMain(func(w *gc.Window) { w.Clear() })
+				}
+			}
 		case 'q':
 			state.quit = true
 			return
