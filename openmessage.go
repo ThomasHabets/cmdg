@@ -193,7 +193,9 @@ U                 Mark message unread and close.
 					nc.Status("Mime decode of RAW message failed: %v", err)
 				} else {
 					dec = strings.Replace(dec, "\r", "", -1)
-					runPager(dec)
+					if err := runPager(dec); err != nil {
+						helpWin(fmt.Sprintf("Error running pager:\n%v", err))
+					}
 					nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 				}
 			}
