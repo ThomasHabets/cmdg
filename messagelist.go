@@ -534,10 +534,11 @@ func compose() {
 	input := fmt.Sprintf("To: %s\nSubject: \n\n%s\n", to, getSignature())
 	sendMessage, err := runEditor(input)
 	if err != nil {
-		nc.Status("Running editor: %v", err)
+		helpWin(fmt.Sprintf("Running editor:\n%v", err))
 		return
 	}
 	createSend("", sendMessage)
+	nc.Status("Composed email")
 }
 
 // messageListInput handles input. It's run synchronously in the main thread.
@@ -626,7 +627,6 @@ s                 Search
 		}
 	case 'c': // Compose.
 		compose()
-		nc.Status("Sent email")
 		// We could be in sent folders or a search that sees this message.
 		state.goLoadMsgs()
 	case 'C':
