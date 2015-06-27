@@ -99,6 +99,9 @@ var (
 
 	logRedirected bool // Don't write API measurements to log until it's been redirected.
 
+	pagerBinary  string
+	editorBinary string
+
 	replyRE   *regexp.Regexp
 	forwardRE *regexp.Regexp
 
@@ -673,18 +676,14 @@ func runEditorHeadersOK(input string) (string, error) {
 }
 
 func runPager(input string) error {
-	bin := ""
-	if e := os.Getenv("PAGER"); len(e) > 0 {
-		bin = e
-	}
 	// Re-acquire terminal when done.
 	defer runSomething()()
-	cmd := exec.Command(bin)
+	cmd := exec.Command(pagerBinary)
 	cmd.Stdin = bytes.NewBufferString(input)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run pager %q: %v", bin, err)
+		return fmt.Errorf("failed to run pager %q: %v", pagerBinary, err)
 	}
 	return nil
 }
@@ -718,19 +717,12 @@ func runEditor(input string) (string, error) {
 	defer runSomething()()
 
 	// Run editor.
-	bin := ""
-	if e := os.Getenv("EDITOR"); len(e) > 0 {
-		bin = e
-	}
-	if e := os.Getenv("VISUAL"); len(e) > 0 {
-		bin = e
-	}
-	cmd := exec.Command(bin, f.Name())
+	cmd := exec.Command(editorBinary, f.Name())
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to open editor %q: %v", bin, err)
+		return "", fmt.Errorf("failed to open editor %q: %v", editorBinary, err)
 	}
 
 	// Read back reply.
@@ -971,6 +963,19 @@ func main() {
 		log.Fatalf("Missing config file %q: %v", *config, err)
 	} else if (fi.Mode() & 0477) != 0400 {
 		log.Fatalf("Config file (%q) permissions must be 0600 or better, was 0%o", *config, fi.Mode()&os.ModePerm)
+	}
+
+	pagerBinary = os.Getenv("PAGER")
+	if len(pagerBinary) == 0 {
+		log.Fatalf("You need to set the PAGER environment variable. When in doubt, set to 'less'.")
+	}
+
+	editorBinary = os.Getenv("VISUAL")
+	if len(editorBinary) == 0 {
+		editorBinary = os.Getenv("EDITOR")
+		if len(editorBinary) == 0 {
+			log.Fatalf("You need to set the VISUAL or EDITOR environment variable. Set to your favourite editor.")
+		}
 	}
 
 	if err := reconnect(); err != nil {
