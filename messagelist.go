@@ -600,8 +600,8 @@ s                 Search
 			for _, m := range state.msgs {
 				ms = append(ms, m.thread)
 			}
-			if openThreadMain(ms, state.current, state.marked, state.currentLabel) {
-				state.quit = true
+			openThreadMain(ms, state)
+			if state.quit {
 				return
 			}
 		} else {
@@ -609,8 +609,8 @@ s                 Search
 			for _, m := range state.msgs {
 				ms = append(ms, m.msg)
 			}
-			if openMessageMain(ms, state.current, state.marked, state.currentLabel) {
-				state.quit = true
+			openMessageMain(ms, state)
+			if state.quit {
 				return
 			}
 		}

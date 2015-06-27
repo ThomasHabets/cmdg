@@ -28,13 +28,13 @@ import (
 )
 
 // Return true if cmdg should quit.
-func openThreadMain(ts []*gmail.Thread, currentThread int, marked map[string]bool, currentLabel string) bool {
+func openThreadMain(ts []*gmail.Thread, state *messageListState) {
 	nc.Status("Opening thread")
 	scroll := 0
 	currentMessage := 0
 	for {
 		nc.ApplyMain(func(w *gc.Window) {
-			openThreadPrint(w, ts, currentThread, currentMessage, marked[ts[currentThread].Id], currentLabel, scroll)
+			openThreadPrint(w, ts, state.current, currentMessage, state.marked[ts[state.current].Id], state.currentLabel, scroll)
 		})
 		key := <-nc.Input
 		switch key {
@@ -58,27 +58,32 @@ Backspace         Page up
 `)
 			nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 		case 'q':
-			return true
+			state.quit = true
+			return
 		case gc.KEY_LEFT, '<', 'u':
-			return false
+			return
 		case gc.KEY_RIGHT, '>', '\n', '\r':
-			if openMessageMain(ts[currentThread].Messages, currentMessage, marked, currentLabel) {
-				return true
+			r := state.current
+			state.current = currentMessage
+			openMessageMain(ts[state.current].Messages, state)
+			state.current = r
+			if state.quit {
+				return
 			}
 		case ctrlP:
-			if currentThread > 0 {
-				currentThread--
+			if state.current > 0 {
+				state.current--
 			}
 		case ctrlN:
-			if currentThread < len(ts)-1 {
-				currentThread++
+			if state.current < len(ts)-1 {
+				state.current++
 			}
 		case 'p', 'k':
 			if currentMessage > 0 {
 				currentMessage--
 			}
 		case 'n', 'j':
-			if currentMessage < len(ts[currentThread].Messages)-1 {
+			if currentMessage < len(ts[state.current].Messages)-1 {
 				currentMessage++
 			}
 		default:

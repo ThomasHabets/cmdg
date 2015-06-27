@@ -151,14 +151,14 @@ Labels: [bold]%s[unbold]%s
 }
 
 // Return true if cmdg should quit.
-func openMessageMain(msgs []*gmail.Message, current int, marked map[string]bool, currentLabel string) bool {
+func openMessageMain(msgs []*gmail.Message, state *messageListState) {
 	nc.Status("Opening message")
 	scroll := 0
 	nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 	for {
 		maxY, _ := winSize()
 		nc.ApplyMain(func(w *gc.Window) {
-			openMessagePrint(w, msgs, current, marked[msgs[current].Id], currentLabel, scroll)
+			openMessagePrint(w, msgs, state.current, state.marked[msgs[state.current].Id], state.currentLabel, scroll)
 		})
 		key := <-nc.Input
 		nc.Status("OK")
@@ -182,46 +182,47 @@ Backspace         Page up
 `)
 			nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 		case 'q':
-			return true
+			state.quit = true
+			return
 		case gc.KEY_LEFT, '<', 'u':
-			return false
+			return
 		case 16, 'k': // CtrlP
 			scroll = 0
-			if current > 0 {
-				current--
+			if state.current > 0 {
+				state.current--
 			}
 		case 14, 'j': // CtrlN
 			scroll = 0
-			if current < len(msgs)-1 {
-				current++
+			if state.current < len(msgs)-1 {
+				state.current++
 			}
 		case 'f':
 			nc.Status("Composing forward")
-			msg, err := getForward(msgs[current])
+			msg, err := getForward(msgs[state.current])
 			if err != nil {
 				nc.Status("Failed to compose forward: %v", err)
 			} else {
-				createSend(msgs[current].ThreadId, msg)
+				createSend(msgs[state.current].ThreadId, msg)
 			}
 		case 'r':
 			nc.Status("Composing reply")
-			msg, err := getReply(msgs[current])
+			msg, err := getReply(msgs[state.current])
 			if err != nil {
 				nc.Status("Failed to compose reply: %v", err)
 			} else {
-				createSend(msgs[current].ThreadId, msg)
+				createSend(msgs[state.current].ThreadId, msg)
 			}
 		case 'a':
 			nc.Status("Composing reply to all")
-			msg, err := getReplyAll(msgs[current])
+			msg, err := getReplyAll(msgs[state.current])
 			if err != nil {
 				nc.Status("Failed to compose reply all: %v", err)
 			} else {
-				createSend(msgs[current].ThreadId, msg)
+				createSend(msgs[state.current].ThreadId, msg)
 			}
 		case 'e':
 			st := time.Now()
-			if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
+			if _, err := gmailService.Users.Messages.Modify(email, msgs[state.current].Id, &gmail.ModifyMessageRequest{
 				RemoveLabelIds: []string{cmdglib.Inbox},
 			}).Do(); err == nil {
 				log.Printf("Users.Messages.Modify(archive): %v", time.Since(st))
@@ -229,13 +230,13 @@ Backspace         Page up
 			} else {
 				nc.Status("Failed to archive: %v", err)
 			}
-			return false
+			return
 		case 'l':
-			ls := notLabeled(msgs[current])
+			ls := notLabeled(msgs[state.current])
 			label := stringChoice("Add label", ls, false)
 			if label != "" {
 				id := labels[label]
-				if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
+				if _, err := gmailService.Users.Messages.Modify(email, msgs[state.current].Id, &gmail.ModifyMessageRequest{
 					AddLabelIds: []string{id},
 				}).Do(); err != nil {
 					nc.Status("[red]Failed to apply label %q: %v", id, labelIDs[id], err)
@@ -245,11 +246,11 @@ Backspace         Page up
 			}
 
 		case 'L':
-			ls := labeled(msgs[current])
+			ls := labeled(msgs[state.current])
 			label := stringChoice("Remove label", ls, false)
 			if label != "" {
 				id := labels[label]
-				if _, err := gmailService.Users.Messages.Modify(email, msgs[current].Id, &gmail.ModifyMessageRequest{
+				if _, err := gmailService.Users.Messages.Modify(email, msgs[state.current].Id, &gmail.ModifyMessageRequest{
 					RemoveLabelIds: []string{id},
 				}).Do(); err != nil {
 					nc.Status("[red]Failed to remove label %q (%q): %v", id, labelIDs[id], err)
@@ -259,9 +260,9 @@ Backspace         Page up
 			}
 
 		case 'x':
-			// TODO; Mark message
+			state.marked[msgs[state.current].Id] = true
 		case 'v':
-			openMessageCmdGPGVerify(msgs[current], true)
+			openMessageCmdGPGVerify(msgs[state.current], true)
 		case 'n', gc.KEY_DOWN: // Scroll down.
 			scroll += 2
 		case 'p', gc.KEY_UP: // Scroll up.
@@ -276,7 +277,7 @@ Backspace         Page up
 		if scroll < 0 {
 			scroll = 0
 		}
-		ms := maxScroll(len(breakLines(strings.Split(getBody(msgs[current]), "\n"))), maxY)
+		ms := maxScroll(len(breakLines(strings.Split(getBody(msgs[state.current]), "\n"))), maxY)
 		if scroll > ms {
 			scroll = ms
 		}
