@@ -308,6 +308,18 @@ type messageListState struct {
 	msgUpdateCh   chan listEntry               // Send back updated/full messages/threads.
 }
 
+func (m *messageListState) archive(id string) {
+	if m.currentLabel == cmdglib.Inbox {
+		delete(m.marked, id)
+	}
+	for n, msg := range m.msgs {
+		if msg.msg.Id == id {
+			m.msgs = append(m.msgs[:n], m.msgs[n+1:]...)
+			return
+		}
+	}
+}
+
 // bgLoadMsgs loads messages asynchronously and sends that info back to the main thread via channels.
 func bgLoadMsgs(msgDo chan<- func(*messageListState), msgsCh chan<- []listEntry, msgUpdateCh chan<- listEntry, thread bool, historyID uint64, label, search string) {
 	log.Printf("Loading label %q, search %q", label, search)
@@ -663,6 +675,7 @@ s                 Search
 			if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
 				RemoveLabelIds: []string{cmdglib.Inbox},
 			}).Do(); err == nil {
+				state.archive(m.ID())
 				state.goLoadMsgs()
 				log.Printf("Users.Messages.Archive: %v", time.Since(st))
 				if state.currentLabel == cmdglib.Inbox {

@@ -256,6 +256,7 @@ U                 Mark message unread and close.
 			}).Do(); err == nil {
 				log.Printf("Users.Messages.Modify(archive): %v", time.Since(st))
 				nc.Status("[green]OK, archived")
+				state.archive(msgs[state.current].Id)
 			} else {
 				nc.Status("Failed to archive: %v", err)
 			}
