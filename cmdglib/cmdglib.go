@@ -111,9 +111,9 @@ func TimeString(m *gmail.Message) string {
 }
 
 // FromString gets the source address, unless mail is sent, in which case get destination.
-func FromString(m *gmail.Message) string {
+func FromString(m *gmail.Message, inSent bool) string {
 	s := GetHeader(m, "From")
-	if HasLabel(m.LabelIds, Sent) {
+	if inSent && HasLabel(m.LabelIds, Sent) {
 		s = GetHeader(m, "To")
 	}
 	a, err := mail.ParseAddress(s)

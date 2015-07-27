@@ -253,15 +253,15 @@ func (e *listEntry) Time() string {
 	return cmdglib.TimeString(e.thread.Messages[len(e.thread.Messages)-1])
 }
 
-func (e *listEntry) From() string {
+func (e *listEntry) From(inSent bool) string {
 	if e.msg != nil {
-		return cmdglib.FromString(e.msg)
+		return cmdglib.FromString(e.msg, inSent)
 	}
 	if len(e.thread.Messages) == 0 {
 		return "Loading"
 	}
 	// TODO: better fromstring.
-	return cmdglib.FromString(e.thread.Messages[0])
+	return cmdglib.FromString(e.thread.Messages[0], inSent)
 }
 
 func (e *listEntry) Subject() string {
@@ -872,6 +872,7 @@ func messageListPrint(w *gc.Window, msgs []listEntry, marked map[string]bool, cu
 	if len(msgs) == 0 {
 		ncwrap.ColorPrint(w, "<empty for label %q, search query %q>", currentLabel, currentSearch)
 	}
+	inSent := (currentLabel == cmdglib.Sent)
 	for n, m := range msgs {
 		if n >= maxY {
 			break
@@ -882,7 +883,7 @@ func messageListPrint(w *gc.Window, msgs []listEntry, marked map[string]bool, cu
 		}
 		s := fmt.Sprintf("%*.*s | %*.*s | %s",
 			tsWidth, tsWidth, m.Time(),
-			fromMax, fromMax, m.From(),
+			fromMax, fromMax, m.From(inSent),
 			m.Subject())
 
 		// Selector, mark, unread, starred.
