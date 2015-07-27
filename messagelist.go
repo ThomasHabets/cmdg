@@ -545,6 +545,14 @@ func continueDraft() {
 
 func compose() {
 	to := stringChoice("To", contactAddresses(), true)
+	if strings.EqualFold(to, "me") {
+		p, err := gmailService.Users.GetProfile(email).Do()
+		if err != nil {
+			nc.Status("[red]Failed to get own email address: %v", err)
+			return
+		}
+		to = p.EmailAddress
+	}
 	nc.Status("Running editor")
 	input := fmt.Sprintf("To: %s\nSubject: \n\n%s\n", to, getSignature())
 	sendMessage, err := runEditor(input)

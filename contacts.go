@@ -33,7 +33,7 @@ func updateContacts() error {
 }
 
 func contactAddresses() []string {
-	var ret []string
+	ret := []string{"me"}
 	for _, c := range contacts.Entry {
 		for _, e := range c.Email {
 			if c.Title != "" {
