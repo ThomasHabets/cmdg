@@ -43,6 +43,7 @@ const (
 	ctrlR           = 18
 	ctrlP           = 16
 	ctrlN           = 14
+	ctrlU           = 21
 
 	draftListBatchSize = 100
 )
@@ -130,14 +131,16 @@ func stringChoice(prompt string, ls []string, free bool) string {
 				if len(s) == 0 {
 					cur = -1
 				}
-			case gc.KEY_DOWN, 14: // CtrlN
+			case gc.KEY_DOWN, ctrlN:
 				if cur < seenLabels-1 {
 					cur++
 				}
-			case gc.KEY_UP, 16: // CtrlP
+			case gc.KEY_UP, ctrlP:
 				if cur > 0 {
 					cur--
 				}
+			case ctrlU:
+				s = ""
 			case '\n', '\r':
 				if seenLabels == 0 {
 					if free {
