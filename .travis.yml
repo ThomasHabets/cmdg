@@ -2,6 +2,7 @@ language: go
 go:
   - 1.4
   - tip
+sudo: false
 install:
   - go get github.com/golang/glog
   - go get github.com/ThomasHabets/drive-du/lib
