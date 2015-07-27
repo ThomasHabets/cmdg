@@ -803,13 +803,21 @@ func messageListMain(thread bool) {
 
 	refreshTicker := time.NewTicker(refreshDuration)
 	defer refreshTicker.Stop()
+	redraw := false
 	for !state.quit {
 		select {
+
+		// Periodically check for new messagse.
 		case <-refreshTicker.C:
 			state.goLoadMsgs()
+
+		// User input.
 		case key := <-nc.Input:
 			messageListInput(key, &state)
+
+		// New list of messages in current view.
 		case newMsgs := <-state.msgsCh:
+			redraw = true
 			old := make(map[string]listEntry)
 			for _, m := range state.msgs {
 				old[m.ID()] = m
@@ -826,6 +834,8 @@ func messageListMain(thread bool) {
 			if state.current < 0 {
 				state.current = 0
 			}
+
+		// Update to one message.
 		case m := <-state.msgUpdateCh:
 			for n := range state.msgs {
 				if state.msgs[n].ID() == m.ID() {
@@ -836,6 +846,9 @@ func messageListMain(thread bool) {
 			f(&state)
 		}
 		nc.ApplyMain(func(w *gc.Window) {
+			if redraw {
+				w.Clear()
+			}
 			messageListPrint(w, state.msgs, state.marked, state.current, state.showDetails, state.currentLabel, state.currentSearch)
 		})
 	}
