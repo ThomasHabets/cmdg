@@ -26,6 +26,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -395,6 +397,7 @@ func bgLoadMsgs(msgDo chan<- func(*messageListState), msgsCh chan<- []listEntry,
 	}
 }
 
+// goLoadMsgs schedules a message reload.
 func (m *messageListState) goLoadMsgs() {
 	go bgLoadMsgs(m.msgDo, m.msgsCh, m.msgUpdateCh, m.thread, m.historyID, m.currentLabel, m.currentSearch)
 }
@@ -669,24 +672,28 @@ s                 Search
 			nc.Status("No messages marked")
 			break
 		}
-		allFine := true
+		var errCount int32
+		var wg sync.WaitGroup
 		for _, m := range mm {
-			st := time.Now()
-			if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
-				RemoveLabelIds: []string{cmdglib.Inbox},
-			}).Do(); err == nil {
-				state.archive(m.ID())
-				state.goLoadMsgs()
-				log.Printf("Users.Messages.Archive: %v", time.Since(st))
-				if state.currentLabel == cmdglib.Inbox {
-					delete(state.marked, m.ID())
+			m := m
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				st := time.Now()
+				if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
+					RemoveLabelIds: []string{cmdglib.Inbox},
+				}).Do(); err == nil {
+					state.archive(m.ID())
+					log.Printf("Users.Messages.Archive: %v", time.Since(st))
+				} else {
+					nc.Status("[red]Failed to archive message %s: %v", m, err)
+					atomic.AddInt32(&errCount, 1)
 				}
-			} else {
-				nc.Status("[red]Failed to archive message %s: %v", m, err)
-				allFine = false
-			}
+			}()
 		}
-		if allFine {
+		wg.Wait()
+		state.goLoadMsgs()
+		if errCount > 0 {
 			nc.Status("[green]Archived messages")
 		}
 
@@ -698,20 +705,28 @@ s                 Search
 		newLabel := stringChoice("Add label", sortedLabels(), false)
 		if newLabel != "" {
 			id := labels[newLabel]
-			allFine := true
+			var errCount int32
+			var wg sync.WaitGroup
 			for _, m := range mm {
-				st := time.Now()
-				if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
-					AddLabelIds: []string{id},
-				}).Do(); err == nil {
-					state.goLoadMsgs()
-					log.Printf("Users.Messages.Label: %v", time.Since(st))
-				} else {
-					nc.Status("[red]Failed to label message %s: %v", m, err)
-					allFine = false
-				}
+				m := m
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					st := time.Now()
+					if _, err := gmailService.Users.Messages.Modify(email, m.ID(), &gmail.ModifyMessageRequest{
+						AddLabelIds: []string{id},
+					}).Do(); err == nil {
+						state.goLoadMsgs()
+						log.Printf("Users.Messages.Label: %v", time.Since(st))
+					} else {
+						log.Printf("Users.Messages.Label error: %v", err)
+						nc.Status("[red]Failed to label message %s: %v", m, err)
+						atomic.AddInt32(&errCount, 1)
+					}
+				}()
 			}
-			if allFine {
+			wg.Wait()
+			if errCount > 0 {
 				nc.Status("[green]Labelled messages")
 			}
 		}
