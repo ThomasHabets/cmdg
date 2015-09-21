@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	gmail "google.golang.org/api/gmail/v1"
 )
@@ -160,6 +161,7 @@ func fakeAPIMeHistory(t *testing.T, w http.ResponseWriter, r *http.Request) {
 }
 
 func TestListMessages(t *testing.T) {
+	sleep = func(time.Duration) {}
 	var err error
 	gmailService, err = gmail.New(http.DefaultClient)
 	if err != nil {

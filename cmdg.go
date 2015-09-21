@@ -106,6 +106,8 @@ var (
 	forwardRE *regexp.Regexp
 
 	errNoHistory = errors.New("nothing new since last check")
+
+	sleep = time.Sleep
 )
 
 const (
@@ -254,7 +256,7 @@ func list(label, search, pageToken string, nres int, historyID uint64) (uint64, 
 							log.Printf("Get message failed, backoff expired, giving up: %v", err)
 							return
 						}
-						time.Sleep(s)
+						sleep(s)
 						log.Printf("Get message failed, retrying: %v", err)
 						continue
 					}
@@ -352,7 +354,7 @@ func listThreads(label, search, pageToken string, nres int, historyID uint64) ([
 							return
 						}
 						log.Printf("Get thread %q failed, retrying after %v: %v", m2.Id, s, err)
-						time.Sleep(s)
+						sleep(s)
 						continue
 					}
 					profileAPI("Users.Thread.Get", time.Since(st))
