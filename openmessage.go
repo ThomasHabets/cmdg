@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -150,6 +151,75 @@ Labels: [bold]%s[unbold]%s
 		body)
 }
 
+type part struct {
+	depth int
+	part  *gmail.MessagePart
+}
+
+func partTreeRecurse(depth int, ret []part, p *gmail.MessagePart) []part {
+	ret = append(ret, part{
+		depth: depth,
+		part:  p,
+	})
+	for _, c := range p.Parts {
+		ret = partTreeRecurse(depth+1, ret, c)
+	}
+	return ret
+}
+func partTree(m *gmail.Message) []part {
+	ret := []part{}
+	return partTreeRecurse(0, ret, m.Payload)
+}
+
+// browseAttachments browses messages attachments and lets the user save one.
+func browseAttachments(msg *gmail.Message) error {
+	// Get part from user.
+	var p part
+	{
+		s := []string{}
+		parts := partTree(msg)
+		partMap := []int{}
+		for pN, p := range parts {
+			if p.part.Filename != "" {
+				s = append(s, p.part.Filename)
+				partMap = append(partMap, pN)
+			}
+		}
+		_, a := stringChoice("Select attachment", s, false)
+		if a == -1 {
+			return nil
+		}
+		p = parts[partMap[a]]
+	}
+
+	// Download attachment.
+	var dec string
+	{
+		body, err := gmailService.Users.Messages.Attachments.Get(email, msg.Id, p.part.Body.AttachmentId).Do()
+		if err != nil {
+			return err
+		}
+		dec, err = mimeDecode(body.Data)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Save file.
+	{
+		f, err := os.Create(p.part.Filename)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if _, err := f.Write([]byte(dec)); err != nil {
+			os.Remove(f.Name())
+			return err
+		}
+	}
+	return nil
+}
+
 // Return true if cmdg should quit.
 func openMessageMain(msgs []*gmail.Message, state *messageListState) {
 	nc.Status("Opening message")
@@ -181,6 +251,7 @@ Space             Page down
 Backspace         Page up
 u, <, Left        Close message.
 U                 Mark message unread and close.
+t                 Browse attachments.
 \                 Show raw message.
 `)
 			nc.ApplyMain(func(w *gc.Window) { w.Clear() })
@@ -199,6 +270,11 @@ U                 Mark message unread and close.
 					nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 				}
 			}
+		case 't':
+			if err := browseAttachments(msgs[state.current]); err != nil {
+				nc.Status("[red]Failed to download attachment.")
+			}
+			nc.Status("[green]OK")
 		case 'q':
 			state.quit = true
 			return
@@ -263,7 +339,7 @@ U                 Mark message unread and close.
 			return
 		case 'l':
 			ls := notLabeled(msgs[state.current])
-			label := stringChoice("Add label", ls, false)
+			label, _ := stringChoice("Add label", ls, false)
 			if label != "" {
 				id := labels[label]
 				if _, err := gmailService.Users.Messages.Modify(email, msgs[state.current].Id, &gmail.ModifyMessageRequest{
@@ -277,7 +353,7 @@ U                 Mark message unread and close.
 
 		case 'L':
 			ls := labeled(msgs[state.current])
-			label := stringChoice("Remove label", ls, false)
+			label, _ := stringChoice("Remove label", ls, false)
 			if label != "" {
 				id := labels[label]
 				if _, err := gmailService.Users.Messages.Modify(email, msgs[state.current].Id, &gmail.ModifyMessageRequest{

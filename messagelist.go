@@ -87,7 +87,7 @@ func winBorder(w *gc.Window) {
 
 // stringChoice interactively asks the user for a label or email or something, and returns it.
 // if 'free' is true, allow 'write-ins'. Else 'write-ins' become empty string.
-func stringChoice(prompt string, ls []string, free bool) string {
+func stringChoice(prompt string, ls []string, free bool) (string, int) {
 	maxY, maxX := winSize()
 
 	w, err := gc.NewWindow(maxY-5, maxX-4, 2, 2)
@@ -104,12 +104,14 @@ func stringChoice(prompt string, ls []string, free bool) string {
 		w.Print(fmt.Sprintf("\n %s> %s\n", prompt, s))
 		seenLabels := 0
 		curLabel := ""
-		for _, l := range ls {
+		curLabelIndex := -1
+		for lindex, l := range ls {
 			if strings.Contains(strings.ToLower(l), strings.ToLower(s)) {
 				prefix := " "
 				if seenLabels == cur {
 					prefix = ">[bold]"
 					curLabel = l
+					curLabelIndex = lindex
 				}
 				ncwrap.ColorPrint(w, "  %s%s[unbold]\n", ncwrap.Preformat(prefix), l)
 				seenLabels++
@@ -144,11 +146,11 @@ func stringChoice(prompt string, ls []string, free bool) string {
 			case '\n', '\r':
 				if seenLabels == 0 {
 					if free {
-						return s
+						return s, -1
 					}
-					return ""
+					return "", -1
 				}
-				return curLabel
+				return curLabel, curLabelIndex
 			default:
 				cur = 0
 				if unicode.IsPrint(rune(key)) {
@@ -490,7 +492,7 @@ func continueDraft() {
 	for n, d := range drafts {
 		ss = append(ss, fmt.Sprintf("To:%s %s %d", cmdglib.GetHeader(d.Message, "To"), d.Message.Snippet, n))
 	}
-	dn := stringChoice("Draft", ss, false)
+	dn, _ := stringChoice("Draft", ss, false)
 	re := regexp.MustCompile(` (\d+)$`)
 	m := re.FindStringSubmatch(dn)
 	if len(m) != 2 {
@@ -547,7 +549,7 @@ func continueDraft() {
 }
 
 func compose() {
-	to := stringChoice("To", contactAddresses(), true)
+	to, _ := stringChoice("To", contactAddresses(), true)
 	if strings.EqualFold(to, "me") {
 		p, err := gmailService.Users.GetProfile(email).Do()
 		if err != nil {
@@ -645,7 +647,7 @@ s                 Search
 	case '1':
 		state.changeLabel(cmdglib.Inbox, "")
 	case 'g':
-		newLabel := stringChoice("Go to label", sortedLabels(), false)
+		newLabel, _ := stringChoice("Go to label", sortedLabels(), false)
 		if newLabel != "" {
 			newLabel = labels[newLabel]
 			log.Printf("Going to label %q (%q)", newLabel, labelIDs[newLabel])
@@ -713,7 +715,7 @@ s                 Search
 			nc.Status("No messages marked")
 			break
 		}
-		newLabel := stringChoice("Add label", sortedLabels(), false)
+		newLabel, _ := stringChoice("Add label", sortedLabels(), false)
 		if newLabel != "" {
 			id := labels[newLabel]
 			var errCount int32
@@ -764,7 +766,7 @@ s                 Search
 		sort.Sort(sortLabels(ls))
 
 		// Ask for labels.
-		newLabel := stringChoice("Remove label", ls, false)
+		newLabel, _ := stringChoice("Remove label", ls, false)
 		if newLabel != "" {
 			state.goLoadMsgs()
 			id := labels[newLabel]
