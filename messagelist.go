@@ -327,8 +327,20 @@ func (m *messageListState) archive(id string) {
 	}
 }
 
+var isLoading int32
+
 // bgLoadMsgs loads messages asynchronously and sends that info back to the main thread via channels.
 func bgLoadMsgs(msgDo chan<- func(*messageListState), msgsCh chan<- []listEntry, msgUpdateCh chan<- listEntry, thread bool, historyID uint64, label, search string) {
+	// Disable concurrent reloads, except for the acceptable race condition.
+	{
+		n := atomic.LoadInt32(&isLoading)
+		if n > 0 {
+			return
+		}
+		atomic.AddInt32(&isLoading, 1)
+		defer atomic.AddInt32(&isLoading, -1)
+	}
+
 	log.Printf("Loading label %q, search %q", label, search)
 	var l []listEntry
 	var lch <-chan listEntry
@@ -344,6 +356,7 @@ func bgLoadMsgs(msgDo chan<- func(*messageListState), msgsCh chan<- []listEntry,
 		lch = c
 		newHistoryID, l, lch2, errs = list(label, search, "", 100, historyID)
 		go func() {
+			defer close(c)
 			goodHistoryID := true
 			var nh uint64
 			// Get the *lowest* history ID. That's the safest bet.
@@ -382,7 +395,6 @@ func bgLoadMsgs(msgDo chan<- func(*messageListState), msgsCh chan<- []listEntry,
 			msgUpdateCh <- m
 		}
 	}
-
 	// Get contacts.
 	if c, err := getContacts(); err != nil {
 		log.Printf("Getting contacts: %v", err)
