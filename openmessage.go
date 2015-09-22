@@ -205,9 +205,19 @@ func browseAttachments(msg *gmail.Message) error {
 		}
 	}
 
+	// Select output filename.
+	var ofn string
+	{
+		var err error
+		ofn, err = saveFileDialog(p.part.Filename)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Save file.
 	{
-		f, err := os.Create(p.part.Filename)
+		f, err := os.Create(ofn)
 		if err != nil {
 			return err
 		}
