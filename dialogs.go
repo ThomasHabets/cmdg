@@ -67,8 +67,11 @@ func readDir(d string) ([]os.FileInfo, error) {
 }
 
 // saveFileDialog finds a place to save a file.
-// TODO: Allow changing the filename. Tab to the Filename field.
+// Run in main/ncurses goroutine.
 func saveFileDialog(fn string) (string, error) {
+	defer func() {
+		gc.Cursor(0)
+	}()
 	maxY, maxX := winSize()
 
 	w, err := gc.NewWindow(maxY-5, maxX-4, 2, 2)
@@ -88,9 +91,11 @@ func saveFileDialog(fn string) (string, error) {
 		return "", err
 	}
 
+	fileNameEdit := false
 	for {
 		w.Clear()
-		w.Print(fmt.Sprintf("\n  Filename> %s\n  Current dir: %s\n\n", fn, curDir))
+		filenamePrompt := "Filename> "
+		w.Print(fmt.Sprintf("\n  %s%s\n  Current dir: %s\n\n", filenamePrompt, fn, curDir))
 		if cur == -1 {
 			w.Print(fmt.Sprintf(" > <save>\n"))
 		} else {
@@ -114,33 +119,57 @@ func saveFileDialog(fn string) (string, error) {
 				w.Print(fmt.Sprintf("   %s\n", printName))
 			}
 		}
+		gc.Cursor(0)
 		winBorder(w)
 		w.Refresh()
-		select {
-		case key := <-nc.Input:
-			switch key {
-			case 'n':
-				if cur < len(files)-1 {
-					cur++
-				}
-			case 'p':
-				// -1 is OK, it's the OK button.
-				if cur >= 0 {
-					cur--
-				}
-			case 'q':
-				return "", errCancel
-			case '\n', '\r':
-				if cur == -1 {
+		if fileNameEdit {
+			w.Move(1, 2+len(filenamePrompt)+len(fn))
+			gc.Cursor(1)
+			w.Refresh()
+			select {
+			case key := <-nc.Input:
+				switch key {
+				case gc.KEY_TAB:
+					fileNameEdit = false
+				case '\n', '\r':
 					return path.Join(curDir, fn), nil
+				case '\b', gc.KEY_BACKSPACE, 127:
+					if len(fn) > 0 {
+						fn = fn[:len(fn)-1]
+					}
+				default:
+					fn = fmt.Sprintf("%s%c", fn, key)
 				}
-				if files[cur].IsDir() {
-					newDir := path.Join(curDir, files[cur].Name())
-					newFiles, err := readDir(newDir)
-					if err == nil {
-						curDir = newDir
-						files = newFiles
-						cur = 0
+			}
+		} else {
+			select {
+			case key := <-nc.Input:
+				switch key {
+				case 'n':
+					if cur < len(files)-1 {
+						cur++
+					}
+				case 'p':
+					// -1 is OK, it's the OK button.
+					if cur >= 0 {
+						cur--
+					}
+				case 'q':
+					return "", errCancel
+				case gc.KEY_TAB:
+					fileNameEdit = true
+				case '\n', '\r':
+					if cur == -1 {
+						return path.Join(curDir, fn), nil
+					}
+					if files[cur].IsDir() {
+						newDir := path.Join(curDir, files[cur].Name())
+						newFiles, err := readDir(newDir)
+						if err == nil {
+							curDir = newDir
+							files = newFiles
+							cur = 0
+						}
 					}
 				}
 			}
