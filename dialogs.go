@@ -66,18 +66,91 @@ func readDir(d string) ([]os.FileInfo, error) {
 	return files, nil
 }
 
-// saveFileDialog finds a place to save a file.
-// Run in main/ncurses goroutine.
-func saveFileDialog(fn string) (string, error) {
-	defer func() {
-		gc.Cursor(0)
-	}()
+func fullscreenWindow() *gc.Window {
 	maxY, maxX := winSize()
 
 	w, err := gc.NewWindow(maxY-5, maxX-4, 2, 2)
 	if err != nil {
 		log.Fatalf("Creating stringChoice window: %v", err)
 	}
+	return w
+}
+
+func loadFileDialog() (string, error) {
+	w := fullscreenWindow()
+	defer w.Delete()
+
+	cur := 0
+	curDir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	files, err := readDir(curDir)
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		w.Clear()
+		w.Print("\n")
+		offset := 0
+		if cur > 5 {
+			offset = cur - 5
+		}
+		for n, f := range files {
+			if n < offset {
+				continue
+			}
+			printName := f.Name()
+			if f.IsDir() {
+				printName += "/"
+			}
+			if n == cur {
+				w.Print(fmt.Sprintf(" > %s\n", printName))
+			} else {
+				w.Print(fmt.Sprintf("   %s\n", printName))
+			}
+		}
+		winBorder(w)
+		w.Refresh()
+		select {
+		case key := <-nc.Input:
+			switch key {
+			case 'q':
+				return "", errCancel
+			case 'n':
+				if cur < len(files)-1 {
+					cur++
+				}
+			case 'p':
+				if cur > 0 {
+					cur--
+				}
+			case '\n':
+				if files[cur].IsDir() {
+					newDir := path.Join(curDir, files[cur].Name())
+					newFiles, err := readDir(newDir)
+					if err == nil {
+						curDir = newDir
+						files = newFiles
+						cur = 0
+					}
+				} else {
+					return path.Join(curDir, files[cur].Name()), nil
+				}
+			}
+		}
+	}
+}
+
+// saveFileDialog finds a place to save a file.
+// Run in main/ncurses goroutine.
+func saveFileDialog(fn string) (string, error) {
+	defer func() {
+		gc.Cursor(0)
+	}()
+	w := fullscreenWindow()
 	defer w.Delete()
 
 	cur := -1
