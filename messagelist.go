@@ -31,11 +31,12 @@ import (
 	"time"
 	"unicode"
 
+	gc "github.com/rthornton128/goncurses"
+	gmail "google.golang.org/api/gmail/v1"
+
 	"github.com/ThomasHabets/cmdg/cmdglib"
 	"github.com/ThomasHabets/cmdg/messagegetter"
 	"github.com/ThomasHabets/cmdg/ncwrap"
-	gc "github.com/rthornton128/goncurses"
-	gmail "google.golang.org/api/gmail/v1"
 )
 
 const (

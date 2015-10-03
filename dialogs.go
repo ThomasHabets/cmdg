@@ -10,6 +10,8 @@ import (
 	"time"
 
 	gc "github.com/rthornton128/goncurses"
+
+	"github.com/ThomasHabets/cmdg/ncwrap"
 )
 
 var (
@@ -170,7 +172,7 @@ func saveFileDialog(fn string) (string, error) {
 		filenamePrompt := "Filename> "
 		w.Print(fmt.Sprintf("\n  %s%s\n  Current dir: %s\n\n", filenamePrompt, fn, curDir))
 		if cur == -1 {
-			w.Print(fmt.Sprintf(" > <save>\n"))
+			ncwrap.ColorPrint(w, "[bold] > <save>[unbold]\n")
 		} else {
 			w.Print(fmt.Sprintf("   <save>\n"))
 		}
@@ -187,7 +189,7 @@ func saveFileDialog(fn string) (string, error) {
 				printName += "/"
 			}
 			if n == cur {
-				w.Print(fmt.Sprintf(" > %s\n", printName))
+				ncwrap.ColorPrint(w, "[bold] > %s[unbold]\n", printName)
 			} else {
 				w.Print(fmt.Sprintf("   %s\n", printName))
 			}
