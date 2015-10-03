@@ -41,6 +41,8 @@ import (
 
 const (
 	refreshDuration = 30 * time.Second
+	ctrlC           = 3
+	ctrlG           = 7
 	ctrlR           = 18
 	ctrlP           = 16
 	ctrlN           = 14

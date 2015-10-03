@@ -340,12 +340,12 @@ t                 Browse attachments.
 				nc.Status("Failed to marked unread: %v", err)
 			}
 			return
-		case 16, 'k': // CtrlP
+		case ctrlP, 'k':
 			scroll = 0
 			if state.current > 0 {
 				state.current--
 			}
-		case 14, 'j': // CtrlN
+		case ctrlN, 'j':
 			scroll = 0
 			if state.current < len(msgs)-1 {
 				state.current++

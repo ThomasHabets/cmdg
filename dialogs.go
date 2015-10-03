@@ -172,11 +172,11 @@ func saveFileDialog(fn string) (string, error) {
 		w.Clear()
 		filenamePrompt := "Filename> "
 		w.Print(fmt.Sprintf("\n  %s%s\n  Current dir: %s\n\n", filenamePrompt, fn, curDir))
+		prefix := "  "
 		if cur == -1 {
-			ncwrap.ColorPrint(w, "[bold] > <save>[unbold]\n")
-		} else {
-			w.Print(fmt.Sprintf("   <save>\n"))
+			prefix = "[bold] >"
 		}
+		ncwrap.ColorPrint(w, fmt.Sprintf("%s <save>[unbold]\n", prefix))
 		offset := 0
 		if cur > 5 {
 			offset = cur - 5
@@ -221,18 +221,26 @@ func saveFileDialog(fn string) (string, error) {
 			select {
 			case key := <-nc.Input:
 				switch key {
-				case 'n':
+				case '?':
+					helpWin(`q, ^C, ^G         Abort save
+!                 Open as temp file.
+^P, n, k, Up      Previous
+^N, p, j, Down    Next
+Enter             Choose
+Tab               Switch to file name editing
+`)
+				case gc.KEY_DOWN, 'n', ctrlN, 'k':
 					if cur < len(files)-1 {
 						cur++
 					}
-				case 'p':
+				case gc.KEY_UP, 'p', ctrlP, 'j':
 					// -1 is OK, it's the OK button.
 					if cur >= 0 {
 						cur--
 					}
 				case '!':
 					return "", errOpen
-				case 'q':
+				case 'q', ctrlC, ctrlG:
 					return "", errCancel
 				case gc.KEY_TAB:
 					fileNameEdit = true
