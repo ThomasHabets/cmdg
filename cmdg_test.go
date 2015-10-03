@@ -261,7 +261,10 @@ func TestListMessages(t *testing.T) {
 		}
 		sort.Sort(sortUpdatesByID(updates))
 		for n := range updates {
+			// We don't care about what the payload and headers say, only the parsed output.
 			updates[n].msg.Payload = nil
+			updates[n].msg.ServerResponse = want[n].ServerResponse
+
 			if got, want := updates[n].msg, want[n]; !reflect.DeepEqual(got, want) {
 				t.Errorf("update %d: got %+v, want %+v", n, got, want)
 			}
