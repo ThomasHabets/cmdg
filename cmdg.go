@@ -84,6 +84,8 @@ var (
 	lynx          = flag.String("lynx", "lynx", "Path to 'lynx' browser. Used to render HTML email.")
 	preConfig     = flag.String("preconfig", "", "Command to run before reading config. Used if config is generated.")
 	enableHistory = flag.Bool("history", true, "Enable history API to optimize network use. Seems to be a bit unreliable on the server side.")
+	openBinary    = flag.String("open", "xdg-open", "Command to open attachments with.")
+	openWait      = flag.Bool("open_wait", false, "Wait after opening attachment. If using X, then makes sense to say no.")
 
 	authedClient *http.Client
 	gmailService *gmail.Service

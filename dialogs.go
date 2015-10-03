@@ -16,6 +16,7 @@ import (
 
 var (
 	errCancel = fmt.Errorf("user cancelled request")
+	errOpen   = fmt.Errorf("user asked to open, not save")
 )
 
 type sortFiles []os.FileInfo
@@ -229,6 +230,8 @@ func saveFileDialog(fn string) (string, error) {
 					if cur >= 0 {
 						cur--
 					}
+				case '!':
+					return "", errOpen
 				case 'q':
 					return "", errCancel
 				case gc.KEY_TAB:

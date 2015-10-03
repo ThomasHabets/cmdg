@@ -21,6 +21,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -207,10 +208,22 @@ func browseAttachments(msg *gmail.Message) error {
 
 	// Select output filename.
 	var ofn string
+	var open bool
 	{
 		var err error
 		ofn, err = saveFileDialog(p.part.Filename)
-		if err != nil {
+		if err == errOpen {
+			open = true
+			t, err := ioutil.TempFile("", "")
+			if err != nil {
+				log.Printf("Failed to create tempfile: %v", err)
+				return err
+			}
+			ofn = t.Name()
+			if err := t.Close(); err != nil {
+				log.Printf("Failed to close tempfile %q: %v", t.Name(), err)
+			}
+		} else if err != nil {
 			return err
 		}
 	}
@@ -221,10 +234,36 @@ func browseAttachments(msg *gmail.Message) error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
 		if _, err := f.Write([]byte(dec)); err != nil {
 			os.Remove(f.Name())
 			return err
+		}
+		if err := f.Close(); err != nil {
+			os.Remove(f.Name())
+			return err
+		}
+	}
+	if open {
+		defer runSomething()()
+		cmd := exec.Command(*openBinary, ofn)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("failed to open attachment %q using %q: %v", ofn, *openBinary, err)
+		}
+		w := func() {
+			if err := cmd.Wait(); err != nil {
+				log.Printf("Failed to finish opening attachment %q using %q: %v", ofn, *openBinary, err)
+			}
+			if err := os.Remove(ofn); err != nil {
+				log.Printf("Failed to remove tempfile %q: %v", ofn, err)
+			}
+		}
+		if *openWait {
+			w()
+		} else {
+			go w()
 		}
 	}
 	return nil
