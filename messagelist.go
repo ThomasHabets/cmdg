@@ -325,6 +325,12 @@ func (m *messageListState) archive(id string) {
 	for n, msg := range m.msgs {
 		if msg.msg.Id == id {
 			m.msgs = append(m.msgs[:n], m.msgs[n+1:]...)
+			if m.current >= n {
+				m.current--
+			}
+			if len(m.msgs) <= m.current {
+				m.current--
+			}
 			return
 		}
 	}
