@@ -639,26 +639,28 @@ s                 Search
 			}
 		}
 	case gc.KEY_RIGHT, '\n', '\r', '>':
-		if state.thread {
-			var ms []*gmail.Thread
-			for _, m := range state.msgs {
-				ms = append(ms, m.thread)
+		if len(state.msgs) > 0 {
+			if state.thread {
+				var ms []*gmail.Thread
+				for _, m := range state.msgs {
+					ms = append(ms, m.thread)
+				}
+				openThreadMain(ms, state)
+				if state.quit {
+					return
+				}
+			} else {
+				var ms []*gmail.Message
+				for _, m := range state.msgs {
+					ms = append(ms, m.msg)
+				}
+				openMessageMain(ms, state)
+				if state.quit {
+					return
+				}
 			}
-			openThreadMain(ms, state)
-			if state.quit {
-				return
-			}
-		} else {
-			var ms []*gmail.Message
-			for _, m := range state.msgs {
-				ms = append(ms, m.msg)
-			}
-			openMessageMain(ms, state)
-			if state.quit {
-				return
-			}
+			state.goLoadMsgs()
 		}
-		state.goLoadMsgs()
 	case '1':
 		state.changeLabel(cmdglib.Inbox, "")
 	case 'g':

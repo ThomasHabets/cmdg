@@ -997,7 +997,7 @@ func main() {
 
 	// Get some initial data that should always succeed.
 	if c, err := getLabels(); err != nil {
-		log.Fatalf("Getting contacts: %v", err)
+		log.Fatalf("Getting labels: %v", err)
 	} else {
 		updateLabels(c)
 	}
