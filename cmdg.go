@@ -903,11 +903,10 @@ func reconnect() error {
 	if err != nil {
 		return fmt.Errorf("failed to read config %q: %v", *config, err)
 	}
-	t, err := lib.Connect(conf.OAuth, scope, accessType)
+	authedClient, err := lib.Connect(conf.OAuth, scope, accessType)
 	if err != nil {
 		return fmt.Errorf("failed to connect to gmail: %v", err)
 	}
-	authedClient = t.Client()
 	gmailService, err = gmail.New(authedClient)
 	if err != nil {
 		return err
