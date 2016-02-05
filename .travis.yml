@@ -1,11 +1,12 @@
 language: go
 go:
   - 1.4
+  - 1.5
   - tip
 sudo: false
 install:
-  - go get github.com/golang/glog
   - go get github.com/ThomasHabets/drive-du/lib
-  - go get code.google.com/p/goauth2/oauth
+  - go get github.com/golang/glog
   - go get github.com/rthornton128/goncurses
+  - go get golang.org/x/oauth2
   - go get google.golang.org/api/gmail/v1

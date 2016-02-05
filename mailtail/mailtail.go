@@ -115,7 +115,7 @@ func main() {
 	if err != nil {
 		glog.Exitf("Failed to connect to gmail: %v", err)
 	}
-	g, err := gmail.New(t.Client())
+	g, err := gmail.New(t)
 	if err != nil {
 		glog.Exitf("Failed to create gmail client: %v", err)
 	}
