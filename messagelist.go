@@ -600,7 +600,7 @@ func messageListInput(key gc.Key, state *messageListState) {
 Up, p, ^P, k      Previous
 Down, n, ^N, j    Next
 r, ^R             Reload
-x                 Mark/unmark
+Space, x          Mark/unmark
 Tab               Show/hide snippets
 Right, Enter, >   Open message
 g                 Go to label
@@ -635,7 +635,7 @@ s                 Search
 		state.showDetails = !state.showDetails
 	case 'r', ctrlR:
 		state.goLoadMsgs()
-	case 'x':
+	case ' ', 'x':
 		if len(state.msgs) > 0 {
 			id := state.msgs[state.current].ID()
 			if state.marked[id] {
