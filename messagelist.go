@@ -47,6 +47,7 @@ const (
 	ctrlP           = 16
 	ctrlN           = 14
 	ctrlU           = 21
+	ctrlL           = 12
 
 	draftListBatchSize = 100
 )
@@ -612,7 +613,8 @@ l                 Label marked emails
 L                 Unlabel marked emails
 s                 Search
 1                 Go to inbox
-0                 Re-read config.
+0                 Re-read config
+^L                Refresh screen.
 `)
 		nc.ApplyMain(func(w *gc.Window) { w.Clear() })
 	case 'q':
@@ -819,6 +821,12 @@ s                 Search
 		if cs != "" {
 			state.changeLabel("", cs)
 		}
+
+	case ctrlL:
+		nc.ApplyMain(func(w *gc.Window) {
+			w.Refresh()
+		})
+
 	default:
 		nc.Status("Unknown key %v (%v)", key, gc.KeyString(key))
 	}
