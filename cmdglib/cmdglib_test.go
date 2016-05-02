@@ -15,7 +15,7 @@ func TestDateFormats(t *testing.T) {
 		{"Thu, 04 Feb 16 14:14:32 +0000", false},
 	} {
 		if _, err := ParseTime(test.input); (err != nil) != test.error {
-			t.Errorf("%q want error=%v, got: %v", test.error, err)
+			t.Errorf("%q want error=%v, got: %v", test.input, test.error, err)
 		}
 	}
 }
