@@ -1,16 +1,15 @@
-cmdg - A command line client to Gmail
-=====================================
+# cmdg - A command line client to Gmail
 
-Copyright Thomas Habets <thomas@habets.se> 2015
+Copyright Thomas Habets <thomas@habets.se> 2015-2016
 
 https://github.com/ThomasHabets/cmdg
 
-Licence:
-  This software is dual-licensed GPL and "Thomas is allowed to release a
-  binary version that adds shared API keys and nothing else".
+## Licence
 
-Introduction
-============
+This software is dual-licensed GPL and "Thomas is allowed to release a
+binary version that adds shared API keys and nothing else".
+
+## Introduction
 
 cmdg is a commandline client to Gmail that provides a UI more similar
 to Pine.
@@ -18,8 +17,7 @@ to Pine.
 It uses the Gmail API to interact with your mailbox. This has several
 benefits.
 
-Benefits over IMAP
-------------------
+### Benefits over IMAP
 * No passwords stored on disk. (application-specific passwords are
   also passwords, and can be used for more than Gmail). OAuth2 is used
   instead, and cmdgs access can be revoked
@@ -30,8 +28,7 @@ Benefits over IMAP
   that try to map Gmail labels onto IMAP.
 * TODO: others
 
-Benefits over the Gmail web UI
-------------------------------
+### Benefits over the Gmail web UI
 * Emacs keys.
 * Uses a real $EDITOR.
 * Really fast. No browser, CSS, or javascript gettin in the way.
@@ -43,8 +40,7 @@ Benefits over the Gmail web UI
 * cmdg uses less bandwidth (citation needed), and much less memory.
 * Local GPG integration.
 
-A security difference
----------------------
+### A security difference
 * Gmail web UI uses username and password to log in, which means they
   can be stolen. You should be using [U2F
   Yubikeys](https://www.yubico.com/products/yubikey-hardware/fido-u2f-security-key/),
@@ -55,8 +51,7 @@ A security difference
   able to access the users Gmail until the key is revoked. The
   access does not expire on its own.
 
-Installing
-==========
+## Installing
 ```
 $ sudo apt-get install libncurses-dev pkg-config
 $ mkdir go
@@ -66,8 +61,7 @@ $ GOPATH=$(pwd) go build github.com/ThomasHabets/cmdg
 $ sudo cp cmdg /usr/local/bin
 ```
 
-Configuring
-===========
+## Configuring
 ```
 $ cmdg -configure
 [It will ask about ClientID and ClientSecret.
@@ -79,8 +73,7 @@ $
 ```
 This creates ~/.cmdg.conf.
 
-Running
-=======
+## Running
 ```
 $ cmdg
 ```
