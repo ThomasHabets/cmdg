@@ -59,8 +59,12 @@ const (
 	maxRetries  = 20
 	maxTimeout  = 5 * time.Second
 
+	configDirMode os.FileMode = 0700
+
+	// Relative to configDir.
+	configFileName = "cmdg.conf"
+
 	// Relative to $HOME.
-	defaultConfigFile    = ".cmdg.conf"
 	defaultConfigDir     = ".cmdg"
 	defaultSignatureFile = ".signature"
 )
@@ -69,7 +73,6 @@ var (
 	license       = flag.Bool("license", false, "Show program license.")
 	help          = flag.Bool("help", false, "Show usage text and exit.")
 	help2         = flag.Bool("h", false, "Show usage text and exit.")
-	config        = flag.String("config", "", "Config file. If empty will default to ~/"+defaultConfigFile)
 	configDir     = flag.String("config_dir", "", "Config directory. If empty will default to ~/"+defaultConfigDir)
 	configure     = flag.Bool("configure", false, "Configure OAuth and write config file.")
 	readonly      = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
@@ -852,9 +855,9 @@ func reconnect() error {
 			return fmt.Errorf("failed to run preconfig %q: %v", *preConfig, err)
 		}
 	}
-	conf, err := lib.ReadConfig(*config)
+	conf, err := lib.ReadConfig(configFilePath())
 	if err != nil {
-		return fmt.Errorf("failed to read config %q: %v", *config, err)
+		return fmt.Errorf("failed to read config %q: %v", configFilePath(), err)
 	}
 	authedClient, err = lib.Connect(conf.OAuth, scope, accessType)
 	if err != nil {
@@ -866,6 +869,10 @@ func reconnect() error {
 	}
 	gmailService.UserAgent = userAgent
 	return nil
+}
+
+func configFilePath() string {
+	return path.Join(*configDir, configFileName)
 }
 
 func main() {
@@ -892,36 +899,35 @@ func main() {
 	if forwardRE, err = regexp.Compile(*forwardRegex); err != nil {
 		log.Fatalf("-forward_regexp %q is not a valid regex: %v", *forwardRegex, err)
 	}
-	if *config == "" {
-		*config = path.Join(os.Getenv("HOME"), defaultConfigFile)
-	}
 	if *configDir == "" {
 		*configDir = path.Join(os.Getenv("HOME"), defaultConfigDir)
 	}
 	if *signature == "" {
 		*signature = path.Join(os.Getenv("HOME"), defaultSignatureFile)
 	}
-
 	scope = scopeModify
 	if *readonly {
 		scope = scopeReadonly
 	}
 	if *configure {
+		if err := os.MkdirAll(*configDir, configDirMode); err != nil {
+			log.Printf("Failed to create %q, continuing anyway: %v", *configDir, err)
+		}
 		if len(publicClientID) > 0 {
-			if err := lib.ConfigureWriteSharedSecrets(scope, accessType, *config, publicClientID, publicClientSecret); err != nil {
+			if err := lib.ConfigureWriteSharedSecrets(scope, accessType, configFilePath(), publicClientID, publicClientSecret); err != nil {
 				log.Fatalf("Failed to config: %v", err)
 			}
 		} else {
-			if err := lib.ConfigureWrite(scope, accessType, *config); err != nil {
+			if err := lib.ConfigureWrite(scope, accessType, configFilePath()); err != nil {
 				log.Fatalf("Failed to config: %v", err)
 			}
 		}
 		return
 	}
-	if fi, err := os.Stat(*config); err != nil {
-		log.Fatalf("Missing config file %q: %v", *config, err)
+	if fi, err := os.Stat(configFilePath()); err != nil {
+		log.Fatalf("Missing config file %q: %v", configFilePath(), err)
 	} else if (fi.Mode() & 0477) != 0400 {
-		log.Fatalf("Config file (%q) permissions must be 0600 or better, was 0%o", *config, fi.Mode()&os.ModePerm)
+		log.Fatalf("Config file (%q) permissions must be 0600 or better, was 0%o", configFilePath(), fi.Mode()&os.ModePerm)
 	}
 
 	pagerBinary = os.Getenv("PAGER")

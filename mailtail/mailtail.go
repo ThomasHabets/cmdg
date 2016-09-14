@@ -1,3 +1,4 @@
+// tool to "tail" a gmail account as email comes in.
 package main
 
 /*
@@ -40,7 +41,7 @@ const (
 )
 
 var (
-	config       = flag.String("config", "", "Config file. If empty will default to ~/cmdg.conf.")
+	config       = flag.String("config", "", "Config file. If empty will default to ~/.cmdg/cmdg.conf.")
 	pollInterval = flag.Duration("poll", 10*time.Second, "Time to wait between polls.")
 )
 
@@ -97,7 +98,7 @@ func main() {
 	flag.Parse()
 	glog.Infof("Starting up")
 	if *config == "" {
-		*config = path.Join(os.Getenv("HOME"), ".cmdg.conf")
+		*config = path.Join(os.Getenv("HOME"), ".cmdg", "cmdg.conf")
 	}
 
 	if fi, err := os.Stat(*config); err != nil {

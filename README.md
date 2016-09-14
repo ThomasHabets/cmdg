@@ -71,7 +71,7 @@ Cut and paste this URL into your browser:
 Returned code: <paste code here>
 $
 ```
-This creates ~/.cmdg.conf.
+This creates `~/.cmdg/cmdg.conf`.
 
 ## Running
 ```
