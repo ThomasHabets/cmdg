@@ -96,6 +96,10 @@ func mailTail(g *gmail.Service, historyID uint64) uint64 {
 
 func main() {
 	flag.Parse()
+	if flag.NArg() > 0 {
+		glog.Exitf("Non-argument options provided: %q", flag.Args())
+	}
+
 	glog.Infof("Starting up")
 	if *config == "" {
 		*config = path.Join(os.Getenv("HOME"), ".cmdg", "cmdg.conf")
