@@ -29,7 +29,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
@@ -62,6 +61,7 @@ const (
 
 	// Relative to $HOME.
 	defaultConfigFile    = ".cmdg.conf"
+	defaultConfigDir     = ".cmdg"
 	defaultSignatureFile = ".signature"
 )
 
@@ -70,6 +70,7 @@ var (
 	help          = flag.Bool("help", false, "Show usage text and exit.")
 	help2         = flag.Bool("h", false, "Show usage text and exit.")
 	config        = flag.String("config", "", "Config file. If empty will default to ~/"+defaultConfigFile)
+	configDir     = flag.String("config_dir", "", "Config directory. If empty will default to ~/"+defaultConfigDir)
 	configure     = flag.Bool("configure", false, "Configure OAuth and write config file.")
 	readonly      = flag.Bool("readonly", false, "When configuring, only acquire readonly permission.")
 	gpg           = flag.String("gpg", "/usr/bin/gpg", "Path to GnuPG.")
@@ -657,28 +658,6 @@ func getForward(openMessage *gmail.Message) (string, error) {
 	return standardHeaders() + s, err
 }
 
-// runEditorHeadersOK is a poorly named function that calls runEditor() until the reply looks somewhat like an email.
-func runEditorHeadersOK(input string) (string, error) {
-	var s string
-	for {
-		var err error
-		s, err = runEditor(input)
-		if err != nil {
-			nc.Status("Running editor failed: %v", err)
-			return "", err
-		}
-		s2 := strings.SplitN(s, "\n\n", 2)
-		if len(s2) != 2 {
-			// TODO: Ask about reopening editor.
-			nc.Status("Malformed email, reopening editor")
-			input = s
-			continue
-		}
-		break
-	}
-	return s, nil
-}
-
 func runPager(input string) error {
 	// Re-acquire terminal when done.
 	defer runSomething()()
@@ -692,6 +671,7 @@ func runPager(input string) error {
 	return nil
 }
 
+// runSomething gives up terminal control, and returns a lambda that reacquires it.
 func runSomething() func() {
 	// Restore terminal for editors use.
 	nc.Stop()
@@ -705,42 +685,18 @@ func runSomething() func() {
 	}
 }
 
-func runEditor(input string) (string, error) {
-	f, err := ioutil.TempFile("", "cmdg-")
-	if err != nil {
-		return "", fmt.Errorf("creating tempfile: %v", err)
-	}
-	f.Close()
-	defer os.Remove(f.Name())
-
-	if err := ioutil.WriteFile(f.Name(), []byte(input), 0600); err != nil {
-		return "", err
-	}
-
-	// Re-acquire terminal when done.
-	defer runSomething()()
-
-	// Run editor.
-	cmd := exec.Command(editorBinary, f.Name())
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to open editor %q: %v", editorBinary, err)
-	}
-
-	// Read back reply.
-	data, err := ioutil.ReadFile(f.Name())
-	if err != nil {
-		return "", fmt.Errorf("reading back editor output: %v", err)
-	}
-	return string(data), nil
-}
-
-// createSend asks how to send the message just composed.
+// createSend asks how to send the message just composed, and sends it.
 // thread is the thread id, and may be empty.
 // msg is the string representation of the message.
-func createSend(thread, msg string) {
+func createSend(thread, msg string) (err error) {
+	defer func() {
+		if err != nil {
+			if err2 := saveFailedSend(msg); err2 != nil {
+				nc.Status("[red]Double fail: %v; %v", err, err2)
+				log.Printf("Failed while laving failsafe: %v %v", err, err2)
+			}
+		}
+	}()
 	// Run menu.
 	var choice gc.Key
 	{
@@ -768,11 +724,10 @@ func createSend(thread, msg string) {
 			Raw:      mimeEncode(msg),
 		}).Do(); err != nil {
 			nc.Status("Error sending: %v", err)
-			return
+			return err
 		}
 		log.Printf("Users.Messages.Send: %v", time.Since(st))
 		nc.Status("[green]Successfully sent")
-		return
 	case 'S':
 		st := time.Now()
 		if _, err := gmailService.Users.Messages.Send(email, &gmail.Message{
@@ -780,7 +735,7 @@ func createSend(thread, msg string) {
 			Raw:      mimeEncode(msg),
 		}).Do(); err != nil {
 			nc.Status("Error sending: %v", err)
-			return
+			return err
 		}
 		log.Printf("Users.Messages.Send: %v", time.Since(st))
 		nc.Status("[green]Successfully sent")
@@ -788,7 +743,6 @@ func createSend(thread, msg string) {
 			// TODO: Do this in a better way.
 			nc.Input <- 'e'
 		}()
-		return
 	case 'w': // Send with label.
 		st := time.Now()
 		l, hasLabel := labels[*waitingLabel]
@@ -801,7 +755,7 @@ func createSend(thread, msg string) {
 		}).Do()
 		if err != nil {
 			nc.Status("Error sending: %v", err)
-			break
+			return err
 		}
 
 		if !hasLabel {
@@ -819,7 +773,6 @@ func createSend(thread, msg string) {
 			}
 			nc.Status("[green]Sent with label")
 		}
-		return
 	case 'W': // Send with label and archive.
 		st := time.Now()
 		l, hasLabel := labels[*waitingLabel]
@@ -831,7 +784,7 @@ func createSend(thread, msg string) {
 		}).Do()
 		if err != nil {
 			nc.Status("Error sending: %v", err)
-			break
+			return err
 		}
 
 		if !hasLabel {
@@ -857,10 +810,8 @@ func createSend(thread, msg string) {
 			// TODO: Archive in a better way.
 			nc.Input <- 'e'
 		}()
-		return
 	case 'a':
 		nc.Status("Aborted send")
-		return
 	case 'd':
 		st := time.Now()
 		if _, err := gmailService.Users.Drafts.Create(email, &gmail.Draft{
@@ -870,13 +821,15 @@ func createSend(thread, msg string) {
 			},
 		}).Do(); err != nil {
 			nc.Status("[red]Error saving as draft: %v", err)
-			// TODO: data loss!
-			return
+			return err
 		}
 		nc.Status("Saved draft")
 		log.Printf("Users.Drafts.Create: %v", time.Since(st))
-		return
+	default:
+		nc.Status("[red]Error: invalid key %q pressed!", choice)
+		return fmt.Errorf("invalid key %q", choice)
 	}
+	return nil
 }
 
 func usage(f io.Writer) {
@@ -941,6 +894,9 @@ func main() {
 	}
 	if *config == "" {
 		*config = path.Join(os.Getenv("HOME"), defaultConfigFile)
+	}
+	if *configDir == "" {
+		*configDir = path.Join(os.Getenv("HOME"), defaultConfigDir)
 	}
 	if *signature == "" {
 		*signature = path.Join(os.Getenv("HOME"), defaultSignatureFile)
