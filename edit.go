@@ -60,14 +60,16 @@ func runEditor(input string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("creating tempfile: %v", err)
 	}
-	f.Close()
+	defer f.Close()
+	if _, err := f.Write([]byte(input)); err != nil {
+		return "", fmt.Errorf("writing data: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("closing file: %v", err)
+	}
 	defer os.Remove(f.Name())
 
-	if err := ioutil.WriteFile(f.Name(), []byte(input), 0600); err != nil {
-		return "", err
-	}
-
-	// Re-acquire terminal when done.
+	// Release terminal and re-acquire when editor finishes.
 	defer runSomething()()
 
 	// Run editor.
