@@ -1,7 +1,7 @@
 language: go
 go:
-  - 1.5
-  - 1.6
+  - 1.10
+  - 1.11
   - tip
 sudo: false
 install:
@@ -10,3 +10,4 @@ install:
   - go get github.com/rthornton128/goncurses
   - go get golang.org/x/oauth2
   - go get google.golang.org/api/gmail/v1
+  - go get golang.org/x/text/encoding
