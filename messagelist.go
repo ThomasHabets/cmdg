@@ -697,7 +697,7 @@ s                 Search
 				log.Printf("Users.Messages.Trash: %v", time.Since(st))
 				delete(state.marked, m.ID())
 			} else {
-				nc.Status("[red]Failed to trash message %s: %v", m, err)
+				nc.Status("[red]Failed to trash message %v: %v", m, err)
 				allFine = false
 			}
 		}
@@ -724,7 +724,7 @@ s                 Search
 					state.archive(m.ID())
 					log.Printf("Users.Messages.Archive: %v", time.Since(st))
 				} else {
-					nc.Status("[red]Failed to archive message %s: %v", m, err)
+					nc.Status("[red]Failed to archive message %v: %v", m, err)
 					atomic.AddInt32(&errCount, 1)
 				}
 			}()
@@ -758,7 +758,7 @@ s                 Search
 						log.Printf("Users.Messages.Label: %v", time.Since(st))
 					} else {
 						log.Printf("Users.Messages.Label error: %v", err)
-						nc.Status("[red]Failed to label message %s: %v", m, err)
+						nc.Status("[red]Failed to label message %v: %v", m, err)
 						atomic.AddInt32(&errCount, 1)
 					}
 				}()
@@ -807,7 +807,7 @@ s                 Search
 						delete(state.marked, m.ID())
 					}
 				} else {
-					nc.Status("[red]Failed to unlabel message %s: %v", m, err)
+					nc.Status("[red]Failed to unlabel message %v: %v", m, err)
 					allFine = false
 				}
 			}
