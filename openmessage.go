@@ -398,7 +398,7 @@ t                 Browse attachments.
 				if _, err := gmailService.Users.Messages.Modify(email, msgs[state.current].Id, &gmail.ModifyMessageRequest{
 					AddLabelIds: []string{id},
 				}).Do(); err != nil {
-					nc.Status("[red]Failed to apply label %q: %v", id, labelIDs[id], err)
+					nc.Status("[red]Failed to apply label %q, %q: %v", id, labelIDs[id], err)
 				} else {
 					nc.Status("[green]Applied label %q (%q)", id, labelIDs[id])
 				}
