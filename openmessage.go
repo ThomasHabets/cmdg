@@ -73,19 +73,21 @@ func maxScroll(lines, height int) int {
 
 func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked bool, currentLabel string, scroll int) {
 	m := msgs[current]
+
 	go func() {
+		// Mark read, if not already marked as such.
+
 		if !cmdglib.HasLabel(m.LabelIds, cmdglib.Unread) {
 			return
 		}
 		id := m.Id
 		st := time.Now()
-		_, err := gmailService.Users.Messages.Modify(email, id, &gmail.ModifyMessageRequest{
+		if _, err := gmailService.Users.Messages.Modify(email, id, &gmail.ModifyMessageRequest{
 			RemoveLabelIds: []string{cmdglib.Unread},
-		}).Do()
-		if err != nil {
-			// TODO: log to file or something.
+		}).Do(); err != nil {
+			log.Printf("Failed to mark as read: %v", err)
 		} else {
-			log.Printf("Users.Messages.Modify(remove unread): %v", time.Since(st))
+			log.Printf("Users.Messages.Modify(remove 'unread' label): %v", time.Since(st))
 		}
 	}()
 
@@ -194,16 +196,17 @@ func browseAttachments(msg *gmail.Message) error {
 	}
 
 	// Download attachment.
-	var dec string
-	{
+	dec := p.part.Body.Data
+	if p.part.Body == nil {
 		body, err := gmailService.Users.Messages.Attachments.Get(email, msg.Id, p.part.Body.AttachmentId).Do()
 		if err != nil {
 			return err
 		}
-		dec, err = mimeDecode(body.Data)
-		if err != nil {
-			return err
-		}
+		dec = body.Data
+	}
+	dec, err := mimeDecode(dec)
+	if err != nil {
+		return err
 	}
 
 	// Select output filename.
@@ -321,6 +324,7 @@ t                 Browse attachments.
 			}
 		case 't':
 			if err := browseAttachments(msgs[state.current]); err != nil {
+				log.Printf("Failed to download attachment: %v", err)
 				nc.Status("[red]Failed to download attachment.")
 			}
 			nc.Status("[green]OK")

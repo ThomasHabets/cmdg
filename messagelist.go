@@ -312,7 +312,7 @@ type messageListState struct {
 	showDetails   bool                         // Show snippets.
 	currentLabel  string                       // Current label/folder.
 	currentSearch string                       // Current search expression.
-	msgs          []listEntry                  // Current messages.
+	msgs          []listEntry                  // Messages in current view.
 	marked        map[string]bool              // Marked message/thread IDs.
 	msgDo         chan func(*messageListState) // Do things in sync handler.
 	msgsCh        chan []listEntry             // Full list of messages/threads, possibly only initial data.

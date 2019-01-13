@@ -19,20 +19,30 @@
  *  You should have received a copy of the GNU General Public License along
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Some more interesting stuff can be found in doc for:
+ *  golang.org/x/text/encoding
+ * golang.org/x/text/encoding/charmap
  */
 package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
+	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net/http"
+	"net/mail"
 	"os"
 	"os/exec"
 	"path"
@@ -47,6 +57,7 @@ import (
 	"github.com/ThomasHabets/cmdg/ncwrap"
 	"github.com/ThomasHabets/drive-du/lib"
 	gc "github.com/rthornton128/goncurses"
+	"golang.org/x/net/html/charset"
 	gmail "google.golang.org/api/gmail/v1"
 )
 
@@ -415,6 +426,38 @@ func mimeDecode(s string) (string, error) {
 	return string(data), err
 }
 
+// Fetch and gpg decode a gmail attachment.
+func gpgDecodeAttachment(msgID, id string) (string, error) {
+	body, err := gmailService.Users.Messages.Attachments.Get(email, msgID, id).Do()
+	if err != nil {
+		return "", err
+	}
+	dec, err := mimeDecode(body.Data)
+	if err != nil {
+		return "", err
+	}
+	return gpgDecode(dec)
+}
+
+// GPG decode a string.
+func gpgDecode(p string) (string, error) {
+	in := bytes.NewBufferString(p)
+	var stderr, stdout bytes.Buffer
+	cmd := exec.CommandContext(context.TODO(), *gpg, "-v", "--batch", "--no-tty")
+	cmd.Stdin = in
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to run gpg: %v", err)
+	}
+	if err := cmd.Wait(); err != nil {
+		return "", fmt.Errorf("gpg decode failed: %v. Stderr: %q", err, stderr.String())
+	}
+
+	return stdout.String(), nil
+}
+
+// mime decode for gmail. Seems to be special version of base64.
 func mimeEncode(s string) string {
 	s = base64.StdEncoding.EncodeToString([]byte(s))
 	s = strings.Replace(s, "+", "-", -1)
@@ -422,8 +465,151 @@ func mimeEncode(s string) string {
 	return s
 }
 
+// Given a header and a reader, make a new reader that is aware of
+// headers special meaning for decoding.
+func toUTF8Reader(header mail.Header, r io.Reader) (io.Reader, error) {
+	_, params, err := mime.ParseMediaType(header.Get("Content-Type"))
+	if err != nil {
+		return nil, err
+	}
+	switch header.Get("Content-Transfer-Encoding") {
+	case "quoted-printable":
+		r = quotedprintable.NewReader(r)
+	case "base64":
+		r = base64.NewDecoder(base64.StdEncoding, r)
+	}
+	e, _ := charset.Lookup(params["charset"])
+	if e != nil {
+		return e.NewDecoder().Reader(r), nil
+	}
+	log.Printf("No decoder for charmap %q", params["charset"])
+	return r, nil
+}
+
+func partIsAttachment(p *gmail.MessagePart) bool {
+	for _, head := range p.Headers {
+		if head.Name == "Content-Disposition" {
+			// TODO: Is this the correct way? Maybe check "attachment" instead?
+			return head.Value != "inline"
+		}
+	}
+	return false
+}
+
+// Fixup a message part so that application/pgp-encrypted gets
+// subparts with decrypted data.
+func fixupGPG(msgID string, m *gmail.MessagePart) {
+	var enc *gmail.MessagePart
+
+	// Check if mail is encrypted, and if so add encrypted
+	// sections underneath application/pgp-encrypted.
+	// TODO: this should probably be moved to a message fixup-thing.
+	for _, p := range m.Parts {
+		// TODO: check version
+		if p.MimeType == "application/pgp-encrypted" {
+			enc = p
+			continue
+		}
+		if p.MimeType == "application/octet-stream" {
+			if enc == nil {
+				continue
+			}
+			if len(enc.Parts) > 0 {
+				// Already added.
+				continue
+			}
+
+			data, err := gpgDecodeAttachment(msgID, p.Body.AttachmentId)
+			if err != nil {
+				log.Printf("Failed to decode GPG: %v", err)
+				continue
+			}
+			msg, err := mail.ReadMessage(strings.NewReader(data))
+			if err != nil {
+				log.Printf("Failed to read message: %v", err)
+				continue
+			}
+
+			mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+			if err != nil {
+				log.Printf("Failed to parse media type: %v", err)
+				continue
+			}
+			if strings.HasPrefix(mediaType, "multipart/") {
+				mr := multipart.NewReader(msg.Body, params["boundary"])
+				for {
+					p, err := mr.NextPart()
+					if err == io.EOF {
+						break
+					}
+					if err != nil {
+						log.Printf("Failed to get mime part: %v", err)
+						break
+					}
+					dec, err := toUTF8Reader(map[string][]string(p.Header), p)
+					t, err := ioutil.ReadAll(dec)
+					if err != nil {
+						log.Printf("Failed to read mime part body: %v", err)
+					}
+					np := &gmail.MessagePart{
+						MimeType: mediaType,
+						Body: &gmail.MessagePartBody{
+							Data: mimeEncode(string(t)),
+						},
+					}
+					for k, vs := range p.Header {
+						for _, v := range vs {
+							if strings.ToLower(k) == strings.ToLower("Content-Disposition") {
+								t := strings.Split(v, ";")
+								for _, t2 := range t {
+									t2 = strings.Trim(t2, " ")
+									eq := strings.SplitN(t2, "=", 2)
+									if eq[0] == "filename" {
+										np.Filename = strings.Trim(eq[1], `"`)
+									}
+								}
+							}
+							np.Headers = append(np.Headers, &gmail.MessagePartHeader{
+								Name:  k,
+								Value: v,
+							})
+						}
+					}
+					enc.Parts = append(enc.Parts, np)
+				}
+			} else {
+				// TODO: merge this code with the above multipart code.
+				dec, err := toUTF8Reader(msg.Header, msg.Body)
+				t, err := ioutil.ReadAll(dec)
+				if err != nil {
+					log.Printf("Failed to read body: %v", err)
+				}
+				if enc == nil {
+					continue
+				}
+				var hs []*gmail.MessagePartHeader
+				for k, vs := range msg.Header {
+					for _, v := range vs {
+						hs = append(hs, &gmail.MessagePartHeader{
+							Name:  k,
+							Value: v,
+						})
+					}
+				}
+				enc.Parts = append(enc.Parts, &gmail.MessagePart{
+					Headers:  hs,
+					MimeType: mediaType,
+					Body: &gmail.MessagePartBody{
+						Data: mimeEncode(string(t)),
+					},
+				})
+			}
+		}
+	}
+}
+
 // Find plaintext body among all attachments.
-func getBodyRecurse(m *gmail.MessagePart) string {
+func getBodyRecurse(msgID string, m *gmail.MessagePart) string {
 	if len(m.Parts) == 0 {
 		data, err := mimeDecode(string(m.Body.Data))
 		if err != nil {
@@ -440,7 +626,13 @@ func getBodyRecurse(m *gmail.MessagePart) string {
 	}
 	body := ""
 	htmlBody := "" // Used only if there's no plaintext version.
+
+	fixupGPG(msgID, m)
+
 	for _, p := range m.Parts {
+		if partIsAttachment(p) && p.MimeType != "application/pgp-encrypted" {
+			continue
+		}
 		switch p.MimeType {
 		case "text/plain":
 			data, err := mimeDecode(p.Body.Data)
@@ -454,8 +646,10 @@ func getBodyRecurse(m *gmail.MessagePart) string {
 				return fmt.Sprintf("mime decoding error for text/html: %v", err)
 			}
 			htmlBody += string(data)
-		case "multipart/alternative", "multipart/related":
-			body += getBodyRecurse(p)
+		case "multipart/alternative", "multipart/related", "multipart/mixed":
+			body += getBodyRecurse(msgID, p)
+		case "application/pgp-encrypted":
+			body += getBodyRecurse(msgID, p)
 		default:
 			// Skip.
 			log.Printf("Unknown mimetype skipped: %q", p.MimeType)
@@ -479,7 +673,7 @@ func getBody(m *gmail.Message) string {
 	if m.Payload == nil {
 		return "loading..."
 	}
-	return strings.Trim(getBodyRecurse(m.Payload), " \n\r\t")
+	return strings.Trim(getBodyRecurse(m.Id, m.Payload), " \n\r\t")
 }
 
 var (
