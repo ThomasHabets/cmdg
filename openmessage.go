@@ -72,6 +72,15 @@ func maxScroll(lines, height int) int {
 	return lines - height/2
 }
 
+func hasAttachment(m *gmail.Message) bool {
+	for _, p := range partTree(m) {
+		if p.part.Filename != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked bool, currentLabel string, scroll int) {
 	m := msgs[current]
 
@@ -105,6 +114,9 @@ func openMessagePrint(w *gc.Window, msgs []*gmail.Message, current int, marked b
 	}
 	if len(bodyLines) > scroll {
 		bodyLines = bodyLines[scroll:]
+	}
+	if hasAttachment(m) {
+		bodyLines = append(bodyLines, "", "<<<press 't' to see attachments>>>")
 	}
 	body := strings.Join(bodyLines, "\n")
 	if len(bodyLines) < height {
