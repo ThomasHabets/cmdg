@@ -25,6 +25,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -197,13 +198,14 @@ func browseAttachments(msg *gmail.Message) error {
 
 	// Download attachment.
 	dec := p.part.Body.Data
-	if p.part.Body == nil {
+	if p.part.Body == nil || len(dec) == 0 {
 		body, err := gmailService.Users.Messages.Attachments.Get(email, msg.Id, p.part.Body.AttachmentId).Do()
 		if err != nil {
 			return err
 		}
 		dec = body.Data
 	}
+	log.Printf("Attachment of size %d downloaded", len(dec))
 	dec, err := mimeDecode(dec)
 	if err != nil {
 		return err
@@ -217,7 +219,7 @@ func browseAttachments(msg *gmail.Message) error {
 		ofn, err = saveFileDialog(p.part.Filename)
 		if err == errOpen {
 			open = true
-			t, err := ioutil.TempFile("", "")
+			t, err := ioutil.TempFile("", fmt.Sprintf("attachment.*.%s", path.Ext(p.part.Filename)))
 			if err != nil {
 				log.Printf("Failed to create tempfile: %v", err)
 				return err
@@ -237,9 +239,11 @@ func browseAttachments(msg *gmail.Message) error {
 		if err != nil {
 			return err
 		}
-		if _, err := f.Write([]byte(dec)); err != nil {
+		if n, err := f.Write([]byte(dec)); err != nil {
 			os.Remove(f.Name())
 			return err
+		} else {
+			log.Printf("Saved attachment %q, %d bytes", ofn, n)
 		}
 		if err := f.Close(); err != nil {
 			os.Remove(f.Name())
@@ -249,15 +253,21 @@ func browseAttachments(msg *gmail.Message) error {
 	if open {
 		defer runSomething()()
 		cmd := exec.Command(*openBinary, ofn)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		if *openWait {
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
 		if err := cmd.Start(); err != nil {
 			return fmt.Errorf("failed to open attachment %q using %q: %v", ofn, *openBinary, err)
 		}
 		w := func() {
 			if err := cmd.Wait(); err != nil {
 				log.Printf("Failed to finish opening attachment %q using %q: %v", ofn, *openBinary, err)
+			}
+			if !*openWait {
+				// Some application openers run in the background, so keep the file around for a bit.
+				time.Sleep(time.Minute)
 			}
 			if err := os.Remove(ofn); err != nil {
 				log.Printf("Failed to remove tempfile %q: %v", ofn, err)
