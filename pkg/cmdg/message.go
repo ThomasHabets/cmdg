@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
+	log "github.com/sirupsen/logrus"
 	gmail "google.golang.org/api/gmail/v1"
 )
 
 type Message struct {
 	m       sync.RWMutex
 	conn    *CmdG
-	level   dataLevel
+	level   DataLevel
 	headers map[string]string
 
 	ID       string
@@ -30,15 +32,18 @@ func NewMessage(c *CmdG, msgID string) *Message {
 }
 
 // assumes R lock held!
-func (m *Message) hasData(level dataLevel) bool {
+func (m *Message) HasData(level DataLevel) bool {
+	m.m.RLock()
+	defer m.m.RUnlock()
+
 	switch m.level {
-	case levelFull:
+	case LevelFull:
 		return true
-	case levelMetadata:
-		return level != levelFull
-	case levelMinimal:
-		return levelMinimal != ""
-	case levelEmpty:
+	case LevelMetadata:
+		return level != LevelFull
+	case LevelMinimal:
+		return LevelMinimal != ""
+	case LevelEmpty:
 		return false
 	}
 	panic(fmt.Sprintf("can't happen: current level is %q", m.level))
@@ -50,6 +55,9 @@ func (m *Message) IsUnread() bool {
 
 func (m *Message) HasLabel(label string) bool {
 	// TODO: this only works for label IDs.
+	if m.Response == nil {
+		return false
+	}
 	for _, l := range m.Response.LabelIds {
 		if label == l {
 			return true
@@ -59,7 +67,7 @@ func (m *Message) HasLabel(label string) bool {
 }
 
 func (m *Message) GetHeader(ctx context.Context, k string) (string, error) {
-	if err := m.Preload(ctx, levelMetadata); err != nil {
+	if err := m.Preload(ctx, LevelMetadata); err != nil {
 		return "", err
 	}
 	h, ok := m.headers[strings.ToLower(k)]
@@ -71,34 +79,33 @@ func (m *Message) GetHeader(ctx context.Context, k string) (string, error) {
 
 func (m *Message) ReloadLabels(ctx context.Context) error {
 	msg, err := m.conn.gmail.Users.Messages.Get(email, m.ID).
-		Format(string(levelMinimal)).
+		Format(string(LevelMinimal)).
 		Context(ctx).
 		Do()
 	m.m.Lock()
 	defer m.m.Unlock()
 	if m.Response == nil {
 		m.Response = msg
-		m.level = levelMinimal
+		m.level = LevelMinimal
 	} else {
 		m.Response.LabelIds = msg.LabelIds
 	}
 	return err
 }
 
-func (m *Message) Preload(ctx context.Context, level dataLevel) error {
+func (m *Message) Preload(ctx context.Context, level DataLevel) error {
 	{
-		m.m.RLock()
-		has := m.hasData(level)
-		m.m.RUnlock()
-		if has {
+		if m.HasData(level) {
 			return nil
 		}
 	}
 
+	st := time.Now()
 	msg, err := m.conn.gmail.Users.Messages.Get(email, m.ID).
 		Format(string(level)).
 		Context(ctx).
 		Do()
+	log.Debugf("Downloading message %q level %q took %v", m.ID, level, time.Since(st))
 	m.m.Lock()
 	defer m.m.Unlock()
 	m.Response = msg

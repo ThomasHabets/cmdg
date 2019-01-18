@@ -21,6 +21,7 @@ func (p *Page) Next(ctx context.Context) (*Page, error) {
 	return p.conn.ListMessages(ctx, p.Label, p.Response.NextPageToken)
 }
 
+// Async start loading message info.
 func (p *Page) PreloadSubjects(ctx context.Context) error {
 	conc := 100
 	sem := make(chan struct{}, conc)
@@ -32,7 +33,7 @@ func (p *Page) PreloadSubjects(ctx context.Context) error {
 		go func() {
 			defer func() { <-sem }()
 
-			if err := p.Messages[n].Preload(ctx, levelMetadata); err != nil {
+			if err := p.Messages[n].Preload(ctx, LevelMetadata); err != nil {
 				errs[n] = err
 			}
 		}()

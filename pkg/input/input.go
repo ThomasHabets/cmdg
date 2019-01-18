@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	fd = 0
+	fd    = 0
+	CtrlN = 14
+	CtrlP = 16
 )
 
 type Input struct {

@@ -15,21 +15,21 @@ const (
 	version   = "0.4"
 	userAgent = "cmdg med " + version
 	scope     = "https://www.googleapis.com/auth/gmail.modify https://www.google.com/m8/feeds"
-	pageSize  = 10
+	pageSize  = 100
 
 	accessType = "offline"
 	email      = "me"
 
 	// Messages.Get()
-	levelEmpty    dataLevel = ""         // Nothing
-	levelMinimal  dataLevel = "minimal"  // ID, labels
-	levelMetadata dataLevel = "metadata" // ID, labels, headers
-	levelFull     dataLevel = "full"     // ID, labels, headers, payload
-	// DO NOT USE: levelRaw      dataLevel = "raw"
+	LevelEmpty    DataLevel = ""         // Nothing
+	LevelMinimal  DataLevel = "minimal"  // ID, labels
+	LevelMetadata DataLevel = "metadata" // ID, labels, headers
+	LevelFull     DataLevel = "full"     // ID, labels, headers, payload
+	// DO NOT USE: levelRaw      DataLevel = "raw"
 )
 
 type (
-	dataLevel string
+	DataLevel string
 )
 
 type CmdG struct {
