@@ -89,6 +89,10 @@ func stringWidth(s string) int {
 	return runewidth.StringWidth(stripANSI(s))
 }
 
+func FixedWidth(s string, w int) string {
+	return runewidth.FillLeft(runewidth.Truncate(s, w, ""), w)
+}
+
 func (s *Screen) Printlnf(y int, fmts string, args ...interface{}) {
 	str := fmt.Sprintf(fmts, args...)
 	s.buffer[y] = str

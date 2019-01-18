@@ -3,6 +3,7 @@ package cmdg
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"strings"
 	"sync"
 	"time"
@@ -64,6 +65,63 @@ func (m *Message) HasLabel(label string) bool {
 		}
 	}
 	return false
+}
+
+// ParseTime tries a few time formats and returns the one that works.
+func parseTime(s string) (time.Time, error) {
+	var t time.Time
+	var err error
+	for _, layout := range []string{
+		"Mon, 2 Jan 2006 15:04:05 -0700",
+		"Mon, 2 Jan 2006 15:04:05 -0700 (MST)",
+		"Mon, 2 Jan 2006 15:04:05 MST",
+		"2 Jan 2006 15:04:05 -0700",
+		"Mon, 2 Jan 2006 15:04:05 -0700 (GMT-07:00)",
+		"Mon, _2 Jan 2006 15:04:05 -0700 (GMT-07:00)",
+		"Mon, _2 Jan 06 15:04:05 -0700",
+		time.RFC1123Z,
+	} {
+		t, err = time.Parse(layout, s)
+		if err == nil {
+			break
+		}
+	}
+	return t, err
+}
+
+func (m *Message) GetFrom(ctx context.Context) (string, error) {
+	s, err := m.GetHeader(ctx, "From")
+	if err != nil {
+		return "", err
+	}
+	a, err := mail.ParseAddress(s)
+	if err != nil {
+		log.Warningf("%q is not a valid address: %v", s, err)
+		return s, nil
+	}
+	if len(a.Name) > 0 {
+		return a.Name, nil
+	}
+	return a.Address, nil
+}
+
+func (m *Message) GetTimeFmt(ctx context.Context) (string, error) {
+	s, err := m.GetHeader(ctx, "Date")
+	if err != nil {
+		return "", err
+	}
+	ts, err := parseTime(s)
+	if err != nil {
+		return "", err
+	}
+	ts.Local()
+	if time.Since(ts) > 365*24*time.Hour {
+		return ts.Format("2006"), nil
+	}
+	if !(time.Now().Month() == ts.Month() && time.Now().Day() == ts.Day()) {
+		return ts.Format("Jan 02"), nil
+	}
+	return ts.Format("15:04"), nil
 }
 
 func (m *Message) GetHeader(ctx context.Context, k string) (string, error) {

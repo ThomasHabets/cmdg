@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -73,10 +74,22 @@ func (mv *MessageView) Run(ctx context.Context) error {
 	drawMessage := func(cur int) error {
 		s := "Loading…"
 		if messages[cur].HasData(cmdg.LevelMetadata) {
-			s, err = messages[cur].GetHeader(ctx, "subject")
+			subj, err := messages[cur].GetHeader(ctx, "subject")
 			if err != nil {
 				return err
 			}
+			tm, err := messages[cur].GetTimeFmt(ctx)
+			if err != nil {
+				return err
+			}
+			from, err := messages[cur].GetFrom(ctx)
+			if err != nil {
+				return err
+			}
+			from = display.FixedWidth(from, 20)
+			s = fmt.Sprintf("%[1]*.[1]*[2]s | %[3]s | %[4]s",
+				6, tm,
+				from, subj)
 		} else {
 			go func(cur int) {
 				messages[cur].Preload(ctx, cmdg.LevelMetadata)
