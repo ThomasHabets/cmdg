@@ -155,6 +155,14 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		case key := <-mv.keys.Chan():
 			log.Debugf("Got key %d", key)
 			switch key {
+			case 13:
+				vo, err := NewOpenMessageView(ctx, messages[pos], mv.keys)
+				if err != nil {
+					return err
+				}
+				if err := vo.Run(ctx); err != nil {
+					return err
+				}
 			case 'N', 'n', input.CtrlN:
 				if (messages != nil) && (pos < len(messages)-1) {
 					if pos-scroll > contentHeight-scrollLimit {
@@ -204,7 +212,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		if theresMore {
 			status += display.Color(50) + "Loading…"
 		}
-		screen.Printlnf(screen.Height-2, "%s", strings.Repeat("-", screen.Width))
+		screen.Printlnf(screen.Height-2, "%s", strings.Repeat("—", screen.Width))
 		screen.Printlnf(screen.Height-1, "%s", status)
 
 		// Draw.

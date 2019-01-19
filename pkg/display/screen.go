@@ -73,7 +73,11 @@ func NewScreen2(w int, h int) *Screen {
 
 func (s *Screen) Draw() {
 	for n, l := range s.buffer {
-		fmt.Printf("\033[%d;%dH%s%s", n+1, 1, l+strings.Repeat(" ", s.Width-stringWidth(l)), Reset)
+		pad := ""
+		if padlen := s.Width - stringWidth(l); padlen > 0 {
+			pad = strings.Repeat(" ", padlen)
+		}
+		fmt.Printf("\033[%d;%dH%s%s%s", n+1, 1, l, pad, Reset)
 	}
 }
 

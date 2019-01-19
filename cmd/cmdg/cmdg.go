@@ -27,7 +27,9 @@ func run(ctx context.Context) error {
 
 	v := NewMessageView(ctx, "INBOX", keys)
 
-	v.Run(ctx)
+	if err := v.Run(ctx); err != nil {
+		log.Errorf("Bailing due to error: %v", err)
+	}
 	log.Infof("MessageView returned, stopping keys")
 	keys.Stop()
 	log.Infof("Shutting down")

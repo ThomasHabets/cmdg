@@ -2,8 +2,10 @@ package cmdg
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/mail"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +21,7 @@ type Message struct {
 	headers map[string]string
 
 	ID       string
+	body     string // Printable body.
 	Response *gmail.Message
 }
 
@@ -105,16 +108,23 @@ func (m *Message) GetFrom(ctx context.Context) (string, error) {
 	return a.Address, nil
 }
 
-func (m *Message) GetTimeFmt(ctx context.Context) (string, error) {
+func (m *Message) GetTime(ctx context.Context) (time.Time, error) {
 	s, err := m.GetHeader(ctx, "Date")
 	if err != nil {
-		return "", err
+		return time.Time{}, err
 	}
 	ts, err := parseTime(s)
 	if err != nil {
-		return "", err
+		return time.Time{}, err
 	}
 	ts.Local()
+	return ts, nil
+}
+func (m *Message) GetTimeFmt(ctx context.Context) (string, error) {
+	ts, err := m.GetTime(ctx)
+	if err != nil {
+		return "", err
+	}
 	if time.Since(ts) > 365*24*time.Hour {
 		return ts.Format("2006"), nil
 	}
@@ -133,6 +143,58 @@ func (m *Message) GetHeader(ctx context.Context, k string) (string, error) {
 		return h, nil
 	}
 	return "", fmt.Errorf("header not found in msg %q: %q", m.ID, k)
+}
+
+func mimeDecode(s string) (string, error) {
+	s = strings.Replace(s, "-", "+", -1)
+	s = strings.Replace(s, "_", "/", -1)
+	data, err := base64.StdEncoding.DecodeString(s)
+	return string(data), err
+}
+
+var unprintableRE = regexp.MustCompile(`[\033\r]`)
+
+func stripUnprintable(s string) string {
+	return unprintableRE.ReplaceAllString(s, "")
+}
+func partIsAttachment(p *gmail.MessagePart) bool {
+	for _, head := range p.Headers {
+		if head.Name == "Content-Disposition" {
+			// TODO: Is this the correct way? Maybe check "attachment" instead?
+			return head.Value != "inline"
+		}
+	}
+	return false
+}
+
+func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string, error) {
+	if len(part.Parts) == 0 {
+		data, err := mimeDecode(string(part.Body.Data))
+		data = stripUnprintable(data)
+		if err != nil {
+			return "", err
+		}
+		return data, nil
+	}
+
+	for _, p := range part.Parts {
+		if partIsAttachment(p) {
+			continue
+		}
+		switch p.MimeType {
+		case "text/plain":
+			return m.makeBody(ctx, p)
+		}
+	}
+
+	return "", fmt.Errorf("not implemented")
+}
+
+func (m *Message) GetBody(ctx context.Context) (string, error) {
+	if err := m.Preload(ctx, LevelFull); err != nil {
+		return "", err
+	}
+	return m.body, nil
 }
 
 func (m *Message) ReloadLabels(ctx context.Context) error {
@@ -163,7 +225,11 @@ func (m *Message) Preload(ctx context.Context, level DataLevel) error {
 		Format(string(level)).
 		Context(ctx).
 		Do()
+	if err != nil {
+		return err
+	}
 	log.Debugf("Downloading message %q level %q took %v", m.ID, level, time.Since(st))
+
 	m.m.Lock()
 	defer m.m.Unlock()
 	m.Response = msg
@@ -172,5 +238,15 @@ func (m *Message) Preload(ctx context.Context, level DataLevel) error {
 	for _, h := range m.Response.Payload.Headers {
 		m.headers[strings.ToLower(h.Name)] = h.Value
 	}
+	if level == LevelFull {
+		m.body, err = m.makeBody(ctx, m.Response.Payload)
+	}
 	return err
+}
+
+func (m *Message) Lines(ctx context.Context) (int, error) {
+	if err := m.Preload(ctx, LevelFull); err != nil {
+		return 0, err
+	}
+	return len(strings.Split(m.body, "\n")), nil
 }
