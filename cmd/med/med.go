@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	//gmail "google.golang.org/api/gmail/v1"
 
-	cmdg "github.com/ThomasHabets/cmdg/src"
+	cmdg "github.com/ThomasHabets/cmdg/pkg/cmdg"
 )
 
 var (
