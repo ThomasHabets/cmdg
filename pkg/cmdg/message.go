@@ -1,17 +1,33 @@
 package cmdg
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"mime"
+	"mime/quotedprintable"
 	"net/mail"
+	"os"
+	"os/exec"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/html/charset"
 	gmail "google.golang.org/api/gmail/v1"
+)
+
+var (
+	gpg = flag.String("gpg", "gpg", "Path to GnuPG.")
 )
 
 type Message struct {
@@ -20,9 +36,14 @@ type Message struct {
 	level   DataLevel
 	headers map[string]string
 
-	ID       string
-	body     string // Printable body.
-	Response *gmail.Message
+	ID        string
+	body      string // Printable body.
+	gpgStatus *GPGStatus
+	Response  *gmail.Message
+}
+
+func (m *Message) GPGStatus() *GPGStatus {
+	return m.gpgStatus
 }
 
 func NewMessage(c *CmdG, msgID string) *Message {
@@ -213,6 +234,239 @@ func (m *Message) ReloadLabels(ctx context.Context) error {
 	return err
 }
 
+func (m *Message) tryGPGSigned(ctx context.Context) error {
+	if m.Response.Payload.MimeType != "multipart/signed" {
+		return nil
+	}
+	var partData *gmail.MessagePart
+	var partSig *gmail.MessagePart
+	for _, p := range m.Response.Payload.Parts {
+		switch p.MimeType {
+		case "text/plain":
+			partData = p
+			// TODO: what if it's signed HTML?
+		case "application/pgp-signature":
+			partSig = p
+		default:
+			log.Warningf("Found unexpected part in signed packet: %q", p.MimeType)
+		}
+	}
+
+	// Fetch attachment.
+	body, err := m.conn.gmail.Users.Messages.Attachments.Get(email, m.ID, partSig.Body.AttachmentId).Context(ctx).Do()
+	if err != nil {
+		return errors.Wrap(err, "failed to download signature attachment")
+	}
+	sigDec, err := mimeDecode(body.Data)
+	if err != nil {
+		return errors.Wrap(err, "failed to MIME decode signature attachment")
+	}
+	st, err := GPGVerify(ctx, partData.Body.Data, sigDec)
+	if err != nil {
+		return err
+	}
+	m.gpgStatus = st
+	return nil
+}
+
+func (m *Message) tryGPGEncrypted(ctx context.Context) error {
+	if m.Response.Payload.MimeType != "multipart/encrypted" {
+		return nil
+	}
+
+	// Expect two subparts.
+	var partMeta *gmail.MessagePart
+	var partData *gmail.MessagePart
+	for _, p := range m.Response.Payload.Parts {
+		switch p.MimeType {
+		case "application/pgp-encrypted":
+			partMeta = p
+		case "application/octet-stream":
+			partData = p
+		default:
+			log.Warningf("Found unexpected part in encrypted packet: %q", p.MimeType)
+		}
+	}
+	if partMeta == nil || partData == nil {
+		log.Warningf("Encrypted packet missing either meta or data")
+	}
+
+	// Fetch data attachment.
+	body, err := m.conn.gmail.Users.Messages.Attachments.Get(email, m.ID, partData.Body.AttachmentId).Context(ctx).Do()
+	if err != nil {
+		return errors.Wrap(err, "failed to download encrypted data attachment")
+	}
+	dec, err := mimeDecode(body.Data)
+	if err != nil {
+		return errors.Wrap(err, "failed to MIME decode encrypted data attachment")
+	}
+
+	// Decrypt data attachment.
+	dec2, status, err := GPGDecode(ctx, dec)
+	if err != nil {
+		return err
+	}
+
+	msg, err := mail.ReadMessage(strings.NewReader(dec2))
+	if err != nil {
+		return err
+	}
+
+	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if err != nil {
+		return err
+	}
+	if strings.HasPrefix(mediaType, "multipart/") {
+		params = params
+		/*
+			mr := multipart.NewReader(msg.Body, params["boundary"])
+			for {
+				p, err := mr.NextPart()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					return errors.Wrap(err, "failed to get mime part")
+				}
+				dec, err := toUTF8Reader(map[string][]string(p.Header), p)
+				t, err := ioutil.ReadAll(dec)
+				if err != nil {
+					return err
+				}
+				np := &gmail.MessagePart{
+					MimeType: mediaType,
+					Body: &gmail.MessagePartBody{
+						Data: mimeEncode(string(t)),
+					},
+				}
+			}
+		*/
+	} else {
+		r, err := toUTF8Reader(map[string][]string(msg.Header), msg.Body)
+		t, err := ioutil.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		m.body = string(t)
+	}
+
+	m.gpgStatus = status
+	return nil
+}
+
+func toUTF8Reader(header mail.Header, r io.Reader) (io.Reader, error) {
+	_, params, err := mime.ParseMediaType(header.Get("Content-Type"))
+	if err != nil {
+		return nil, err
+	}
+	switch header.Get("Content-Transfer-Encoding") {
+	case "quoted-printable":
+		r = quotedprintable.NewReader(r)
+	case "base64":
+		r = base64.NewDecoder(base64.StdEncoding, r)
+	}
+	e, _ := charset.Lookup(params["charset"])
+	if e != nil {
+		return e.NewDecoder().Reader(r), nil
+	}
+	log.Printf("No decoder for charmap %q", params["charset"])
+	return r, nil
+}
+
+type GPGStatus struct {
+	Signed        string
+	Encrypted     []string
+	GoodSignature bool
+	Warnings      []string
+}
+
+var (
+	goodSignatureRE = regexp.MustCompile(`(?m)^gpg: Good signature from "(.*)"`)
+	badSignatureRE  = regexp.MustCompile(`(?m)^gpg: BAD signature from "(.*)"`)
+	encryptedRE     = regexp.MustCompile(`(?m)^gpg: encrypted with[^\n]+\n([^\n]+)\n`)
+)
+
+func GPGDecode(ctx context.Context, dec string) (string, *GPGStatus, error) {
+	var stderr bytes.Buffer
+	var stdout bytes.Buffer
+	cmd := exec.CommandContext(ctx, *gpg, "--batch", "--no-tty")
+	cmd.Stdin = bytes.NewBufferString(dec)
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+	if err := cmd.Start(); err != nil {
+		return "", nil, errors.Wrapf(err, "failed to start gpg (%q)", *gpg)
+	}
+	if err := cmd.Wait(); err != nil {
+		return "", nil, errors.Wrapf(err, "gpg decode failed", *gpg)
+	}
+	status := &GPGStatus{}
+	if m := goodSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
+		status.Signed = stripUnprintable(m[1])
+		status.GoodSignature = true
+	}
+	if ms := encryptedRE.FindAllStringSubmatch(stderr.String(), -1); ms != nil {
+		for _, m := range ms {
+			status.Encrypted = append(status.Encrypted, strings.Trim(stripUnprintable(m[1]), "\t "))
+		}
+	}
+
+	return stdout.String(), status, nil
+}
+
+func GPGVerify(ctx context.Context, data, sig string) (*GPGStatus, error) {
+	dir, err := ioutil.TempDir("", "gpg-signature")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+
+	log.Infof("Checking signature with %q…", dir)
+	dataFN := path.Join(dir, "data")
+	sigFN := path.Join(dir, "data.gpg")
+	if err := ioutil.WriteFile(dataFN, []byte(data), 0600); err != nil {
+		return nil, err
+	}
+	if err := ioutil.WriteFile(sigFN, []byte(sig), 0600); err != nil {
+		return nil, err
+	}
+
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, *gpg, "--verify", "--no-tty", sigFN, dataFN)
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return nil, errors.Wrapf(err, "failed to start gpg (%q)", *gpg)
+	}
+	status := &GPGStatus{}
+	goodOrBad := false
+	if err := cmd.Wait(); err != nil {
+		e, ok := err.(*exec.ExitError)
+		if !ok {
+			return nil, errors.Wrapf(err, "gpg verify failed for odd reason. stderr: %q", stderr.String())
+		}
+		u, ok := e.Sys().(syscall.WaitStatus)
+		if !ok {
+			return nil, errors.Wrapf(e, "gpg verify failed, and not unix status. stderr: %q", stderr.String())
+		}
+		if u.ExitStatus() != 1 {
+			return nil, errors.Wrapf(e, "gpg verify failed, and not status 1 (was %d). stderr: %q", u.ExitStatus(), stderr.String())
+		}
+		// Continue since status 1, assume either good or bad signature now.
+	}
+	if m := badSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
+		status.Signed = stripUnprintable(m[1])
+		goodOrBad = true
+	}
+	if m := goodSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
+		status.Signed = stripUnprintable(m[1])
+		status.GoodSignature = true
+		goodOrBad = true
+	}
+	if !goodOrBad {
+		return nil, fmt.Errorf("signature not good nor bad. What? %q", stderr.String())
+	}
+	return status, nil
+}
+
 func (m *Message) Preload(ctx context.Context, level DataLevel) error {
 	{
 		if m.HasData(level) {
@@ -240,6 +494,12 @@ func (m *Message) Preload(ctx context.Context, level DataLevel) error {
 	}
 	if level == LevelFull {
 		m.body, err = m.makeBody(ctx, m.Response.Payload)
+		if err := m.tryGPGEncrypted(ctx); err != nil {
+			log.Errorf("Decrypting GPG: %v", err)
+		}
+		if err := m.tryGPGSigned(ctx); err != nil {
+			log.Errorf("Checking GPG signature: %v", err)
+		}
 	}
 	return err
 }

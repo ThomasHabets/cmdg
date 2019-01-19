@@ -65,7 +65,26 @@ func (ov *OpenMessageView) Draw(scroll int) error {
 		ov.errors <- err
 		from = fmt.Sprintf("Unknown: %q", err)
 	}
-	ov.screen.Printlnf(line, "From: %s", from)
+	var signed string
+	var encrypted string
+	if st := ov.msg.GPGStatus(); st != nil {
+		if st.Signed != "" {
+			if st.GoodSignature {
+				signed = fmt.Sprintf(" — signed by %s", st.Signed)
+				if len(st.Warnings) == 0 {
+					signed = display.Bold + display.Green + signed
+				} else {
+					signed = " but with warnings"
+				}
+			} else {
+				signed = fmt.Sprintf("%s — BAD signature from %s", display.Bold+display.Red, st.Signed)
+			}
+		}
+		if len(st.Encrypted) != 0 {
+			encrypted = fmt.Sprintf("%s — Encrypted to %s", display.Green+display.Bold, strings.Join(st.Encrypted, ";"))
+		}
+	}
+	ov.screen.Printlnf(line, "From: %s%s", from, signed)
 	line++
 
 	// To.
@@ -74,14 +93,13 @@ func (ov *OpenMessageView) Draw(scroll int) error {
 		ov.errors <- err
 		to = fmt.Sprintf("Unknown: %q", err)
 	}
-	ov.screen.Printlnf(line, "To: %s", to)
+	ov.screen.Printlnf(line, "To: %s%s", to, encrypted)
 	line++
 
 	// CC.
 	cc, err := ov.msg.GetHeader(ctx, "CC")
 	if err != nil {
-		ov.errors <- err
-		cc = fmt.Sprintf("Unknown: %q", err)
+		cc = ""
 	}
 	ov.screen.Printlnf(line, "CC: %s", cc)
 	line++
