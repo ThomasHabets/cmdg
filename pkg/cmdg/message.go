@@ -165,7 +165,7 @@ func (m *Message) GetTime(ctx context.Context) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	ts.Local()
+	ts = ts.Local()
 	return ts, nil
 }
 func (m *Message) GetTimeFmt(ctx context.Context) (string, error) {

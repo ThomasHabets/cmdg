@@ -163,6 +163,10 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				if err := vo.Run(ctx); err != nil {
 					return err
 				}
+			case 'c':
+				if err := compose(ctx, conn, mv.keys); err != nil {
+					return err
+				}
 			case 'N', 'n', input.CtrlN:
 				if (messages != nil) && (pos < len(messages)-1) {
 					if pos-scroll > contentHeight-scrollLimit {

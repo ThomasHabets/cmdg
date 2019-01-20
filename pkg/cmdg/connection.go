@@ -106,6 +106,17 @@ func (c *CmdG) LoadLabels(ctx context.Context) error {
 	return nil
 }
 
+func (c *CmdG) GetProfile(ctx context.Context) (*gmail.Profile, error) {
+	return c.gmail.Users.GetProfile(email).Context(ctx).Do()
+}
+
+func (c *CmdG) Send(ctx context.Context, msg string) error {
+	_, err := c.gmail.Users.Messages.Send(email, &gmail.Message{
+		Raw: mimeEncode(msg),
+	}).Context(ctx).Do()
+	return err
+}
+
 func (c *CmdG) ListMessages(ctx context.Context, label, token string) (*Page, error) {
 	nres := int64(pageSize)
 	q := c.gmail.Users.Messages.List(email).

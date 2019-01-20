@@ -1,5 +1,16 @@
 // cmdg is the next generation cmdg.
-
+//
+// TODO before it can replace old code:
+// * Attachments
+// * HTML emails.
+// * Reconnecting
+// * Error messages (as opposed to just exiting)
+// * Searching
+// * Add/remove label
+// * Go to label.
+//
+// After
+// * label colors
 package main
 
 import (

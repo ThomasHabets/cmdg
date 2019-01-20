@@ -30,6 +30,7 @@ func (i *Input) Chan() <-chan byte {
 func (i *Input) Stop() {
 	select {
 	case <-i.running:
+		log.Infof("Called stop though already stopped")
 		return // already stopped
 	default:
 	}
@@ -47,6 +48,7 @@ func (i *Input) Start() error {
 	}
 	i.running = make(chan struct{})
 	i.stop = make(chan struct{})
+	i.keys = make(chan byte)
 	go func() {
 		defer close(i.running)
 		defer close(i.keys)
@@ -100,10 +102,5 @@ func (i *Input) Start() error {
 }
 
 func New() *Input {
-	t := make(chan struct{})
-	close(t)
-	return &Input{
-		keys:    make(chan byte),
-		running: t,
-	}
+	return &Input{}
 }
