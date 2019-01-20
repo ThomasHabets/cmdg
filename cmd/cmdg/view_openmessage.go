@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
@@ -166,6 +167,13 @@ func (ov *OpenMessageView) Run(ctx context.Context) error {
 			ov.Draw(scroll)
 		case key := <-ov.keys.Chan():
 			switch key {
+			case 'r':
+				go func() {
+					if err := ov.msg.Reload(ctx, cmdg.LevelFull); err != nil {
+						ov.errors <- errors.Wrap(err, "reloading message")
+					}
+					ov.update <- struct{}{}
+				}()
 			case 'u', 'q':
 				return nil
 			case 'n':

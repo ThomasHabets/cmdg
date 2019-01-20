@@ -440,13 +440,18 @@ func toUTF8Reader(header mail.Header, r io.Reader) (io.Reader, error) {
 	return r, nil
 }
 
-func (m *Message) Preload(ctx context.Context, level DataLevel) error {
-	{
-		if m.HasData(level) {
-			return nil
-		}
-	}
+func (m *Message) Reload(ctx context.Context, level DataLevel) error {
+	return m.load(ctx, level)
+}
 
+func (m *Message) Preload(ctx context.Context, level DataLevel) error {
+	if m.HasData(level) {
+		return nil
+	}
+	return m.load(ctx, level)
+}
+
+func (m *Message) load(ctx context.Context, level DataLevel) error {
 	st := time.Now()
 	msg, err := m.conn.gmail.Users.Messages.Get(email, m.ID).
 		Format(string(level)).
