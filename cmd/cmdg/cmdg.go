@@ -41,6 +41,7 @@ func run(ctx context.Context) error {
 func main() {
 	syscall.Umask(0077)
 	flag.Parse()
+	ctx := context.Background()
 	cmdg.GPG = gpg.New(*gpgFlag)
 
 	var err error
@@ -49,8 +50,11 @@ func main() {
 		log.Fatalf("Failed to connect: %v", err)
 	}
 	log.Infof("Connected")
+	if err := conn.LoadLabels(ctx); err != nil {
+		log.Fatalf("Loading labels: %v", err)
+	}
+	log.Infof("Labels loaded")
 
-	ctx := context.Background()
 	if err := run(ctx); err != nil {
 		log.Fatal(err)
 	}

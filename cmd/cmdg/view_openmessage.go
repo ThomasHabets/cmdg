@@ -121,6 +121,15 @@ func (ov *OpenMessageView) Draw(scroll int) error {
 	ov.screen.Printlnf(line, "Subject: %s", subject)
 	line++
 
+	// Labels
+	labels, err := ov.msg.GetLabelsString(ctx)
+	if err != nil {
+		ov.errors <- err
+		labels = fmt.Sprintf("Unknown: %q", err)
+	}
+	ov.screen.Printlnf(line, "Labels: %s", labels)
+	line++
+
 	ov.screen.Printlnf(line, strings.Repeat("—", ov.screen.Width))
 	line++
 	b, err := ov.msg.GetBody(ctx)

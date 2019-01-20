@@ -44,13 +44,10 @@ func (m *Message) GPGStatus() *gpg.Status {
 }
 
 func NewMessage(c *CmdG, msgID string) *Message {
-	if m, found := c.MessageCache(msgID); found {
-		return m
-	}
-	return &Message{
+	return c.MessageCache(&Message{
 		conn: c,
 		ID:   msgID,
-	}
+	})
 }
 
 // assumes R lock held!
@@ -124,6 +121,39 @@ func (m *Message) GetFrom(ctx context.Context) (string, error) {
 		return a.Name, nil
 	}
 	return a.Address, nil
+}
+
+type Label struct {
+	ID       string
+	Label    string
+	Response *gmail.Label
+}
+
+func (m *Message) GetLabels(ctx context.Context) ([]*Label, error) {
+	if err := m.Preload(ctx, LevelMinimal); err != nil {
+		return nil, err
+	}
+	var ret []*Label
+	for _, l := range m.Response.LabelIds {
+		l2 := &Label{
+			ID:    l,
+			Label: "<unknown>",
+		}
+		ret = append(ret, m.conn.LabelCache(l2))
+	}
+	return ret, nil
+}
+
+func (m *Message) GetLabelsString(ctx context.Context) (string, error) {
+	var s []string
+	ls, err := m.GetLabels(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, l := range ls {
+		s = append(s, l.Label)
+	}
+	return strings.Join(s, ", "), nil
 }
 
 func (m *Message) GetTime(ctx context.Context) (time.Time, error) {

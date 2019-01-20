@@ -37,18 +37,33 @@ type CmdG struct {
 	authedClient *http.Client
 	gmail        *gmail.Service
 	messageCache map[string]*Message
+	labelCache   map[string]*Label
 }
 
-func (c *CmdG) MessageCache(msgID string) (*Message, bool) {
+func (c *CmdG) MessageCache(msg *Message) *Message {
 	c.m.Lock()
 	defer c.m.Unlock()
-	t, f := c.messageCache[msgID]
-	return t, f
+	if t, found := c.messageCache[msg.ID]; found {
+		return t
+	}
+	c.messageCache[msg.ID] = msg
+	return msg
+}
+
+func (c *CmdG) LabelCache(label *Label) *Label {
+	c.m.Lock()
+	defer c.m.Unlock()
+	if t, f := c.labelCache[label.ID]; f {
+		return t
+	}
+	c.labelCache[label.ID] = label
+	return label
 }
 
 func New(fn string) (*CmdG, error) {
 	conn := &CmdG{
 		messageCache: make(map[string]*Message),
+		labelCache:   make(map[string]*Label),
 	}
 
 	// Read config.
@@ -69,7 +84,26 @@ func New(fn string) (*CmdG, error) {
 		return nil, err
 	}
 	conn.gmail.UserAgent = userAgent
+
 	return conn, nil
+}
+
+func (c *CmdG) LoadLabels(ctx context.Context) error {
+	// Load initial labels.
+	res, err := c.gmail.Users.Labels.List(email).Context(ctx).Do()
+	if err != nil {
+		return err
+	}
+	c.m.Lock()
+	defer c.m.Unlock()
+	for _, l := range res.Labels {
+		c.labelCache[l.Id] = &Label{
+			ID:       l.Id,
+			Label:    l.Name,
+			Response: l,
+		}
+	}
+	return nil
 }
 
 func (c *CmdG) ListMessages(ctx context.Context, label, token string) (*Page, error) {
