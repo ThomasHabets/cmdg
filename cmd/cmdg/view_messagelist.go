@@ -123,7 +123,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		// Get event.
 		select {
 		case err := <-mv.errors:
-			log.Errorf("Got error!", err)
+			log.Errorf("MessageView got error: %v", err)
 			screen.Printf(10, 0, "Got error: %v", err)
 		case m := <-mv.messageCh:
 			cur := messagePos[m.ID]

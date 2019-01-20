@@ -353,7 +353,7 @@ func (m *Message) tryGPGEncrypted(ctx context.Context) error {
 			dec, err := toUTF8Reader(map[string][]string(p.Header), p)
 			t, err := ioutil.ReadAll(dec)
 			if err != nil {
-				return errors.Wrapf(err, "utf8reading mime part")
+				return errors.Wrap(err, "utf8reading mime part")
 			}
 			ct := p.Header.Get("Content-Type")
 			mt, _, err := mime.ParseMediaType(ct)
@@ -369,7 +369,7 @@ func (m *Message) tryGPGEncrypted(ctx context.Context) error {
 				}
 				m.body, err = m.makeBody(ctx, np)
 				if err != nil {
-					return errors.Wrapf(err, "failed to decrypt")
+					return errors.Wrap(err, "failed to decrypt")
 				}
 			} else {
 				// TODO: handle attachment.
@@ -432,7 +432,7 @@ func GPGDecode(ctx context.Context, dec string) (string, *GPGStatus, error) {
 		return "", nil, errors.Wrapf(err, "failed to start gpg (%q)", *gpg)
 	}
 	if err := cmd.Wait(); err != nil {
-		return "", nil, errors.Wrapf(err, "gpg decode failed", *gpg)
+		return "", nil, errors.Wrapf(err, "gpg decode failed")
 	}
 	status := &GPGStatus{}
 	if m := goodSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
