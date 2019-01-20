@@ -12,6 +12,7 @@ import (
 
 const (
 	fd    = 0
+	CtrlC = 3
 	CtrlN = 14
 	CtrlP = 16
 )

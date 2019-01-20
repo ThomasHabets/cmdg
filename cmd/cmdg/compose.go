@@ -13,6 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
+	"github.com/ThomasHabets/cmdg/pkg/dialog"
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
 
@@ -82,17 +83,48 @@ Subject:
 
 %s`, to, signature)
 
-	// Get message content.
-	msg, err := getInput(ctx, prefill, keys)
-	if err != nil {
-		return err
-	}
+	for {
+		// Get message content.
+		msg, err := getInput(ctx, prefill, keys)
+		if err != nil {
+			return err
+		}
 
-	st := time.Now()
-	if err := conn.Send(ctx, msg); err != nil {
-		return err
-	}
-	log.Infof("Took %v to send message", time.Since(st))
+		// Ask to send it.
+		sendQ := []dialog.Option{
+			{"s", "Send"},
+			{"d", "Save as draft"},
+			{"a", "Abort, discarding draft"},
+			{"r", "Return to editor"},
+		}
+		// TODO: send signed.
+		// TODO: attach.
 
+		a, err := dialog.Question(sendQ, keys)
+		if err != nil {
+			return err
+		}
+
+		switch a {
+		case "r": // Return to editor.
+			prefill = msg
+			continue
+		case "^C", "a": // Abandon.
+			return nil
+		case "s", "S":
+			st := time.Now()
+			if err := conn.Send(ctx, msg); err != nil {
+				// TODO: ask to save on local filesystem.
+				return err
+			}
+			log.Infof("Took %v to send message", time.Since(st))
+			if a == "S" {
+				// TODO: also archive.
+			}
+			return nil
+		default:
+			return fmt.Errorf("can't happen! Got %q from compose question", a)
+		}
+	}
 	return nil
 }

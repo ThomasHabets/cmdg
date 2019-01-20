@@ -74,7 +74,7 @@ func NewScreen2(w int, h int) *Screen {
 func (s *Screen) Draw() {
 	for n, l := range s.buffer {
 		pad := ""
-		if padlen := s.Width - stringWidth(l); padlen > 0 {
+		if padlen := s.Width - StringWidth(l); padlen > 0 {
 			pad = strings.Repeat(" ", padlen)
 		}
 		fmt.Printf("\033[%d;%dH%s%s%s", n+1, 1, l, pad, Reset)
@@ -89,7 +89,7 @@ func stripANSI(s string) string {
 	return stripANSIRE.ReplaceAllString(s, "")
 }
 
-func stringWidth(s string) int {
+func StringWidth(s string) int {
 	return runewidth.StringWidth(stripANSI(s))
 }
 
@@ -105,31 +105,31 @@ func (s *Screen) Printlnf(y int, fmts string, args ...interface{}) {
 // Printf prints to a given point on the screen.
 func (s *Screen) Printf(y, x int, fmts string, args ...interface{}) {
 	str := fmt.Sprintf(fmts, args...)
-	strw := stringWidth(str)
+	strw := StringWidth(str)
 	prefix := ""
 	suffix := ""
 	skip := ""
 	for _, ru := range s.buffer[y] {
-		pw := stringWidth(prefix)
+		pw := StringWidth(prefix)
 		if pw < x {
 			prefix += string(ru)
 			continue
 		}
-		skipw := stringWidth(skip)
+		skipw := StringWidth(skip)
 		if skipw < strw {
 			skip += string(ru)
 			continue
 		}
 		suffix += string(ru)
 	}
-	for stringWidth(prefix) < x {
+	for StringWidth(prefix) < x {
 		prefix += " "
 	}
 	b := prefix + str + suffix
 	if false {
 		log.Printf("%q %q %q", prefix, str, suffix)
 	}
-	if add := x - stringWidth(b); add > 0 {
+	if add := x - StringWidth(b); add > 0 {
 		b += strings.Repeat(" ", add)
 	}
 	s.buffer[y] = b

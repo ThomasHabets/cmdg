@@ -278,6 +278,7 @@ func (m *Message) ReloadLabels(ctx context.Context) error {
 }
 
 func (m *Message) tryGPGSigned(ctx context.Context) error {
+	// https://tools.ietf.org/html/rfc3156
 	if m.Response.Payload.MimeType != "multipart/signed" {
 		return nil
 	}
@@ -323,6 +324,7 @@ func (m *Message) tryGPGSigned(ctx context.Context) error {
 }
 
 func (m *Message) tryGPGEncrypted(ctx context.Context) error {
+	// https://tools.ietf.org/html/rfc3156
 	if m.Response.Payload.MimeType != "multipart/encrypted" {
 		return nil
 	}
