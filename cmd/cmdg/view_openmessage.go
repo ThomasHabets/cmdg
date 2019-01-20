@@ -38,7 +38,9 @@ func NewOpenMessageView(ctx context.Context, msg *cmdg.Message, in *input.Input)
 		errors: make(chan error, 20),
 	}
 	go func() {
-		msg.Preload(ctx, cmdg.LevelFull)
+		if err := msg.Preload(ctx, cmdg.LevelFull); err != nil {
+			ov.errors <- err
+		}
 		ov.update <- struct{}{}
 	}()
 	return ov, err
@@ -132,6 +134,8 @@ func (ov *OpenMessageView) Draw(scroll int) error {
 
 	ov.screen.Printlnf(line, strings.Repeat("—", ov.screen.Width))
 	line++
+
+	// Draw body.
 	b, err := ov.msg.GetBody(ctx)
 	if err != nil {
 		ov.screen.Printlnf(line, display.Red+"Failed to load body of message: %v", err)
@@ -156,10 +160,9 @@ func (ov *OpenMessageView) Run(ctx context.Context) error {
 	for {
 		select {
 		case err := <-ov.errors:
-			err = err
-			// TODO: Surface error.
+			ov.screen.Printlnf(10, "%s%v", display.Red, err)
 		case <-ov.update:
-			log.Infof("Got message, I think")
+			log.Infof("Message arrived")
 			ov.Draw(scroll)
 		case key := <-ov.keys.Chan():
 			switch key {

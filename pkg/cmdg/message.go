@@ -20,6 +20,7 @@ import (
 	"golang.org/x/net/html/charset"
 	gmail "google.golang.org/api/gmail/v1"
 
+	"github.com/ThomasHabets/cmdg/pkg/display"
 	"github.com/ThomasHabets/cmdg/pkg/gpg"
 )
 
@@ -222,6 +223,8 @@ func partIsAttachment(p *gmail.MessagePart) bool {
 	return false
 }
 
+var errNoUsablePart = fmt.Errorf("could not find message part usable as message body")
+
 func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string, error) {
 	if len(part.Parts) == 0 {
 		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
@@ -247,7 +250,8 @@ func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string
 		}
 	}
 
-	return "", fmt.Errorf("not implemented")
+	// Could not find any part of message to use as body.
+	return "", errNoUsablePart
 }
 
 func (m *Message) GetBody(ctx context.Context) (string, error) {
@@ -461,14 +465,17 @@ func (m *Message) Preload(ctx context.Context, level DataLevel) error {
 	}
 	if level == LevelFull {
 		m.body, err = m.makeBody(ctx, m.Response.Payload)
+		if err != nil && err != errNoUsablePart {
+			return err
+		}
 		if err := m.tryGPGEncrypted(ctx); err != nil {
-			log.Errorf("Decrypting GPG: %v", err)
+			m.body = fmt.Sprintf("%sDecrypting GPG: %v%s", display.Red, err, display.Grey)
 		}
 		if err := m.tryGPGSigned(ctx); err != nil {
 			log.Errorf("Checking GPG signature: %v", err)
 		}
 	}
-	return err
+	return nil
 }
 
 func (m *Message) Lines(ctx context.Context) (int, error) {
