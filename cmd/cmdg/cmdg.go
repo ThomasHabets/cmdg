@@ -10,11 +10,13 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
+	"github.com/ThomasHabets/cmdg/pkg/gpg"
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
 
 var (
 	cfgFile = flag.String("conf", "cmdg.conf", "Config file.")
+	gpgFlag = flag.String("gpg", "gpg", "Path to GnuPG.")
 
 	conn *cmdg.CmdG
 )
@@ -39,6 +41,7 @@ func run(ctx context.Context) error {
 func main() {
 	syscall.Umask(0077)
 	flag.Parse()
+	cmdg.GPG = gpg.New(*gpgFlag)
 
 	var err error
 	conn, err = cmdg.New(*cfgFile)

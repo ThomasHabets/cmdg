@@ -1,10 +1,8 @@
 package cmdg
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,23 +10,21 @@ import (
 	"mime/multipart"
 	"mime/quotedprintable"
 	"net/mail"
-	"os"
-	"os/exec"
-	"path"
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/html/charset"
 	gmail "google.golang.org/api/gmail/v1"
+
+	"github.com/ThomasHabets/cmdg/pkg/gpg"
 )
 
 var (
-	gpg = flag.String("gpg", "gpg", "Path to GnuPG.")
+	GPG *gpg.GPG
 )
 
 type Message struct {
@@ -39,11 +35,11 @@ type Message struct {
 
 	ID        string
 	body      string // Printable body.
-	gpgStatus *GPGStatus
+	gpgStatus *gpg.Status
 	Response  *gmail.Message
 }
 
-func (m *Message) GPGStatus() *GPGStatus {
+func (m *Message) GPGStatus() *gpg.Status {
 	return m.gpgStatus
 }
 
@@ -284,7 +280,7 @@ func (m *Message) tryGPGSigned(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to MIME decode signature attachment")
 	}
-	st, err := GPGVerify(ctx, dec, sigDec)
+	st, err := GPG.Verify(ctx, dec, sigDec)
 	if err != nil {
 		return err
 	}
@@ -325,7 +321,7 @@ func (m *Message) tryGPGEncrypted(ctx context.Context) error {
 	}
 
 	// Decrypt data attachment.
-	dec2, status, err := GPGDecode(ctx, dec)
+	dec2, status, err := GPG.Decrypt(ctx, dec)
 	if err != nil {
 		return err
 	}
@@ -406,100 +402,6 @@ func toUTF8Reader(header mail.Header, r io.Reader) (io.Reader, error) {
 	}
 	log.Printf("No decoder for charset %q", params["charset"])
 	return r, nil
-}
-
-type GPGStatus struct {
-	Signed        string
-	Encrypted     []string
-	GoodSignature bool
-	Warnings      []string
-}
-
-var (
-	goodSignatureRE = regexp.MustCompile(`(?m)^gpg: Good signature from "(.*)"`)
-	badSignatureRE  = regexp.MustCompile(`(?m)^gpg: BAD signature from "(.*)"`)
-	encryptedRE     = regexp.MustCompile(`(?m)^gpg: encrypted with[^\n]+\n([^\n]+)\n`)
-)
-
-func GPGDecode(ctx context.Context, dec string) (string, *GPGStatus, error) {
-	var stderr bytes.Buffer
-	var stdout bytes.Buffer
-	cmd := exec.CommandContext(ctx, *gpg, "--batch", "--no-tty")
-	cmd.Stdin = bytes.NewBufferString(dec)
-	cmd.Stderr = &stderr
-	cmd.Stdout = &stdout
-	if err := cmd.Start(); err != nil {
-		return "", nil, errors.Wrapf(err, "failed to start gpg (%q)", *gpg)
-	}
-	if err := cmd.Wait(); err != nil {
-		return "", nil, errors.Wrapf(err, "gpg decode failed")
-	}
-	status := &GPGStatus{}
-	if m := goodSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
-		status.Signed = stripUnprintable(m[1])
-		status.GoodSignature = true
-	}
-	if ms := encryptedRE.FindAllStringSubmatch(stderr.String(), -1); ms != nil {
-		for _, m := range ms {
-			status.Encrypted = append(status.Encrypted, strings.Trim(stripUnprintable(m[1]), "\t "))
-		}
-	}
-
-	return stdout.String(), status, nil
-}
-
-func GPGVerify(ctx context.Context, data, sig string) (*GPGStatus, error) {
-	dir, err := ioutil.TempDir("", "gpg-signature")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(dir)
-
-	log.Infof("Checking signature with %q…", dir)
-	dataFN := path.Join(dir, "data")
-	sigFN := path.Join(dir, "data.gpg")
-	if err := ioutil.WriteFile(dataFN, []byte(data), 0600); err != nil {
-		return nil, err
-	}
-	if err := ioutil.WriteFile(sigFN, []byte(sig), 0600); err != nil {
-		return nil, err
-	}
-
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, *gpg, "--verify", "--no-tty", sigFN, dataFN)
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		return nil, errors.Wrapf(err, "failed to start gpg (%q)", *gpg)
-	}
-	status := &GPGStatus{}
-	goodOrBad := false
-	if err := cmd.Wait(); err != nil {
-		e, ok := err.(*exec.ExitError)
-		if !ok {
-			return nil, errors.Wrapf(err, "gpg verify failed for odd reason. stderr: %q", stderr.String())
-		}
-		u, ok := e.Sys().(syscall.WaitStatus)
-		if !ok {
-			return nil, errors.Wrapf(e, "gpg verify failed, and not unix status. stderr: %q", stderr.String())
-		}
-		if u.ExitStatus() != 1 {
-			return nil, errors.Wrapf(e, "gpg verify failed, and not status 1 (was %d). stderr: %q", u.ExitStatus(), stderr.String())
-		}
-		// Continue since status 1, assume either good or bad signature now.
-	}
-	if m := badSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
-		status.Signed = stripUnprintable(m[1])
-		goodOrBad = true
-	}
-	if m := goodSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
-		status.Signed = stripUnprintable(m[1])
-		status.GoodSignature = true
-		goodOrBad = true
-	}
-	if !goodOrBad {
-		return nil, fmt.Errorf("signature not good nor bad. What? %q", stderr.String())
-	}
-	return status, nil
 }
 
 func (m *Message) Preload(ctx context.Context, level DataLevel) error {
