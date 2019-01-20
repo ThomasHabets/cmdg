@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	fd    = 0
-	CtrlC = 3
-	CtrlN = 14
-	CtrlP = 16
+	fd        = 0
+	Backspace = 127
+	Enter     = 13
+	CtrlC     = 3
+	CtrlN     = 14
+	CtrlP     = 16
 )
 
 type Input struct {

@@ -33,11 +33,12 @@ type (
 )
 
 type CmdG struct {
-	m            sync.Mutex
+	m            sync.RWMutex
 	authedClient *http.Client
 	gmail        *gmail.Service
 	messageCache map[string]*Message
 	labelCache   map[string]*Label
+	contacts     contacts
 }
 
 func (c *CmdG) MessageCache(msg *Message) *Message {

@@ -8,6 +8,7 @@
 // * Searching
 // * Add/remove label
 // * Go to label.
+// * Periodic refresh of inbox, labels, and contacts
 //
 // After
 // * label colors
@@ -65,6 +66,10 @@ func main() {
 		log.Fatalf("Loading labels: %v", err)
 	}
 	log.Infof("Labels loaded")
+	if err := conn.LoadContacts(ctx); err != nil {
+		log.Fatalf("Loading contacts: %v", err)
+	}
+	log.Infof("Contacts loadedo")
 
 	if err := run(ctx); err != nil {
 		log.Fatal(err)

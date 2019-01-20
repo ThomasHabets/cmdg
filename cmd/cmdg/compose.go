@@ -62,7 +62,10 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 }
 
 func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
-	to := ""        // TODO
+	to, err := dialog.Selection(conn.Contacts(), true, keys)
+	if err != nil {
+		return err
+	}
 	signature := "" // TODO
 
 	if strings.EqualFold(to, "me") {
