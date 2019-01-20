@@ -25,7 +25,7 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 	defer func() {
 		if err := os.Remove(tmpf.Name()); err != nil {
 			// TODO: show in UI.
-			log.Errorf("Failed to remove temp compose file %q: %v")
+			log.Errorf("Failed to remove temp compose file %q: %v", tmpf.Name(), err)
 		}
 	}()
 	if _, err := tmpf.Write([]byte(prefill)); err != nil {
