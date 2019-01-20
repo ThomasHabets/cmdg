@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"mime"
+	"mime/multipart"
 	"mime/quotedprintable"
 	"net/mail"
 	"os"
@@ -166,6 +167,13 @@ func (m *Message) GetHeader(ctx context.Context, k string) (string, error) {
 	return "", fmt.Errorf("header not found in msg %q: %q", m.ID, k)
 }
 
+// mime decode for gmail. Seems to be special version of base64.
+func mimeEncode(s string) string {
+	s = base64.StdEncoding.EncodeToString([]byte(s))
+	s = strings.Replace(s, "+", "-", -1)
+	s = strings.Replace(s, "/", "_", -1)
+	return s
+}
 func mimeDecode(s string) (string, error) {
 	s = strings.Replace(s, "-", "+", -1)
 	s = strings.Replace(s, "_", "/", -1)
@@ -190,14 +198,17 @@ func partIsAttachment(p *gmail.MessagePart) bool {
 
 func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string, error) {
 	if len(part.Parts) == 0 {
+		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
 		data, err := mimeDecode(string(part.Body.Data))
 		data = stripUnprintable(data)
+		log.Infof("… contents is %q", data)
 		if err != nil {
 			return "", err
 		}
 		return data, nil
 	}
 
+	log.Infof("Multi part body (%q) with input len %d", part.MimeType, len(part.Body.Data))
 	for _, p := range part.Parts {
 		if partIsAttachment(p) {
 			continue
@@ -205,6 +216,8 @@ func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string
 		switch p.MimeType {
 		case "text/plain":
 			return m.makeBody(ctx, p)
+		default:
+			log.Infof("Ignoring part of type %q", p.MimeType)
 		}
 	}
 
@@ -238,12 +251,22 @@ func (m *Message) tryGPGSigned(ctx context.Context) error {
 	if m.Response.Payload.MimeType != "multipart/signed" {
 		return nil
 	}
-	var partData *gmail.MessagePart
 	var partSig *gmail.MessagePart
+	var dec string
 	for _, p := range m.Response.Payload.Parts {
 		switch p.MimeType {
 		case "text/plain":
-			partData = p
+			var err error
+			dec, err = mimeDecode(p.Body.Data)
+			if err != nil {
+				return err
+			}
+			var hs []string
+			for _, h := range p.Headers {
+				hs = append(hs, fmt.Sprintf("%s: %s", h.Name, h.Value))
+			}
+			hp := strings.Join(hs, "\r\n") + "\r\n\r\n"
+			dec = hp + dec
 			// TODO: what if it's signed HTML?
 		case "application/pgp-signature":
 			partSig = p
@@ -261,7 +284,7 @@ func (m *Message) tryGPGSigned(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to MIME decode signature attachment")
 	}
-	st, err := GPGVerify(ctx, partData.Body.Data, sigDec)
+	st, err := GPGVerify(ctx, dec, sigDec)
 	if err != nil {
 		return err
 	}
@@ -317,30 +340,42 @@ func (m *Message) tryGPGEncrypted(ctx context.Context) error {
 		return err
 	}
 	if strings.HasPrefix(mediaType, "multipart/") {
-		params = params
-		/*
-			mr := multipart.NewReader(msg.Body, params["boundary"])
-			for {
-				p, err := mr.NextPart()
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					return errors.Wrap(err, "failed to get mime part")
-				}
-				dec, err := toUTF8Reader(map[string][]string(p.Header), p)
-				t, err := ioutil.ReadAll(dec)
-				if err != nil {
-					return err
-				}
+		log.Infof("Multipart encrypted with media type %q", mediaType)
+		mr := multipart.NewReader(msg.Body, params["boundary"])
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return errors.Wrap(err, "failed to get mime part")
+			}
+			dec, err := toUTF8Reader(map[string][]string(p.Header), p)
+			t, err := ioutil.ReadAll(dec)
+			if err != nil {
+				return errors.Wrapf(err, "utf8reading mime part")
+			}
+			ct := p.Header.Get("Content-Type")
+			mt, _, err := mime.ParseMediaType(ct)
+			if err != nil {
+				return errors.Wrapf(err, "parsing content-type %q", ct)
+			}
+			if p.FileName() == "" {
 				np := &gmail.MessagePart{
-					MimeType: mediaType,
+					MimeType: mt,
 					Body: &gmail.MessagePartBody{
 						Data: mimeEncode(string(t)),
 					},
 				}
+				m.body, err = m.makeBody(ctx, np)
+				if err != nil {
+					return errors.Wrapf(err, "failed to decrypt")
+				}
+			} else {
+				// TODO: handle attachment.
 			}
-		*/
+		}
+
 	} else {
 		r, err := toUTF8Reader(map[string][]string(msg.Header), msg.Body)
 		t, err := ioutil.ReadAll(r)
@@ -369,7 +404,7 @@ func toUTF8Reader(header mail.Header, r io.Reader) (io.Reader, error) {
 	if e != nil {
 		return e.NewDecoder().Reader(r), nil
 	}
-	log.Printf("No decoder for charmap %q", params["charset"])
+	log.Printf("No decoder for charset %q", params["charset"])
 	return r, nil
 }
 
