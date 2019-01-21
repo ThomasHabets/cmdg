@@ -71,6 +71,10 @@ func NewScreen2(w int, h int) *Screen {
 	}
 }
 
+func (s *Screen) Clear() {
+	s.buffer = make([]string, s.Height, s.Height)
+}
+
 func (s *Screen) Draw() {
 	for n, l := range s.buffer {
 		pad := ""

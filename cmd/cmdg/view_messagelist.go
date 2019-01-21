@@ -62,14 +62,23 @@ func (mv *MessageView) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	screen.Printf(0, 0, "Loading…")
-	screen.Draw()
+	contentHeight := screen.Height - 2
 	var pages []*cmdg.Page
 	var messages []*cmdg.Message
 	messagePos := map[string]int{}
-	contentHeight := screen.Height - 2
 	pos := 0 // Current message.
 	scroll := 0
+
+	empty := func() {
+		screen.Printf(0, 0, "Loading…")
+		screen.Draw()
+		pages = nil
+		messages = nil
+		messagePos = map[string]int{}
+		pos = 0
+		scroll = 0
+	}
+	empty()
 
 	drawMessage := func(cur int) error {
 		s := "Loading…"
@@ -185,6 +194,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				} else {
 					continue
 				}
+			case 'r':
+				empty()
+				screen.Clear()
+				go mv.fetchPage(ctx, "")
+
 			case 'q':
 				return nil
 			default:

@@ -2,16 +2,17 @@
 //
 // TODO before it can replace old code:
 // * Attachments
+// * Reply
 // * HTML emails.
 // * Reconnecting
 // * Error messages (as opposed to just exiting)
 // * Searching
 // * Add/remove label
-// * Go to label.
+// * Go to label
 // * Periodic refresh of inbox, labels, and contacts
 //
-// After
-// * label colors
+// Missing features that can wait
+// * colors on labels
 package main
 
 import (
