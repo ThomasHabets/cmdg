@@ -230,7 +230,7 @@ func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string
 		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
 		data, err := mimeDecode(string(part.Body.Data))
 		data = stripUnprintable(data)
-		log.Infof("… contents is %q", data)
+		// log.Infof("… contents is %q", data)
 		if err != nil {
 			return "", err
 		}

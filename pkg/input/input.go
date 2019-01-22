@@ -17,6 +17,7 @@ const (
 	CtrlC     = 3
 	CtrlN     = 14
 	CtrlP     = 16
+	CtrlV     = 22
 )
 
 type Input struct {

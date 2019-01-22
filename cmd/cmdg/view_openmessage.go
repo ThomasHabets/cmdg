@@ -177,41 +177,39 @@ func (ov *OpenMessageView) Run(ctx context.Context) error {
 			case 'u', 'q':
 				return nil
 			case 'n':
-				var err error
-				scroll, err = ov.scroll(ctx, scroll, 1)
-				if err != nil {
-					return err
-				}
+				scroll = ov.scroll(ctx, scroll, 1)
 				ov.Draw(scroll)
-			case ' ':
-				var err error
-				scroll, err = ov.scroll(ctx, scroll, ov.screen.Height-10)
-				if err != nil {
-					return err
-				}
+			case ' ', input.CtrlV:
+				scroll = ov.scroll(ctx, scroll, ov.screen.Height-10)
 				ov.Draw(scroll)
 			case 'p':
-				scroll--
-				if scroll < 0 {
-					scroll = 0
-				}
+				scroll = ov.scroll(ctx, scroll, -1)
 				ov.Draw(scroll)
+			case input.Backspace:
+				scroll = ov.scroll(ctx, scroll, -(ov.screen.Height - 10))
+				ov.Draw(scroll)
+			default:
+				log.Infof("Unknown key: %d", key)
 			}
 		}
 		ov.screen.Draw()
 	}
 }
 
-func (ov *OpenMessageView) scroll(ctx context.Context, scroll, inc int) (int, error) {
+func (ov *OpenMessageView) scroll(ctx context.Context, scroll, inc int) int {
 	if ov.msg.HasData(cmdg.LevelFull) {
 		lines, err := ov.msg.Lines(ctx)
 		if err != nil {
-			return scroll, err
+			log.Warningf("Body not available, when trying to scroll")
+			return scroll
 		}
 		scroll += inc
 		if maxscroll := (lines - ov.screen.Height + 10); scroll >= maxscroll {
 			scroll = maxscroll
 		}
+		if scroll < 0 {
+			scroll = 0
+		}
 	}
-	return scroll, nil
+	return scroll
 }
