@@ -154,7 +154,7 @@ func (ov *OpenMessageView) Draw(scroll int) error {
 	return nil
 }
 
-func (ov *OpenMessageView) Run(ctx context.Context) error {
+func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 	ov.screen.Printf(0, 0, "Loading…")
 	ov.screen.Draw()
 	scroll := 0
@@ -175,7 +175,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) error {
 					ov.update <- struct{}{}
 				}()
 			case 'u', 'q':
-				return nil
+				return nil, nil
 			case 'n':
 				scroll = ov.scroll(ctx, scroll, 1)
 				ov.Draw(scroll)
@@ -185,6 +185,11 @@ func (ov *OpenMessageView) Run(ctx context.Context) error {
 			case 'p':
 				scroll = ov.scroll(ctx, scroll, -1)
 				ov.Draw(scroll)
+			case 'e':
+				if err := ov.msg.RemoveLabelID(ctx, cmdg.Inbox); err != nil {
+					return nil, err
+				}
+				return OpRemoveCurrent(nil), nil
 			case input.Backspace:
 				scroll = ov.scroll(ctx, scroll, -(ov.screen.Height - 10))
 				ov.Draw(scroll)

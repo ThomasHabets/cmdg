@@ -26,6 +26,10 @@ type MessageView struct {
 	errors    chan error
 	pageCh    chan *cmdg.Page
 	messageCh chan *cmdg.Message
+
+	// Only for use by main thread.
+	messages []*cmdg.Message
+	pos      int
 }
 
 func NewMessageView(ctx context.Context, label string, in *input.Input) *MessageView {
@@ -56,6 +60,34 @@ func (m *MessageView) fetchPage(ctx context.Context, token string) {
 	m.pageCh <- page
 }
 
+type MessageViewOp struct {
+	fun  func(*MessageView)
+	next *MessageViewOp
+}
+
+func (op *MessageViewOp) Do(view *MessageView) {
+	if op == nil {
+		return
+	}
+	op.fun(view)
+	if op.next != nil {
+		op.next.Do(view)
+	}
+}
+
+func OpRemoveCurrent(next *MessageViewOp) *MessageViewOp {
+	return &MessageViewOp{
+		fun: func(view *MessageView) {
+			// TODO
+			view.messages = append(view.messages[:view.pos], view.messages[view.pos+1:]...)
+			if view.pos >= len(view.messages) && view.pos != 0 {
+				view.pos--
+			}
+		},
+		next: next,
+	}
+}
+
 func (mv *MessageView) Run(ctx context.Context) error {
 	theresMore := true
 	screen, err := display.NewScreen()
@@ -64,34 +96,32 @@ func (mv *MessageView) Run(ctx context.Context) error {
 	}
 	contentHeight := screen.Height - 2
 	var pages []*cmdg.Page
-	var messages []*cmdg.Message
 	messagePos := map[string]int{}
-	pos := 0 // Current message.
 	scroll := 0
 
 	empty := func() {
 		screen.Printf(0, 0, "Loading…")
 		screen.Draw()
 		pages = nil
-		messages = nil
+		mv.messages = nil
 		messagePos = map[string]int{}
-		pos = 0
+		mv.pos = 0
 		scroll = 0
 	}
 	empty()
 
 	drawMessage := func(cur int) error {
 		s := "Loading…"
-		if messages[cur].HasData(cmdg.LevelMetadata) {
-			subj, err := messages[cur].GetHeader(ctx, "subject")
+		if mv.messages[cur].HasData(cmdg.LevelMetadata) {
+			subj, err := mv.messages[cur].GetHeader(ctx, "subject")
 			if err != nil {
 				return err
 			}
-			tm, err := messages[cur].GetTimeFmt(ctx)
+			tm, err := mv.messages[cur].GetTimeFmt(ctx)
 			if err != nil {
 				return err
 			}
-			from, err := messages[cur].GetFrom(ctx)
+			from, err := mv.messages[cur].GetFrom(ctx)
 			if err != nil {
 				return err
 			}
@@ -101,13 +131,13 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				from, subj)
 		} else {
 			go func(cur int) {
-				messages[cur].Preload(ctx, cmdg.LevelMetadata)
-				mv.messageCh <- messages[cur]
+				mv.messages[cur].Preload(ctx, cmdg.LevelMetadata)
+				mv.messageCh <- mv.messages[cur]
 			}(cur)
 		}
 		// Show current.
 		prefix := " "
-		if cur == pos {
+		if cur == mv.pos {
 			prefix = display.Reverse + "*"
 		}
 
@@ -118,7 +148,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			prefix += " "
 		}
 
-		if messages[cur].IsUnread() {
+		if mv.messages[cur].IsUnread() {
 			prefix = display.Bold + prefix + ">"
 		} else {
 			prefix += " "
@@ -145,18 +175,18 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			log.Printf("Got page!")
 			pages = append(pages, p)
 			for n, m := range p.Messages {
-				messagePos[m.ID] = len(messages) + n
+				messagePos[m.ID] = len(mv.messages) + n
 			}
-			messages = append(messages, p.Messages...)
+			mv.messages = append(mv.messages, p.Messages...)
 			want := contentHeight
 			if p.Response.NextPageToken == "" {
 				log.Infof("All pages loaded")
 				theresMore = false
 			} else {
-				if want > len(messages) {
+				if want > len(mv.messages) {
 					go mv.fetchPage(ctx, p.Response.NextPageToken)
 				} else {
-					log.Infof("Enough pages. Have %d messages, want %d", len(messages), want)
+					log.Infof("Enough pages. Have %d messages, want %d", len(mv.messages), want)
 					theresMore = false
 				}
 			}
@@ -165,30 +195,32 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			log.Debugf("Got key %d", key)
 			switch key {
 			case 13:
-				vo, err := NewOpenMessageView(ctx, messages[pos], mv.keys)
+				vo, err := NewOpenMessageView(ctx, mv.messages[mv.pos], mv.keys)
 				if err != nil {
 					return err
 				}
-				if err := vo.Run(ctx); err != nil {
+				op, err := vo.Run(ctx)
+				if err != nil {
 					return err
 				}
+				op.Do(mv)
 			case 'c':
 				if err := compose(ctx, conn, mv.keys); err != nil {
 					return err
 				}
 			case 'N', 'n', input.CtrlN:
-				if (messages != nil) && (pos < len(messages)-1) {
-					if pos-scroll > contentHeight-scrollLimit {
+				if (mv.messages != nil) && (mv.pos < len(mv.messages)-1) {
+					if mv.pos-scroll > contentHeight-scrollLimit {
 						scroll++
 					}
-					pos++
+					mv.pos++
 				} else {
 					continue
 				}
 			case 'P', 'p', input.CtrlP:
-				if pos > 0 {
-					pos--
-					if scroll > 0 && pos < scroll+scrollLimit {
+				if mv.pos > 0 {
+					mv.pos--
+					if scroll > 0 && mv.pos < scroll+scrollLimit {
 						scroll--
 					}
 				} else {
@@ -205,12 +237,12 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				log.Infof("Unknown key %v", key)
 			}
 		}
-		if messages != nil {
+		if mv.messages != nil {
 			// Draw to buffer.
 			st := time.Now()
 			for n := 0; n < contentHeight; n++ {
 				cur := n + scroll
-				if cur >= len(messages) {
+				if cur >= len(mv.messages) {
 					screen.Printlnf(n, "")
 					continue
 				}

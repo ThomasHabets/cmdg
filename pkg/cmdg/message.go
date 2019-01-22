@@ -24,6 +24,10 @@ import (
 	"github.com/ThomasHabets/cmdg/pkg/gpg"
 )
 
+const (
+	Inbox = "INBOX"
+)
+
 var (
 	GPG *gpg.GPG
 )
@@ -84,6 +88,15 @@ func (m *Message) HasLabel(label string) bool {
 		}
 	}
 	return false
+}
+
+func (m *Message) RemoveLabelID(ctx context.Context, labelID string) error {
+	st := time.Now()
+	_, err := m.conn.gmail.Users.Messages.Modify(email, m.ID, &gmail.ModifyMessageRequest{
+		RemoveLabelIds: []string{labelID},
+	}).Context(ctx).Do()
+	log.Infof("Removed label %q from %q: %v", labelID, m.ID, time.Since(st))
+	return err
 }
 
 // ParseTime tries a few time formats and returns the one that works.
