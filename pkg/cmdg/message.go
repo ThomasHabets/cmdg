@@ -228,7 +228,7 @@ func (m *Message) GetHeader(ctx context.Context, k string) (string, error) {
 	}
 	h, ok := m.headers[strings.ToLower(k)]
 	if ok {
-		return h, nil
+		return stripUnprintable(h), nil
 	}
 	return "", fmt.Errorf("header not found in msg %q: %q", m.ID, k)
 }
