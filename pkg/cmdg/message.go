@@ -323,6 +323,26 @@ func (m *Message) tryGPGSigned(ctx context.Context) error {
 	return nil
 }
 
+var inlineGPG = regexp.MustCompile(`(?sm)(-----BEGIN PGP SIGNED MESSAGE-----.*-----BEGIN PGP SIGNATURE-----.*-----END PGP SIGNATURE-----)`)
+
+func (m *Message) tryGPGInlineSigned(ctx context.Context) error {
+	var e2 error
+	b2 := inlineGPG.ReplaceAllStringFunc(m.body, func(in string) string {
+		st, err := GPG.VerifyInline(ctx, in)
+		if err != nil {
+			e2 = err
+			return in
+		}
+		// Don't set m.gpgStatus because that'd make it look like the whole message is green.
+		return fmt.Sprintf("%[1]sBEGIN message signed by %[2]s%[4]s\n%[3]s\n%[1]sEND message signed by %[2]s%[4]s", display.Green, st.Signed, in, display.Reset)
+	})
+	if e2 != nil {
+		return e2
+	}
+	m.body = b2
+	return nil
+}
+
 func (m *Message) tryGPGEncrypted(ctx context.Context) error {
 	// https://tools.ietf.org/html/rfc3156
 	if m.Response.Payload.MimeType != "multipart/encrypted" {
@@ -480,6 +500,9 @@ func (m *Message) load(ctx context.Context, level DataLevel) error {
 		}
 		if err := m.tryGPGSigned(ctx); err != nil {
 			log.Errorf("Checking GPG signature: %v", err)
+		}
+		if err := m.tryGPGInlineSigned(ctx); err != nil {
+			log.Errorf("Checking GPG inline signature: %v", err)
 		}
 	}
 	return nil

@@ -120,3 +120,42 @@ func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
 	}
 	return status, nil
 }
+
+func (gpg *GPG) VerifyInline(ctx context.Context, data string) (*Status, error) {
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, gpg.GPG, "--verify", "--no-tty", "-")
+	cmd.Stderr = &stderr
+	cmd.Stdin = strings.NewReader(data)
+	if err := cmd.Start(); err != nil {
+		return nil, errors.Wrapf(err, "failed to start gpg (%q)", gpg.GPG)
+	}
+	status := &Status{}
+	goodOrBad := false
+	if err := cmd.Wait(); err != nil {
+		e, ok := err.(*exec.ExitError)
+		if !ok {
+			return nil, errors.Wrapf(err, "gpg verify failed for odd reason. stderr: %q", stderr.String())
+		}
+		u, ok := e.Sys().(syscall.WaitStatus)
+		if !ok {
+			return nil, errors.Wrapf(e, "gpg verify failed, and not unix status. stderr: %q", stderr.String())
+		}
+		if u.ExitStatus() != 1 {
+			return nil, errors.Wrapf(e, "gpg verify failed, and not status 1 (was %d). stderr: %q", u.ExitStatus(), stderr.String())
+		}
+		// Continue since status 1, assume either good or bad signature now.
+	}
+	if m := badSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
+		status.Signed = unprintableRE.ReplaceAllString(m[1], "")
+		goodOrBad = true
+	}
+	if m := goodSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
+		status.Signed = unprintableRE.ReplaceAllString(m[1], "")
+		status.GoodSignature = true
+		goodOrBad = true
+	}
+	if !goodOrBad {
+		return nil, fmt.Errorf("signature not good nor bad. What? %q", stderr.String())
+	}
+	return status, nil
+}
