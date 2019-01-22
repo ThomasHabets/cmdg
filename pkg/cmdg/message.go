@@ -38,10 +38,11 @@ type Message struct {
 	level   DataLevel
 	headers map[string]string
 
-	ID        string
-	body      string // Printable body.
-	gpgStatus *gpg.Status
-	Response  *gmail.Message
+	ID           string
+	body         string // Printable body.
+	originalBody string
+	gpgStatus    *gpg.Status
+	Response     *gmail.Message
 }
 
 func (m *Message) GPGStatus() *gpg.Status {
@@ -119,6 +120,31 @@ func parseTime(s string) (time.Time, error) {
 		}
 	}
 	return t, err
+}
+
+func (m *Message) GetReplyTo(ctx context.Context) (string, error) {
+	s, err := m.GetHeader(ctx, "Reply-To")
+	if err == nil && s != "" {
+		return s, nil
+	}
+	return m.GetHeader(ctx, "From")
+}
+
+func (m *Message) GetReplyToAll(ctx context.Context) (string, string, error) {
+	to, err := m.GetReplyTo(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	cc := []string{}
+	if f, err := m.GetHeader(ctx, "From"); err != nil {
+		return "", "", err
+	} else if f != to {
+		cc = append(cc, f)
+	}
+	if c, err := m.GetHeader(ctx, "CC"); err != nil && len(c) != 0 {
+		cc = append(cc, c)
+	}
+	return to, strings.Join(cc, ", "), err
 }
 
 func (m *Message) GetFrom(ctx context.Context) (string, error) {
@@ -272,6 +298,13 @@ func (m *Message) GetBody(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return m.body, nil
+}
+
+func (m *Message) GetUnpatchedBody(ctx context.Context) (string, error) {
+	if err := m.Preload(ctx, LevelFull); err != nil {
+		return "", err
+	}
+	return m.originalBody, nil
 }
 
 func (m *Message) ReloadLabels(ctx context.Context) error {
@@ -518,6 +551,7 @@ func (m *Message) load(ctx context.Context, level DataLevel) error {
 		if err := m.tryGPGSigned(ctx); err != nil {
 			log.Errorf("Checking GPG signature: %v", err)
 		}
+		m.originalBody = m.body
 		if err := m.tryGPGInlineSigned(ctx); err != nil {
 			log.Errorf("Checking GPG inline signature: %v", err)
 		}

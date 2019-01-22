@@ -61,12 +61,11 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 	return string(b), nil
 }
 
-func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
+func composeNew(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
 	to, err := dialog.Selection(conn.Contacts(), true, keys)
 	if err != nil {
 		return err
 	}
-	signature := "" // TODO
 
 	if strings.EqualFold(to, "me") {
 		p, err := conn.GetProfile(ctx)
@@ -76,6 +75,7 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
 		to = p.EmailAddress
 	}
 
+	signature := "" // TODO
 	if signature != "" {
 		signature = "--\n" + signature + "\n"
 	}
@@ -86,6 +86,10 @@ Subject:
 
 %s`, to, signature)
 
+	return compose(ctx, conn, keys, prefill)
+}
+
+func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill string) error {
 	for {
 		// Get message content.
 		msg, err := getInput(ctx, prefill, keys)

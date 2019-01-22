@@ -167,7 +167,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			ov.Draw(scroll)
 		case key := <-ov.keys.Chan():
 			switch key {
-			case 'r':
+			case input.CtrlR:
 				go func() {
 					if err := ov.msg.Reload(ctx, cmdg.LevelFull); err != nil {
 						ov.errors <- errors.Wrap(err, "reloading message")
@@ -185,6 +185,18 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			case 'p':
 				scroll = ov.scroll(ctx, scroll, -1)
 				ov.Draw(scroll)
+			case 'f':
+				if err := forward(ctx, conn, ov.keys, ov.msg); err != nil {
+					return nil, err
+				}
+			case 'r':
+				if err := reply(ctx, conn, ov.keys, ov.msg); err != nil {
+					return nil, err
+				}
+			case 'a':
+				if err := replyAll(ctx, conn, ov.keys, ov.msg); err != nil {
+					return nil, err
+				}
 			case 'e':
 				if err := ov.msg.RemoveLabelID(ctx, cmdg.Inbox); err != nil {
 					return nil, err

@@ -205,7 +205,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				}
 				op.Do(mv)
 			case 'c':
-				if err := compose(ctx, conn, mv.keys); err != nil {
+				if err := composeNew(ctx, conn, mv.keys); err != nil {
 					return err
 				}
 			case 'N', 'n', input.CtrlN:
@@ -226,7 +226,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				} else {
 					continue
 				}
-			case 'r':
+			case 'r', input.CtrlR:
 				empty()
 				screen.Clear()
 				go mv.fetchPage(ctx, "")
