@@ -177,18 +177,19 @@ func (ov *OpenMessageView) Run(ctx context.Context) error {
 			case 'u', 'q':
 				return nil
 			case 'n':
-				if ov.msg.HasData(cmdg.LevelFull) {
-					log.Infof("Has data")
-					lines, err := ov.msg.Lines(ctx)
-					if err != nil {
-						return err
-					}
-					if scroll < (lines - ov.screen.Height + 10) {
-						log.Infof("yes scroll")
-						scroll++
-						ov.Draw(scroll)
-					}
+				var err error
+				scroll, err = ov.scroll(ctx, scroll, 1)
+				if err != nil {
+					return err
 				}
+				ov.Draw(scroll)
+			case ' ':
+				var err error
+				scroll, err = ov.scroll(ctx, scroll, ov.screen.Height-10)
+				if err != nil {
+					return err
+				}
+				ov.Draw(scroll)
 			case 'p':
 				scroll--
 				if scroll < 0 {
@@ -199,4 +200,18 @@ func (ov *OpenMessageView) Run(ctx context.Context) error {
 		}
 		ov.screen.Draw()
 	}
+}
+
+func (ov *OpenMessageView) scroll(ctx context.Context, scroll, inc int) (int, error) {
+	if ov.msg.HasData(cmdg.LevelFull) {
+		lines, err := ov.msg.Lines(ctx)
+		if err != nil {
+			return scroll, err
+		}
+		scroll += inc
+		if maxscroll := (lines - ov.screen.Height + 10); scroll >= maxscroll {
+			scroll = maxscroll
+		}
+	}
+	return scroll, nil
 }
