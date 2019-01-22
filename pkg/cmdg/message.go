@@ -334,6 +334,10 @@ func (m *Message) tryGPGInlineSigned(ctx context.Context) error {
 			return in
 		}
 		// Don't set m.gpgStatus because that'd make it look like the whole message is green.
+		if !st.GoodSignature {
+			e2 = fmt.Errorf("signature is there, but not 'good'")
+			return in
+		}
 		return fmt.Sprintf("%[1]sBEGIN message signed by %[2]s%[4]s\n%[3]s\n%[1]sEND message signed by %[2]s%[4]s", display.Green, st.Signed, in, display.Reset)
 	})
 	if e2 != nil {
