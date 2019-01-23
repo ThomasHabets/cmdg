@@ -164,6 +164,14 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			ov.screen.Printlnf(10, "%s%v", display.Red, err)
 		case <-ov.update:
 			log.Infof("Message arrived")
+			go func() {
+				if err := ov.msg.RemoveLabelID(ctx, cmdg.Unread); err != nil {
+					log.Errorf("Failed to remove unread label: %v")
+				}
+				// Does not need to be signaled to
+				// messageview; label list gets
+				// reloaded by RemoveLabelID.
+			}()
 			ov.Draw(scroll)
 		case key := <-ov.keys.Chan():
 			switch key {

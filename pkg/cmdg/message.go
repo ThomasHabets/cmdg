@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	Inbox = "INBOX"
+	Inbox  = "INBOX"
+	Unread = "UNREAD"
 )
 
 var (
@@ -96,7 +97,13 @@ func (m *Message) RemoveLabelID(ctx context.Context, labelID string) error {
 	_, err := m.conn.gmail.Users.Messages.Modify(email, m.ID, &gmail.ModifyMessageRequest{
 		RemoveLabelIds: []string{labelID},
 	}).Context(ctx).Do()
+	if err != nil {
+		return errors.Wrapf(err, "removing label ID %q from %q", labelID, m.ID)
+	}
 	log.Infof("Removed label %q from %q: %v", labelID, m.ID, time.Since(st))
+	if err := m.ReloadLabels(ctx); err != nil {
+		return errors.Wrapf(err, "reloading labels from %q", m.ID)
+	}
 	return err
 }
 
@@ -169,12 +176,15 @@ type Label struct {
 	Response *gmail.Label
 }
 
-func (m *Message) GetLabels(ctx context.Context) ([]*Label, error) {
+func (m *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, error) {
 	if err := m.Preload(ctx, LevelMinimal); err != nil {
 		return nil, err
 	}
 	var ret []*Label
 	for _, l := range m.Response.LabelIds {
+		if l == Unread {
+			continue
+		}
 		l2 := &Label{
 			ID:    l,
 			Label: "<unknown>",
@@ -184,9 +194,10 @@ func (m *Message) GetLabels(ctx context.Context) ([]*Label, error) {
 	return ret, nil
 }
 
+// Return labels as a printable string. With colors, but without "UNREAD".
 func (m *Message) GetLabelsString(ctx context.Context) (string, error) {
 	var s []string
-	ls, err := m.GetLabels(ctx)
+	ls, err := m.GetLabels(ctx, false)
 	if err != nil {
 		return "", err
 	}
