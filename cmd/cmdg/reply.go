@@ -1,26 +1,26 @@
-// TODO: merge common code between replytemplate builders.
 package main
 
 import (
 	"context"
 	"fmt"
-	// "io/ioutil"
-	// "os"
-	// "os/exec"
+	"regexp"
 	"strings"
-	// "time"
 
 	"github.com/pkg/errors"
-	// log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
 	"github.com/ThomasHabets/cmdg/pkg/dialog"
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
 
-var (
+const (
 	replyPrefix   = "Re: "
 	forwardPrefix = "Fwd: "
+)
+
+var (
+	replyPrefixes   = regexp.MustCompile(`^(Re|Sv|Aw): `)
+	forwardPrefixes = regexp.MustCompile(`^(Fwd): `)
 )
 
 func replyQuoted(s string) string {
@@ -32,9 +32,16 @@ func replyQuoted(s string) string {
 	return strings.Join(ret, "\n")
 }
 
-func forward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
-	// Get recipient
-	to, err := dialog.Selection(conn.Contacts(), true, keys)
+func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to, cc, subjPrefix string, rmPrefix *regexp.Regexp, msg *cmdg.Message) error {
+	b, err := msg.GetUnpatchedBody(ctx)
+	if err != nil {
+		return err
+	}
+	subj, err := msg.GetHeader(ctx, "Subject")
+	if err != nil {
+		return err
+	}
+	date, err := msg.GetTime(ctx)
 	if err != nil {
 		return err
 	}
@@ -42,8 +49,41 @@ func forward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.
 	if err != nil {
 		return err
 	}
+	headers := []string{
+		fmt.Sprintf("To: %s", to),
+	}
+	if len(cc) != 0 {
+		headers = append(headers, fmt.Sprintf("CC: %s", cc))
+	}
 
-	date, err := msg.GetTime(ctx)
+	headers = append(headers, fmt.Sprintf("Subject: %s%s", subjPrefix, rmPrefix.ReplaceAllString(subj, "")))
+	body := []string{
+		fmt.Sprintf("On %s, %s said:", date.Format("Mon, 2 Jan 2006 15:04:05 -0700"), orig),
+		replyQuoted(b),
+	}
+	prefill := strings.Join(headers, "\n") + "\n\n" + strings.Join(body, "\n")
+	return compose(ctx, conn, keys, prefill)
+}
+
+func reply(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
+	to, err := msg.GetReplyTo(ctx)
+	if err != nil {
+		return err
+	}
+	return replyOrForward(ctx, conn, keys, to, "", replyPrefix, replyPrefixes, msg)
+}
+
+func replyAll(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
+	to, cc, err := msg.GetReplyToAll(ctx)
+	if err != nil {
+		return err
+	}
+	return replyOrForward(ctx, conn, keys, to, cc, replyPrefix, replyPrefixes, msg)
+}
+
+func forward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
+	// Get recipient
+	to, err := dialog.Selection(conn.Contacts(), true, keys)
 	if err != nil {
 		return err
 	}
@@ -55,91 +95,5 @@ func forward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.
 		to = p.EmailAddress
 	}
 
-	subj, err := msg.GetHeader(ctx, "Subject")
-	if err != nil {
-		return err
-	}
-
-	b, err := msg.GetUnpatchedBody(ctx)
-	if err != nil {
-		return err
-	}
-
-	prefill := []string{
-		fmt.Sprintf("To: %s", to),
-		fmt.Sprintf("Subject: %s%s", forwardPrefix, subj),
-		"",
-		fmt.Sprintf("On %s, %s said:", date.Format("Mon, 2 Jan 2006 15:04:05 -0700"), orig),
-	}
-	return compose(ctx, conn, keys, strings.Join(prefill, "\n")+"\n"+replyQuoted(b))
-}
-
-func reply(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
-	orig, err := msg.GetHeader(ctx, "From")
-	if err != nil {
-		return err
-	}
-	date, err := msg.GetTime(ctx)
-	if err != nil {
-		return err
-	}
-	to, err := msg.GetReplyTo(ctx)
-	if err != nil {
-		return err
-	}
-	subj, err := msg.GetHeader(ctx, "Subject")
-	if err != nil {
-		return err
-	}
-	subj = strings.TrimPrefix(subj, replyPrefix)
-
-	b, err := msg.GetUnpatchedBody(ctx)
-	if err != nil {
-		return err
-	}
-
-	prefill := []string{
-		fmt.Sprintf("To: %s", to),
-		fmt.Sprintf("Subject: %s%s", replyPrefix, subj),
-		"",
-		fmt.Sprintf("On %s, %s said:", date.Format("Mon, 2 Jan 2006 15:04:05 -0700"), orig),
-		replyQuoted(b),
-	}
-	return compose(ctx, conn, keys, strings.Join(prefill, "\n"))
-}
-
-func replyAll(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
-	to, cc, err := msg.GetReplyToAll(ctx)
-	if err != nil {
-		return err
-	}
-	orig, err := msg.GetHeader(ctx, "From")
-	if err != nil {
-		return err
-	}
-	date, err := msg.GetTime(ctx)
-	if err != nil {
-		return err
-	}
-	subj, err := msg.GetHeader(ctx, "Subject")
-	if err != nil {
-		return err
-	}
-	subj = strings.TrimPrefix(subj, replyPrefix)
-	b, err := msg.GetUnpatchedBody(ctx)
-	if err != nil {
-		return err
-	}
-
-	prefill := []string{
-		fmt.Sprintf("To: %s", to),
-	}
-	if len(cc) != 0 {
-		prefill = append(prefill, fmt.Sprintf("CC: %s", cc))
-	}
-	prefill = append(prefill, fmt.Sprintf("Subject: %s%s", replyPrefix, subj))
-	prefill = append(prefill,
-		"",
-		fmt.Sprintf("On %s, %s said:", date.Format("Mon, 2 Jan 2006 15:04:05 -0700"), orig))
-	return compose(ctx, conn, keys, strings.Join(prefill, "\n")+"\n"+replyQuoted(b))
+	return replyOrForward(ctx, conn, keys, to, "", forwardPrefix, forwardPrefixes, msg)
 }

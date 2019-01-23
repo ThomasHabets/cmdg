@@ -2,7 +2,6 @@
 //
 // TODO before it can replace old code:
 // * Attachments
-// * Reply
 // * HTML emails.
 // * Reconnecting
 // * Error messages (as opposed to just exiting)
