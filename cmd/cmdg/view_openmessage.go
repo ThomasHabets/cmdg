@@ -166,7 +166,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			log.Infof("Message arrived")
 			go func() {
 				if err := ov.msg.RemoveLabelID(ctx, cmdg.Unread); err != nil {
-					log.Errorf("Failed to remove unread label: %v")
+					log.Errorf("Failed to remove unread label: %v", err)
 				}
 				// Does not need to be signaled to
 				// messageview; label list gets
