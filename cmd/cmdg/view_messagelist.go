@@ -234,6 +234,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			case 'g':
 				var opts []*dialog.Option
 				for _, l := range conn.Labels() {
+					if strings.HasPrefix(l.ID, "CATEGORY_") {
+						continue
+					}
 					opts = append(opts, &dialog.Option{
 						Key:   l.ID,
 						Label: l.Label,
