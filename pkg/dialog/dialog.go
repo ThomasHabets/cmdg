@@ -59,7 +59,7 @@ func Question(opts []Option, keys *input.Input) (string, error) {
 func filterSubmatch(opts []*Option, filter string) []*Option {
 	var ret []*Option
 	for _, o := range opts {
-		if strings.Contains(o.Label, filter) {
+		if strings.Contains(o.Key, filter) {
 			ret = append(ret, o)
 		}
 	}
