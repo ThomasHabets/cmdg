@@ -62,11 +62,12 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 }
 
 func composeNew(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
-	to, err := dialog.Selection(conn.Contacts(), true, keys)
+	toOpt, err := dialog.Selection(dialog.Strings2Options(conn.Contacts()), true, keys)
 	if err != nil {
 		return err
 	}
 
+	to := toOpt.Key
 	if strings.EqualFold(to, "me") {
 		p, err := conn.GetProfile(ctx)
 		if err != nil {
@@ -99,10 +100,10 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 
 		// Ask to send it.
 		sendQ := []dialog.Option{
-			{"s", "Send"},
-			{"d", "Save as draft"},
-			{"a", "Abort, discarding draft"},
-			{"r", "Return to editor"},
+			{Key: "s", Label: "Send"},
+			{Key: "d", Label: "Save as draft"},
+			{Key: "a", Label: "Abort, discarding draft"},
+			{Key: "r", Label: "Return to editor"},
 		}
 		// TODO: send signed.
 		// TODO: attach.

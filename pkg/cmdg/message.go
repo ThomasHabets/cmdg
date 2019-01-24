@@ -33,6 +33,13 @@ var (
 	GPG *gpg.GPG
 )
 
+type Attachment struct {
+	ID       string
+	MsgID    string
+	contents []byte
+	Part     *gmail.MessagePart
+}
+
 type Message struct {
 	m       sync.RWMutex
 	conn    *CmdG
@@ -44,6 +51,35 @@ type Message struct {
 	originalBody string
 	gpgStatus    *gpg.Status
 	Response     *gmail.Message
+
+	attachments []*Attachment
+}
+
+func (msg *Message) Attachments(ctx context.Context) ([]*Attachment, error) {
+	if err := msg.Preload(ctx, LevelFull); err != nil {
+		return nil, err
+	}
+	msg.m.RLock()
+	defer msg.m.RUnlock()
+	return msg.attachments, nil
+}
+
+// called with lock held
+func (msg *Message) annotateAttachments() error {
+	var bodystr []string
+	for _, p := range msg.Response.Payload.Parts {
+		if !partIsAttachment(p) {
+			continue
+		}
+		msg.attachments = append(msg.attachments, &Attachment{
+			MsgID: msg.ID,
+			ID:    p.Body.AttachmentId,
+			Part:  p,
+		})
+		bodystr = append(bodystr, fmt.Sprintf("%s<<<Attachment %q; press 't' to view>>>", display.Bold, p.Filename))
+	}
+	msg.body += strings.Join(bodystr, "\n")
+	return nil
 }
 
 func (m *Message) GPGStatus() *gpg.Status {
@@ -565,6 +601,9 @@ func (m *Message) load(ctx context.Context, level DataLevel) error {
 		m.originalBody = m.body
 		if err := m.tryGPGInlineSigned(ctx); err != nil {
 			log.Errorf("Checking GPG inline signature: %v", err)
+		}
+		if err := m.annotateAttachments(); err != nil {
+			log.Errorf("Failed to annotate attachments: %v", err)
 		}
 	}
 	return nil

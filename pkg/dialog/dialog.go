@@ -9,11 +9,15 @@ import (
 )
 
 type Option struct {
-	Key   string
-	Label string
+	Key    string
+	KeyInt int
+	Label  string
 }
 
 func (o *Option) String() string {
+	if o.Label == "" {
+		return fmt.Sprintf("%s", o.Key)
+	}
 	return fmt.Sprintf("%s — %s", o.Key, o.Label)
 }
 
@@ -52,20 +56,31 @@ func Question(opts []Option, keys *input.Input) (string, error) {
 	}
 }
 
-func filterSubmatch(opts []string, filter string) []string {
-	var ret []string
+func filterSubmatch(opts []*Option, filter string) []*Option {
+	var ret []*Option
 	for _, o := range opts {
-		if strings.Contains(o, filter) {
+		if strings.Contains(o.Label, filter) {
 			ret = append(ret, o)
 		}
 	}
 	return ret
 }
 
-func Selection(opts []string, free bool, keys *input.Input) (string, error) {
+func Strings2Options(ss []string) []*Option {
+	var ret []*Option
+	for n, o := range ss {
+		ret = append(ret, &Option{
+			Key:    o,
+			KeyInt: n,
+		})
+	}
+	return ret
+}
+
+func Selection(opts []*Option, free bool, keys *input.Input) (*Option, error) {
 	screen, err := display.NewScreen()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	cur := ""
 	selected := -1
@@ -96,7 +111,10 @@ func Selection(opts []string, free bool, keys *input.Input) (string, error) {
 				if !free {
 					continue
 				}
-				return cur, nil
+				return &Option{
+					Key:   cur,
+					Label: cur,
+				}, nil
 			}
 			return visible[selected], nil
 		case input.CtrlN:
