@@ -69,7 +69,24 @@ func listAttachments(ctx context.Context, keys *input.Input, msg *cmdg.Message) 
 }
 
 func saveFile(ctx context.Context, data []byte, fn string) error {
-	// TODO.
+	fn = path.Base(fn)
+
+	f, err := os.OpenFile(fn, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return errors.Wrapf(err, "opening %q", fn)
+	}
+	if _, err := f.Write(data); err != nil {
+		if err := os.Remove(f.Name()); err != nil {
+			log.Errorf("Failed to remove tempfile after failure %q: %v", fn, err)
+		}
+		return err
+	}
+	if err := f.Close(); err != nil {
+		if err := os.Remove(fn); err != nil {
+			log.Errorf("Failed to remove tempfile after failure %q: %v", fn, err)
+		}
+		return err
+	}
 	return nil
 }
 
