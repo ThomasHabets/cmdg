@@ -36,8 +36,24 @@ var (
 type Attachment struct {
 	ID       string
 	MsgID    string
+	conn     *CmdG
 	contents []byte
 	Part     *gmail.MessagePart
+}
+
+func (a *Attachment) Download(ctx context.Context) ([]byte, error) {
+	if a.contents != nil {
+		return a.contents, nil
+	}
+	body, err := a.conn.gmail.Users.Messages.Attachments.Get(email, a.MsgID, a.ID).Context(ctx).Do()
+	if err != nil {
+		return nil, err
+	}
+	d, err := mimeDecode(body.Data)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(d), nil
 }
 
 type Message struct {
@@ -75,6 +91,7 @@ func (msg *Message) annotateAttachments() error {
 			MsgID: msg.ID,
 			ID:    p.Body.AttachmentId,
 			Part:  p,
+			conn:  msg.conn,
 		})
 		bodystr = append(bodystr, fmt.Sprintf("%s<<<Attachment %q; press 't' to view>>>", display.Bold, p.Filename))
 	}
