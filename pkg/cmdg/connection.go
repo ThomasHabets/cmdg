@@ -107,6 +107,16 @@ func (c *CmdG) LoadLabels(ctx context.Context) error {
 	return nil
 }
 
+func (c *CmdG) Labels() []*Label {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	var ret []*Label
+	for _, l := range c.labelCache {
+		ret = append(ret, l)
+	}
+	return ret
+}
+
 func (c *CmdG) GetProfile(ctx context.Context) (*gmail.Profile, error) {
 	return c.gmail.Users.GetProfile(email).Context(ctx).Do()
 }
@@ -125,7 +135,7 @@ func (c *CmdG) ListMessages(ctx context.Context, label, token string) (*Page, er
 		MaxResults(int64(nres)).
 		Context(ctx).
 		Fields("messages,resultSizeEstimate,nextPageToken").
-		LabelIds("INBOX")
+		LabelIds(label)
 	res, err := q.Do()
 	if err != nil {
 		return nil, errors.Wrap(err, "listing messages")

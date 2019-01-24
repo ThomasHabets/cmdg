@@ -18,7 +18,7 @@ func (o *Option) String() string {
 	if o.Label == "" {
 		return fmt.Sprintf("%s", o.Key)
 	}
-	return fmt.Sprintf("%s — %s", o.Key, o.Label)
+	return o.Label
 }
 
 // ^C is always a valid option.
@@ -59,7 +59,7 @@ func Question(opts []Option, keys *input.Input) (string, error) {
 func filterSubmatch(opts []*Option, filter string) []*Option {
 	var ret []*Option
 	for _, o := range opts {
-		if strings.Contains(o.Key, filter) {
+		if strings.Contains(strings.ToLower(o.Key), strings.ToLower(filter)) {
 			ret = append(ret, o)
 		}
 	}
@@ -84,12 +84,13 @@ func Selection(opts []*Option, free bool, keys *input.Input) (*Option, error) {
 	}
 	cur := ""
 	selected := -1
+	scroll := 0 // TODO, implement scrolling.
 	visible := opts
 	for {
 		start := 3
 		prefix := "    "
 		screen.Printlnf(2, "%sTo> %s", prefix, cur)
-		for n, o := range visible {
+		for n, o := range visible[scroll:] {
 			sstr := display.Reset + " "
 			if selected == n {
 				sstr = display.Bold + ">"
@@ -124,7 +125,7 @@ func Selection(opts []*Option, free bool, keys *input.Input) (*Option, error) {
 			}
 		case input.CtrlP:
 			selected--
-			if selected < 0 {
+			if selected < 0 && !free {
 				selected = 0
 			}
 		default:
@@ -137,6 +138,9 @@ func Selection(opts []*Option, free bool, keys *input.Input) (*Option, error) {
 			}
 			selected = -1
 			visible = filterSubmatch(opts, cur)
+			if !free && len(visible) > 0 {
+				selected = 0
+			}
 		}
 	}
 }

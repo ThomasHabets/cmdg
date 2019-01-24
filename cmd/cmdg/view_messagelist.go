@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
+	"github.com/ThomasHabets/cmdg/pkg/dialog"
 	"github.com/ThomasHabets/cmdg/pkg/display"
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
@@ -45,7 +46,7 @@ func NewMessageView(ctx context.Context, label string, in *input.Input) *Message
 }
 
 func (m *MessageView) fetchPage(ctx context.Context, token string) {
-	log.Infof("Listing messages with token %q…", token)
+	log.Infof("Listing messages on label %q with token %q…", m.label, token)
 	page, err := conn.ListMessages(ctx, m.label, token)
 	if err != nil {
 		m.errors <- err
@@ -230,7 +231,23 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				empty()
 				screen.Clear()
 				go mv.fetchPage(ctx, "")
+			case 'g':
+				var opts []*dialog.Option
+				for _, l := range conn.Labels() {
+					opts = append(opts, &dialog.Option{
+						Key:   l.ID,
+						Label: l.Label,
+					})
+				}
+				label, err := dialog.Selection(opts, false, mv.keys)
+				if err != nil {
+					return err
+				}
+				nv := NewMessageView(ctx, label.Key, mv.keys)
 
+				// TODO: not optimal, since it adds a
+				// stack frame on every navigation.
+				return nv.Run(ctx)
 			case 'q':
 				return nil
 			default:

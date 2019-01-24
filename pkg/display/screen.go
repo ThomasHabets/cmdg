@@ -102,6 +102,10 @@ func FixedWidth(s string, w int) string {
 }
 
 func (s *Screen) Printlnf(y int, fmts string, args ...interface{}) {
+	if y >= s.Height {
+		log.Warningf("Print off screen. %d>=%d", y, s.Height)
+		return
+	}
 	str := fmt.Sprintf(fmts, args...)
 	s.buffer[y] = str
 }
