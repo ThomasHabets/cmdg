@@ -21,6 +21,7 @@ const (
 type MessageView struct {
 	// Static state.
 	label string
+	query string
 
 	// Communicate with main thread.
 	keys      *input.Input
@@ -33,21 +34,22 @@ type MessageView struct {
 	pos      int
 }
 
-func NewMessageView(ctx context.Context, label string, in *input.Input) *MessageView {
+func NewMessageView(ctx context.Context, label, q string, in *input.Input) *MessageView {
 	v := &MessageView{
 		label:     label,
 		errors:    make(chan error),
 		pageCh:    make(chan *cmdg.Page),
 		messageCh: make(chan *cmdg.Message),
 		keys:      in,
+		query:     q,
 	}
 	go v.fetchPage(ctx, "")
 	return v
 }
 
 func (m *MessageView) fetchPage(ctx context.Context, token string) {
-	log.Infof("Listing messages on label %q with token %q…", m.label, token)
-	page, err := conn.ListMessages(ctx, m.label, token)
+	log.Infof("Listing messages on label %q query %q with token %q…", m.label, token)
+	page, err := conn.ListMessages(ctx, m.label, m.query, token)
 	if err != nil {
 		m.errors <- err
 		return
@@ -237,6 +239,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					if strings.HasPrefix(l.ID, "CATEGORY_") {
 						continue
 					}
+					if l.ID == "IMPORTANT" {
+						continue
+					}
 					opts = append(opts, &dialog.Option{
 						Key:   l.ID,
 						Label: l.Label,
@@ -246,11 +251,22 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				nv := NewMessageView(ctx, label.Key, mv.keys)
+				nv := NewMessageView(ctx, label.Key, "", mv.keys)
 
 				// TODO: not optimal, since it adds a
 				// stack frame on every navigation.
 				return nv.Run(ctx)
+			case 's':
+				q, err := dialog.Entry("Query> ", mv.keys)
+				if err != nil {
+					return err
+				}
+				if q != "" {
+					nv := NewMessageView(ctx, "", q, mv.keys)
+					// TODO: not optimal, since it adds a
+					// stack frame on every navigation.
+					return nv.Run(ctx)
+				}
 			case 'q':
 				return nil
 			default:

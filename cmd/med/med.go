@@ -18,7 +18,7 @@ var (
 )
 
 func list(ctx context.Context, cmdg *cmdg.CmdG) error {
-	page, err := cmdg.ListMessages(ctx, "INBOX", "")
+	page, err := cmdg.ListMessages(ctx, "INBOX", "", "")
 	if err != nil {
 		return err
 	}

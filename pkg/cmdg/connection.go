@@ -3,6 +3,7 @@ package cmdg
 import (
 	"context"
 	"net/http"
+	"sort"
 	"sync"
 
 	"github.com/ThomasHabets/drive-du/lib"
@@ -114,6 +115,15 @@ func (c *CmdG) Labels() []*Label {
 	for _, l := range c.labelCache {
 		ret = append(ret, l)
 	}
+	sort.Slice(ret, func(i, j int) bool {
+		if ret[i].ID == Inbox {
+			return true
+		}
+		if ret[j].ID == Inbox {
+			return false
+		}
+		return ret[i].Label < ret[j].Label
+	})
 	return ret
 }
 
@@ -128,14 +138,19 @@ func (c *CmdG) Send(ctx context.Context, msg string) error {
 	return err
 }
 
-func (c *CmdG) ListMessages(ctx context.Context, label, token string) (*Page, error) {
+func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*Page, error) {
 	nres := int64(pageSize)
 	q := c.gmail.Users.Messages.List(email).
 		PageToken(token).
 		MaxResults(int64(nres)).
 		Context(ctx).
-		Fields("messages,resultSizeEstimate,nextPageToken").
-		LabelIds(label)
+		Fields("messages,resultSizeEstimate,nextPageToken")
+	if query != "" {
+		q = q.Q(query)
+	}
+	if label != "" {
+		q = q.LabelIds(label)
+	}
 	res, err := q.Do()
 	if err != nil {
 		return nil, errors.Wrap(err, "listing messages")
@@ -144,6 +159,7 @@ func (c *CmdG) ListMessages(ctx context.Context, label, token string) (*Page, er
 	p := &Page{
 		conn:     c,
 		Label:    label,
+		Query:    query,
 		Response: res,
 	}
 	for _, m := range res.Messages {

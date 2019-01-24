@@ -59,7 +59,7 @@ func Question(opts []Option, keys *input.Input) (string, error) {
 func filterSubmatch(opts []*Option, filter string) []*Option {
 	var ret []*Option
 	for _, o := range opts {
-		if strings.Contains(strings.ToLower(o.Key), strings.ToLower(filter)) {
+		if strings.Contains(strings.ToLower(o.String()), strings.ToLower(filter)) {
 			ret = append(ret, o)
 		}
 	}
@@ -75,6 +75,33 @@ func Strings2Options(ss []string) []*Option {
 		})
 	}
 	return ret
+}
+
+func Entry(prompt string, keys *input.Input) (string, error) {
+	screen, err := display.NewScreen()
+	if err != nil {
+		return "", err
+	}
+	cur := ""
+	prefix := "    "
+	for {
+		start := 3
+		screen.Printlnf(start+2, "%s%s%s%s%s", prefix, display.Bold, prompt, display.Reset, cur)
+		screen.Draw()
+		select {
+		case key := <-keys.Chan():
+			switch key {
+			case input.Enter:
+				return cur, nil
+			case input.Backspace:
+				if len(cur) > 0 {
+					cur = cur[:len(cur)-1]
+				}
+			default:
+				cur += string(key)
+			}
+		}
+	}
 }
 
 func Selection(opts []*Option, free bool, keys *input.Input) (*Option, error) {

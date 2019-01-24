@@ -9,6 +9,7 @@ import (
 
 type Page struct {
 	Label string
+	Query string
 
 	m sync.RWMutex
 
@@ -18,7 +19,7 @@ type Page struct {
 }
 
 func (p *Page) Next(ctx context.Context) (*Page, error) {
-	return p.conn.ListMessages(ctx, p.Label, p.Response.NextPageToken)
+	return p.conn.ListMessages(ctx, p.Label, p.Query, p.Response.NextPageToken)
 }
 
 // Async start loading message info.

@@ -4,9 +4,7 @@
 // * HTML emails.
 // * Reconnecting (not needed?)
 // * Error messages (as opposed to just exiting)
-// * Searching
 // * Add/remove label
-// * Go to label
 // * Periodic refresh of inbox, labels, and contacts
 //
 // Missing features that can wait
@@ -41,7 +39,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	v := NewMessageView(ctx, "INBOX", keys)
+	v := NewMessageView(ctx, "INBOX", "", keys)
 
 	if err := v.Run(ctx); err != nil {
 		log.Errorf("Bailing due to error: %v", err)
