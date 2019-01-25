@@ -48,7 +48,7 @@ func NewMessageView(ctx context.Context, label, q string, in *input.Input) *Mess
 }
 
 func (m *MessageView) fetchPage(ctx context.Context, token string) {
-	log.Infof("Listing messages on label %q query %q with token %q…", m.label, token)
+	log.Infof("Listing messages on label %q query %q with token %q…", m.label, m.query, token)
 	page, err := conn.ListMessages(ctx, m.label, m.query, token)
 	if err != nil {
 		m.errors <- err
