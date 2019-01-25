@@ -112,6 +112,9 @@ func main() {
 		}
 		defer f.Close()
 		log.SetOutput(f)
+		log.SetFormatter(&log.TextFormatter{
+			DisableColors: true,
+		})
 	}
 
 	if err := run(ctx); err != nil {
