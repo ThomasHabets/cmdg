@@ -360,6 +360,8 @@ func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string
 		switch p.MimeType {
 		case "text/plain":
 			return m.makeBody(ctx, p)
+		case "multipart/alternative":
+			return m.makeBody(ctx, p)
 		default:
 			log.Infof("Ignoring part of type %q", p.MimeType)
 		}
