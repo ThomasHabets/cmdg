@@ -63,6 +63,18 @@ func NewScreen() (*Screen, error) {
 	return NewScreen2(w, h), nil
 }
 
+func (s *Screen) Copy() *Screen {
+	r := &Screen{
+		Width:  s.Width,
+		Height: s.Height,
+		buffer: make([]string, len(s.buffer), len(s.buffer)),
+	}
+	for n := range s.buffer {
+		r.buffer[n] = s.buffer[n]
+	}
+	return r
+}
+
 func NewScreen2(w int, h int) *Screen {
 	return &Screen{
 		Width:  w,

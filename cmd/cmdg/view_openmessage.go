@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
+	"github.com/ThomasHabets/cmdg/pkg/dialog"
 	"github.com/ThomasHabets/cmdg/pkg/display"
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
@@ -154,6 +155,33 @@ func (ov *OpenMessageView) Draw(scroll int) error {
 	return nil
 }
 
+func showError(oscreen *display.Screen, keys *input.Input, msg string) {
+	screen := oscreen.Copy()
+	lines := []string{
+		strings.Repeat("—", screen.Width),
+	}
+	for len(msg) > 0 {
+		this := msg
+		if len(this) > screen.Width {
+			this, msg = msg[:screen.Width], msg[screen.Width:]
+		} else {
+			msg = ""
+		}
+		lines = append(lines, this)
+	}
+	lines = append(lines, "Press [enter] to continue", lines[0])
+	start := (screen.Height - len(lines)) / 2
+	for n, l := range lines {
+		screen.Printlnf(start+n, "%s%s", display.Red, l)
+	}
+	screen.Draw()
+	for {
+		if input.Enter == <-keys.Chan() {
+			return
+		}
+	}
+}
+
 func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 	ov.screen.Printf(0, 0, "Loading…")
 	ov.screen.Draw()
@@ -161,7 +189,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 	for {
 		select {
 		case err := <-ov.errors:
-			ov.screen.Printlnf(10, "%s%v", display.Red, err)
+			showError(ov.screen, ov.keys, err.Error())
 		case <-ov.update:
 			log.Infof("Message arrived")
 			go func() {
@@ -195,29 +223,31 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				ov.Draw(scroll)
 			case 'f':
 				if err := forward(ctx, conn, ov.keys, ov.msg); err != nil {
-					return nil, err
+					ov.errors <- fmt.Errorf("Failed to forward: %v", err)
 				}
 			case 'r':
 				if err := reply(ctx, conn, ov.keys, ov.msg); err != nil {
-					return nil, err
+					ov.errors <- fmt.Errorf("Failed to reply: %v", err)
 				}
 			case 'a':
 				if err := replyAll(ctx, conn, ov.keys, ov.msg); err != nil {
-					return nil, err
+					ov.errors <- fmt.Errorf("Failed to replyAll: %v", err)
 				}
 			case 'e':
 				if err := ov.msg.RemoveLabelID(ctx, cmdg.Inbox); err != nil {
-					return nil, err
+					ov.errors <- fmt.Errorf("Failed to archive : %v", err)
+				} else {
+					return OpRemoveCurrent(nil), nil
 				}
-				return OpRemoveCurrent(nil), nil
 			case 't':
 				as, err := ov.msg.Attachments(ctx)
 				if err != nil {
-					return nil, err
-				}
-				if len(as) > 0 {
-					if err := listAttachments(ctx, ov.keys, ov.msg); err != nil {
-						return nil, err
+					ov.errors <- fmt.Errorf("Listing attachments failed: %v", err)
+				} else if len(as) > 0 {
+					if err := listAttachments(ctx, ov.keys, ov.msg); errors.Cause(err) == dialog.ErrAborted {
+						log.Infof("View attachment aborted")
+					} else if err != nil {
+						ov.errors <- fmt.Errorf("Attachment browser action failed: %v", err)
 					}
 				}
 			case input.Backspace:
