@@ -211,8 +211,14 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				}
 				return OpRemoveCurrent(nil), nil
 			case 't':
-				if err := listAttachments(ctx, ov.keys, ov.msg); err != nil {
+				as, err := ov.msg.Attachments(ctx)
+				if err != nil {
 					return nil, err
+				}
+				if len(as) > 0 {
+					if err := listAttachments(ctx, ov.keys, ov.msg); err != nil {
+						return nil, err
+					}
 				}
 			case input.Backspace:
 				scroll = ov.scroll(ctx, scroll, -(ov.screen.Height - 10))

@@ -31,15 +31,18 @@ func listAttachments(ctx context.Context, keys *input.Input, msg *cmdg.Message) 
 	for n, a := range as {
 		ass[n] = a.Part.Filename
 	}
-	which, err := dialog.Selection(dialog.Strings2Options(ass), false, keys)
+	which, err := dialog.Selection(dialog.Strings2Options(ass), "Attachment> ", false, keys)
+	if err != nil {
+		return err
+	}
 
 	chosen := as[which.KeyInt]
 
 	for {
 		sendQ := []dialog.Option{
-			{Key: "s", Label: "Save"},
-			{Key: "o", Label: "Open"},
-			{Key: "a", Label: "Abort"},
+			{Key: "s", Label: "s — Save"},
+			{Key: "o", Label: "o — Open"},
+			{Key: "a", Label: "a — Abort"},
 		}
 		a, err := dialog.Question(sendQ, keys)
 		if err != nil {

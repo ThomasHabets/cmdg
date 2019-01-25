@@ -247,7 +247,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						Label: l.Label,
 					})
 				}
-				label, err := dialog.Selection(opts, false, mv.keys)
+				label, err := dialog.Selection(opts, "Label> ", false, mv.keys)
 				if err != nil {
 					return err
 				}

@@ -8,6 +8,10 @@ import (
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
 
+var (
+	ErrAborted = fmt.Errorf("dialog aborted")
+)
+
 type Option struct {
 	Key    string
 	KeyInt int
@@ -104,7 +108,7 @@ func Entry(prompt string, keys *input.Input) (string, error) {
 	}
 }
 
-func Selection(opts []*Option, free bool, keys *input.Input) (*Option, error) {
+func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Option, error) {
 	screen, err := display.NewScreen()
 	if err != nil {
 		return nil, err
@@ -116,7 +120,7 @@ func Selection(opts []*Option, free bool, keys *input.Input) (*Option, error) {
 	for {
 		start := 3
 		prefix := "    "
-		screen.Printlnf(2, "%sTo> %s", prefix, cur)
+		screen.Printlnf(2, "%s%s%s", prefix, prompt, cur)
 		for n, o := range visible[scroll:] {
 			sstr := display.Reset + " "
 			if selected == n {
@@ -155,6 +159,8 @@ func Selection(opts []*Option, free bool, keys *input.Input) (*Option, error) {
 			if selected < 0 && !free {
 				selected = 0
 			}
+		case input.CtrlC:
+			return nil, ErrAborted
 		default:
 			if key == input.Backspace {
 				if len(cur) > 0 {
