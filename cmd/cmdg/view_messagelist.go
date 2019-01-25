@@ -177,7 +177,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			screen.Draw() // TODO: avoid redrawing whole screen.
 			continue
 		case p := <-mv.pageCh:
-			log.Printf("Got page!")
+			log.Printf("MessageListView: Got page!")
 			pages = append(pages, p)
 			for n, m := range p.Messages {
 				messagePos[m.ID] = len(mv.messages) + n
@@ -186,6 +186,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			want := contentHeight
 			if p.Response.NextPageToken == "" {
 				log.Infof("All pages loaded")
+				if len(mv.messages) == 0 {
+					screen.Printlnf(0, "<empty>")
+				}
 				theresMore = false
 			} else {
 				if want > len(mv.messages) {
