@@ -6,11 +6,12 @@
 // * Add/remove label
 // * Periodic refresh of inbox, labels, and contacts
 //
-// Missing features that can wait
+// Missing features that can wait:
 // * colors on labels
 // * attach stuff on send
 // * sign on send
 // * encrypt on send
+// * handle sigwinch
 package main
 
 import (

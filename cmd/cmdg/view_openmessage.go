@@ -56,7 +56,7 @@ func cancelledContext() context.Context {
 	return ctx
 }
 
-func (ov *OpenMessageView) Draw(scroll int) error {
+func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	// Some functions below need a context, but they should never make RPCs so let's give them
 	ctx := cancelledContext()
 
@@ -140,17 +140,12 @@ func (ov *OpenMessageView) Draw(scroll int) error {
 	line++
 
 	// Draw body.
-	b, err := ov.msg.GetBody(ctx)
-	if err != nil {
-		ov.screen.Printlnf(line, display.Red+"Failed to load body of message: %v", err)
-	} else {
-		for _, l := range strings.Split(b, "\n")[scroll:] {
-			l = strings.Trim(l, "\r ")
-			ov.screen.Printlnf(line, "%s", l)
-			line++
-			if line >= ov.screen.Height-2 {
-				break
-			}
+	for _, l := range lines[scroll:] {
+		l = strings.Trim(l, "\r ")
+		ov.screen.Printlnf(line, "%s", l)
+		line++
+		if line >= ov.screen.Height-2 {
+			break
 		}
 	}
 	ov.screen.Printlnf(ov.screen.Height-2, strings.Repeat("—", ov.screen.Width))
@@ -188,6 +183,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 	ov.screen.Printf(0, 0, "Loading…")
 	ov.screen.Draw()
 	scroll := 0
+	var lines []string
 	for {
 		select {
 		case err := <-ov.errors:
@@ -196,6 +192,23 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			continue
 		case <-ov.update:
 			log.Infof("Message arrived")
+			b, err := ov.msg.GetBody(ctx)
+			if err != nil {
+				ov.errors <- errors.Wrapf(err, "Getting message body")
+			} else {
+				lines = []string{}
+				for _, l := range strings.Split(b, "\n") {
+					for len(l) > 0 {
+						if len(l) > ov.screen.Width {
+							lines = append(lines, l[:ov.screen.Width])
+							l = l[ov.screen.Width:]
+						} else {
+							lines = append(lines, l)
+							l = ""
+						}
+					}
+				}
+			}
 			go func() {
 				if ov.msg.IsUnread() {
 					if err := ov.msg.RemoveLabelID(ctx, cmdg.Unread); err != nil {
@@ -206,7 +219,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				// messageview; label list gets
 				// reloaded by RemoveLabelID.
 			}()
-			ov.Draw(scroll)
+			ov.Draw(lines, scroll)
 		case key := <-ov.keys.Chan():
 			switch key {
 			case input.CtrlR:
@@ -219,14 +232,14 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			case 'u', 'q':
 				return nil, nil
 			case 'n':
-				scroll = ov.scroll(ctx, scroll, 1)
-				ov.Draw(scroll)
+				scroll = ov.scroll(ctx, len(lines), scroll, 1)
+				ov.Draw(lines, scroll)
 			case ' ', input.CtrlV:
-				scroll = ov.scroll(ctx, scroll, ov.screen.Height-10)
-				ov.Draw(scroll)
+				scroll = ov.scroll(ctx, len(lines), scroll, ov.screen.Height-10)
+				ov.Draw(lines, scroll)
 			case 'p':
-				scroll = ov.scroll(ctx, scroll, -1)
-				ov.Draw(scroll)
+				scroll = ov.scroll(ctx, len(lines), scroll, -1)
+				ov.Draw(lines, scroll)
 			case 'f':
 				if err := forward(ctx, conn, ov.keys, ov.msg); err != nil {
 					ov.errors <- fmt.Errorf("Failed to forward: %v", err)
@@ -261,8 +274,8 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					ov.errors <- err
 				}
 			case input.Backspace:
-				scroll = ov.scroll(ctx, scroll, -(ov.screen.Height - 10))
-				ov.Draw(scroll)
+				scroll = ov.scroll(ctx, len(lines), scroll, -(ov.screen.Height - 10))
+				ov.Draw(lines, scroll)
 			default:
 				log.Infof("Unknown key: %d", key)
 			}
@@ -293,13 +306,8 @@ func (ov *OpenMessageView) showRaw(ctx context.Context) error {
 	return nil
 }
 
-func (ov *OpenMessageView) scroll(ctx context.Context, scroll, inc int) int {
+func (ov *OpenMessageView) scroll(ctx context.Context, lines, scroll, inc int) int {
 	if ov.msg.HasData(cmdg.LevelFull) {
-		lines, err := ov.msg.Lines(ctx)
-		if err != nil {
-			log.Warningf("Body not available, when trying to scroll")
-			return scroll
-		}
 		scroll += inc
 		if maxscroll := (lines - ov.screen.Height + 10); scroll >= maxscroll {
 			scroll = maxscroll

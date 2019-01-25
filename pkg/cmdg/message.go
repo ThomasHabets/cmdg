@@ -639,10 +639,3 @@ func (m *Message) load(ctx context.Context, level DataLevel) error {
 	}
 	return nil
 }
-
-func (m *Message) Lines(ctx context.Context) (int, error) {
-	if err := m.Preload(ctx, LevelFull); err != nil {
-		return 0, err
-	}
-	return len(strings.Split(m.body, "\n")), nil
-}
