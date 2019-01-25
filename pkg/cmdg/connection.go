@@ -140,6 +140,13 @@ func (c *CmdG) Send(ctx context.Context, msg string) error {
 	return err
 }
 
+func (c *CmdG) BatchArchive(ctx context.Context, ids []string) error {
+	return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
+		Ids:            ids,
+		RemoveLabelIds: []string{Inbox},
+	}).Context(ctx).Do()
+}
+
 func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*Page, error) {
 	nres := int64(pageSize)
 	q := c.gmail.Users.Messages.List(email).

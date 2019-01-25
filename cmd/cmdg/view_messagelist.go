@@ -92,11 +92,31 @@ func OpRemoveCurrent(next *MessageViewOp) *MessageViewOp {
 	}
 }
 
+// Gives messages, a marked map, and current pos, return marked ids,
+// messages-if-marked-removed, and how much pos should go back by.
+func filterMarked(msgs []*cmdg.Message, marked map[string]bool, pos int) ([]string, []*cmdg.Message, int) {
+	var ids []string
+	var ms []*cmdg.Message
+	ofs := 0
+	for n, msg := range msgs {
+		if marked[msg.ID] {
+			ids = append(ids, msg.ID)
+			if n < pos {
+				ofs++
+			}
+		} else {
+			ms = append(ms, msg)
+		}
+	}
+	return ids, ms, ofs
+}
+
 func (mv *MessageView) Run(ctx context.Context) error {
 	theresMore := true
 	var contentHeight int
 	var pages []*cmdg.Page
 	messagePos := map[string]int{}
+	marked := map[string]bool{}
 	var scroll int
 	var screen *display.Screen
 
@@ -127,16 +147,17 @@ func (mv *MessageView) Run(ctx context.Context) error {
 
 	drawMessage := func(cur int) error {
 		s := "Loading…"
-		if mv.messages[cur].HasData(cmdg.LevelMetadata) {
-			subj, err := mv.messages[cur].GetHeader(ctx, "subject")
+		curmsg := mv.messages[cur]
+		if curmsg.HasData(cmdg.LevelMetadata) {
+			subj, err := curmsg.GetHeader(ctx, "subject")
 			if err != nil {
 				return err
 			}
-			tm, err := mv.messages[cur].GetTimeFmt(ctx)
+			tm, err := curmsg.GetTimeFmt(ctx)
 			if err != nil {
 				return err
 			}
-			from, err := mv.messages[cur].GetFrom(ctx)
+			from, err := curmsg.GetFrom(ctx)
 			if err != nil {
 				return err
 			}
@@ -146,8 +167,8 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				from, subj)
 		} else {
 			go func(cur int) {
-				mv.messages[cur].Preload(ctx, cmdg.LevelMetadata)
-				mv.messageCh <- mv.messages[cur]
+				curmsg.Preload(ctx, cmdg.LevelMetadata)
+				mv.messageCh <- curmsg
 			}(cur)
 		}
 		// Show current.
@@ -156,14 +177,13 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			prefix = display.Reverse + "*"
 		}
 
-		if false {
-			// TODO: if marked
+		if marked[curmsg.ID] {
 			prefix += "X"
 		} else {
 			prefix += " "
 		}
 
-		if mv.messages[cur].IsUnread() {
+		if curmsg.IsUnread() {
 			prefix = display.Bold + prefix + ">"
 		} else {
 			prefix += " "
@@ -229,12 +249,27 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					}
 					op.Do(mv)
 				}
-
+			case 'x':
+				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
+			case 'e':
+				ids, nm, ofs := filterMarked(mv.messages, marked, mv.pos)
+				if err := conn.BatchArchive(ctx, ids); err != nil {
+					mv.errors <- errors.Wrapf(err, "Batch archiving")
+				} else {
+					log.Infof("Batch archived %q %d %d", ids, ofs, len(mv.messages))
+					mv.pos -= ofs
+					scroll -= ofs
+					if scroll < 0 {
+						scroll = 0
+					}
+					mv.messages = nm
+					marked = map[string]bool{}
+				}
 			case 'c':
 				if err := composeNew(ctx, conn, mv.keys); err != nil {
 					mv.errors <- errors.Wrapf(err, "Composing new message")
 				}
-			case 'N', 'n', input.CtrlN:
+			case 'N', 'n', 'j', input.CtrlN:
 				if (mv.messages != nil) && (mv.pos < len(mv.messages)-1) {
 					if mv.pos-scroll > contentHeight-scrollLimit {
 						scroll++
@@ -243,7 +278,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				} else {
 					continue
 				}
-			case 'P', 'p', input.CtrlP:
+			case 'P', 'p', 'k', input.CtrlP:
 				if mv.pos > 0 {
 					mv.pos--
 					if scroll > 0 && mv.pos < scroll+scrollLimit {
