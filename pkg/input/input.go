@@ -3,6 +3,7 @@ package input
 
 import (
 	"os"
+	"os/signal"
 	"syscall"
 	"time"
 
@@ -24,11 +25,16 @@ const (
 type Input struct {
 	running chan struct{} // Closed (non-blocking) if running.
 	stop    chan struct{} // Close to stop.
-	keys    chan byte     // Open if running.
+	winch   chan os.Signal
+	keys    chan byte // Open if running.
 }
 
 func (i *Input) Chan() <-chan byte {
 	return i.keys
+}
+
+func (i *Input) Winch() <-chan os.Signal {
+	return i.winch
 }
 
 // Stop input loop, turn off raw mode.
@@ -110,5 +116,9 @@ func (i *Input) Start() error {
 }
 
 func New() *Input {
-	return &Input{}
+	i := &Input{
+		winch: make(chan os.Signal, 1),
+	}
+	signal.Notify(i.winch, syscall.SIGWINCH)
+	return i
 }

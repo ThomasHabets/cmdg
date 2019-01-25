@@ -94,14 +94,25 @@ func OpRemoveCurrent(next *MessageViewOp) *MessageViewOp {
 
 func (mv *MessageView) Run(ctx context.Context) error {
 	theresMore := true
-	screen, err := display.NewScreen()
-	if err != nil {
-		return err
-	}
-	contentHeight := screen.Height - 2
+	var contentHeight int
 	var pages []*cmdg.Page
 	messagePos := map[string]int{}
-	scroll := 0
+	var scroll int
+	var screen *display.Screen
+
+	initScreen := func() error {
+		var err error
+		screen, err = display.NewScreen()
+		if err != nil {
+			return err
+		}
+		contentHeight = screen.Height - 2
+		scroll = 0 // TODO: only scroll back if we need to.
+		return nil
+	}
+	if err := initScreen(); err != nil {
+		return err
+	}
 
 	empty := func() {
 		screen.Printf(0, 0, "Loading…")
@@ -163,8 +174,13 @@ func (mv *MessageView) Run(ctx context.Context) error {
 	}
 
 	for {
-		// Get event.
 		select {
+		case <-mv.keys.Winch():
+			log.Infof("MessageListView got WINCH!")
+			if err := initScreen(); err != nil {
+				// Screen failed to init. Yeah it's time to bail.
+				return err
+			}
 		case err := <-mv.errors:
 			showError(screen, mv.keys, err.Error())
 			screen.Draw()

@@ -11,7 +11,6 @@
 // * attach stuff on send
 // * sign on send
 // * encrypt on send
-// * handle sigwinch
 package main
 
 import (

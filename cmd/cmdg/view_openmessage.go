@@ -180,12 +180,33 @@ func showError(oscreen *display.Screen, keys *input.Input, msg string) {
 }
 
 func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
+	scroll := 0
+	initScreen := func() error {
+		var err error
+		ov.screen, err = display.NewScreen()
+		if err != nil {
+			return err
+		}
+		scroll = 0
+		return nil
+	}
+	if err := initScreen(); err != nil {
+		return nil, err
+	}
 	ov.screen.Printf(0, 0, "Loading…")
 	ov.screen.Draw()
-	scroll := 0
 	var lines []string
 	for {
 		select {
+		case <-ov.keys.Winch():
+			log.Infof("OpenMessageView got WINCH")
+			if err := initScreen(); err != nil {
+				// Screen failed to init. Yeah it's time to bail.
+				return nil, err
+			}
+			go func() {
+				ov.update <- struct{}{}
+			}()
 		case err := <-ov.errors:
 			showError(ov.screen, ov.keys, err.Error())
 			ov.screen.Draw()
