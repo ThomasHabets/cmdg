@@ -17,6 +17,8 @@ package main
 import (
 	"context"
 	"flag"
+	"os"
+	"path"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
@@ -27,11 +29,24 @@ import (
 )
 
 var (
-	cfgFile = flag.String("conf", "cmdg.conf", "Config file.")
+	cfgFile = flag.String("config", "", "Config file. Default is ~/"+path.Join(defaultConfigDir, configFileName))
 	gpgFlag = flag.String("gpg", "gpg", "Path to GnuPG.")
 
 	conn *cmdg.CmdG
+
+	// Relative to configDir.
+	configFileName = "cmdg.conf"
+
+	// Relative to $HOME.
+	defaultConfigDir = ".cmdg"
 )
+
+func configFilePath() string {
+	if *cfgFile != "" {
+		return *cfgFile
+	}
+	return path.Join(os.Getenv("HOME"), defaultConfigDir, configFileName)
+}
 
 func run(ctx context.Context) error {
 	keys := input.New()
@@ -57,7 +72,7 @@ func main() {
 	cmdg.GPG = gpg.New(*gpgFlag)
 
 	var err error
-	conn, err = cmdg.New(*cfgFile)
+	conn, err = cmdg.New(configFilePath())
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
