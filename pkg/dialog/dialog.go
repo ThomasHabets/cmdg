@@ -73,8 +73,13 @@ func filterSubmatch(opts []*Option, filter string) []*Option {
 func Strings2Options(ss []string) []*Option {
 	var ret []*Option
 	for n, o := range ss {
+		l := o
+		if l == "" {
+			l = "<empty>"
+		}
 		ret = append(ret, &Option{
 			Key:    o,
+			Label:  l,
 			KeyInt: n,
 		})
 	}

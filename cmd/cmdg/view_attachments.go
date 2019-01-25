@@ -72,8 +72,10 @@ func listAttachments(ctx context.Context, keys *input.Input, msg *cmdg.Message) 
 }
 
 func saveFile(ctx context.Context, data []byte, fn string) error {
+	if fn == "" {
+		fn = "unnamed-attachment"
+	}
 	fn = path.Base(fn)
-
 	f, err := os.OpenFile(fn, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return errors.Wrapf(err, "opening %q", fn)
