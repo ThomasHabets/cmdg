@@ -31,6 +31,7 @@ import (
 var (
 	cfgFile = flag.String("config", "", "Config file. Default is ~/"+path.Join(defaultConfigDir, configFileName))
 	gpgFlag = flag.String("gpg", "gpg", "Path to GnuPG.")
+	logFile = flag.String("log", "/dev/null", "Log debug data to this file.")
 
 	conn *cmdg.CmdG
 
@@ -68,6 +69,7 @@ func run(ctx context.Context) error {
 func main() {
 	syscall.Umask(0077)
 	flag.Parse()
+
 	ctx := context.Background()
 	cmdg.GPG = gpg.New(*gpgFlag)
 
@@ -84,7 +86,17 @@ func main() {
 	if err := conn.LoadContacts(ctx); err != nil {
 		log.Fatalf("Loading contacts: %v", err)
 	}
-	log.Infof("Contacts loadedo")
+	log.Infof("Contacts loaded")
+
+	// Redirect logging.
+	{
+		f, err := os.OpenFile(*logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			log.Fatalf("Can't create logfile %q: %v", *logFile, err)
+		}
+		defer f.Close()
+		log.SetOutput(f)
+	}
 
 	if err := run(ctx); err != nil {
 		log.Fatal(err)
