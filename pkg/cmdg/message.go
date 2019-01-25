@@ -105,7 +105,7 @@ func (msg *Message) annotateAttachments() error {
 			Part:  p,
 			conn:  msg.conn,
 		})
-		bodystr = append(bodystr, fmt.Sprintf("%s<<<Attachment %q; press 't' to view>>>", display.Bold, p.Filename))
+		bodystr = append(bodystr, fmt.Sprintf("%s\n<<<Attachment %q; press 't' to view>>>", display.Bold, p.Filename))
 	}
 	msg.body += strings.Join(bodystr, "\n")
 	return nil
