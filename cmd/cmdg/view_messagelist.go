@@ -253,10 +253,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
 			case 'e':
 				ids, nm, ofs := filterMarked(mv.messages, marked, mv.pos)
+				st := time.Now()
 				if err := conn.BatchArchive(ctx, ids); err != nil {
 					mv.errors <- errors.Wrapf(err, "Batch archiving")
 				} else {
-					log.Infof("Batch archived %q %d %d", ids, ofs, len(mv.messages))
+					log.Infof("Batch archived %d: %v", len(ids), time.Since(st))
 					mv.pos -= ofs
 					scroll -= ofs
 					if scroll < 0 {
@@ -264,6 +265,30 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					}
 					mv.messages = nm
 					marked = map[string]bool{}
+				}
+			case 'l':
+				ids, _, _ := filterMarked(mv.messages, marked, mv.pos)
+				if len(ids) != 0 {
+					var opts []*dialog.Option
+					for _, l := range conn.Labels() {
+						opts = append(opts, &dialog.Option{
+							Key:   l.ID,
+							Label: l.Label,
+						})
+					}
+					label, err := dialog.Selection(opts, "Label> ", false, mv.keys)
+					if errors.Cause(err) == dialog.ErrAborted {
+						// No-op.
+					} else if err != nil {
+						mv.errors <- errors.Wrapf(err, "Selecting label")
+					} else {
+						st := time.Now()
+						if err := conn.BatchLabel(ctx, ids, label.Key); err != nil {
+							mv.errors <- errors.Wrapf(err, "Batch labelling")
+						} else {
+							log.Infof("Batch labelled %d: %v", len(ids), time.Since(st))
+						}
+					}
 				}
 			case 'c':
 				if err := composeNew(ctx, conn, mv.keys); err != nil {
