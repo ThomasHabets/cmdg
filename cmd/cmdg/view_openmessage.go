@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	tsLayout    = "2006-01-02 15:04:05"
-	pagerBinary = "less" // TODO
+	tsLayout = "2006-01-02 15:04:05"
 )
 
 type OpenMessageView struct {

@@ -3,7 +3,6 @@
 // TODO before it can replace old code:
 // * HTML emails.
 // * Reconnecting (not needed?)
-// * Error messages (as opposed to just exiting)
 // * Add/remove label
 // * Periodic refresh of inbox, labels, and contacts
 //
@@ -40,6 +39,9 @@ var (
 
 	// Relative to $HOME.
 	defaultConfigDir = ".cmdg"
+
+	pagerBinary  string
+	visualBinary string
 )
 
 func configFilePath() string {
@@ -71,6 +73,20 @@ func main() {
 	flag.Parse()
 
 	ctx := context.Background()
+
+	pagerBinary = os.Getenv("PAGER")
+	if len(pagerBinary) == 0 {
+		log.Fatalf("You need to set the PAGER environment variable. When in doubt, set to 'less'.")
+	}
+
+	visualBinary = os.Getenv("VISUAL")
+	if len(visualBinary) == 0 {
+		visualBinary = os.Getenv("EDITOR")
+		if len(visualBinary) == 0 {
+			log.Fatalf("You need to set the VISUAL or EDITOR environment variable. Set to your favourite editor.")
+		}
+	}
+
 	cmdg.GPG = gpg.New(*gpgFlag)
 
 	var err error

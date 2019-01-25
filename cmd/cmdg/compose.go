@@ -40,17 +40,15 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 	keys.Stop()
 	defer keys.Start()
 
-	// Run $VISUAL. TODO: use $VISUAL
-	editor := "emacs"
-	cmd := exec.CommandContext(ctx, editor, tmpf.Name())
+	cmd := exec.CommandContext(ctx, visualBinary, tmpf.Name())
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		return "", errors.Wrapf(err, "failed to start editor %q", editor)
+		return "", errors.Wrapf(err, "failed to start editor %q", visualBinary)
 	}
 	if err := cmd.Wait(); err != nil {
-		return "", errors.Wrap(err, "editor failed")
+		return "", errors.Wrapf(err, "editor %q failed", visualBinary)
 	}
 
 	// Extract content.
