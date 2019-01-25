@@ -33,6 +33,7 @@ func (i *Input) Chan() <-chan byte {
 
 // Stop input loop, turn off raw mode.
 func (i *Input) Stop() {
+	log.Infof("Stopping keyboard input")
 	select {
 	case <-i.running:
 		log.Infof("Called stop though already stopped")
@@ -43,10 +44,12 @@ func (i *Input) Stop() {
 	for _ = range i.keys {
 	}
 	<-i.running
+	log.Infof("Keyboard input stopped")
 }
 
 // Turn on raw mode and receive keys.
 func (i *Input) Start() error {
+	log.Infof("Starting keyboard input")
 	oldState, err := terminal.MakeRaw(fd)
 	if err != nil {
 		return err

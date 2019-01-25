@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -15,7 +17,8 @@ import (
 )
 
 const (
-	tsLayout = "2006-01-02 15:04:05"
+	tsLayout    = "2006-01-02 15:04:05"
+	pagerBinary = "less" // TODO
 )
 
 type OpenMessageView struct {
@@ -190,6 +193,8 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 		select {
 		case err := <-ov.errors:
 			showError(ov.screen, ov.keys, err.Error())
+			ov.screen.Draw()
+			continue
 		case <-ov.update:
 			log.Infof("Message arrived")
 			go func() {
@@ -250,6 +255,10 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 						ov.errors <- fmt.Errorf("Attachment browser action failed: %v", err)
 					}
 				}
+			case '\\':
+				if err := ov.showRaw(ctx); err != nil {
+					ov.errors <- err
+				}
 			case input.Backspace:
 				scroll = ov.scroll(ctx, scroll, -(ov.screen.Height - 10))
 				ov.Draw(scroll)
@@ -259,6 +268,28 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 		}
 		ov.screen.Draw()
 	}
+}
+
+func (ov *OpenMessageView) showRaw(ctx context.Context) error {
+	m, err := ov.msg.Raw(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "Fetching raw msg")
+	}
+	ov.keys.Stop()
+	defer ov.keys.Start()
+
+	cmd := exec.CommandContext(ctx, pagerBinary)
+	cmd.Stdin = strings.NewReader(m)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return errors.Wrapf(err, "failed to start pager %q", pagerBinary)
+	}
+	if err := cmd.Wait(); err != nil {
+		return errors.Wrapf(err, "pager %q failed", pagerBinary)
+	}
+	log.Infof("Pager finished")
+	return nil
 }
 
 func (ov *OpenMessageView) scroll(ctx context.Context, scroll, inc int) int {

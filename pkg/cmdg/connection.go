@@ -26,7 +26,9 @@ const (
 	LevelMinimal  DataLevel = "minimal"  // ID, labels
 	LevelMetadata DataLevel = "metadata" // ID, labels, headers
 	LevelFull     DataLevel = "full"     // ID, labels, headers, payload
-	// DO NOT USE: levelRaw      DataLevel = "raw"
+
+	// Not so much a level as a separate request.
+	LevelRaw DataLevel = "RAW"
 )
 
 type (

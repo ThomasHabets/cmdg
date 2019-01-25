@@ -80,6 +80,18 @@ func (msg *Message) Attachments(ctx context.Context) ([]*Attachment, error) {
 	return msg.attachments, nil
 }
 
+func (msg *Message) Raw(ctx context.Context) (string, error) {
+	m, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).Format(string(LevelRaw)).Context(ctx).Do()
+	if err != nil {
+		return "", err
+	}
+	dec, err := mimeDecode(m.Raw)
+	if err != nil {
+		return "", err
+	}
+	return dec, nil
+}
+
 // called with lock held
 func (msg *Message) annotateAttachments() error {
 	var bodystr []string
