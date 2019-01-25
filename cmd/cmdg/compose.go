@@ -100,10 +100,10 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 
 		// Ask to send it.
 		sendQ := []dialog.Option{
-			{Key: "s", Label: "Send"},
-			{Key: "d", Label: "Save as draft"},
-			{Key: "a", Label: "Abort, discarding draft"},
-			{Key: "r", Label: "Return to editor"},
+			{Key: "s", Label: "s — Send"},
+			{Key: "d", Label: "d — Save as draft"},
+			{Key: "a", Label: "a — Abort, discarding draft"},
+			{Key: "r", Label: "r — Return to editor"},
 		}
 		// TODO: send signed.
 		// TODO: attach.
