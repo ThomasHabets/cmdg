@@ -27,8 +27,8 @@ const (
 	LevelMetadata DataLevel = "metadata" // ID, labels, headers
 	LevelFull     DataLevel = "full"     // ID, labels, headers, payload
 
-	// Not so much a level as a separate request.
-	LevelRaw DataLevel = "RAW"
+	// Not so much a level as a separate request. Type `string` so that it won't be usable as a `DataLevel`.
+	levelRaw string = "RAW"
 )
 
 type (

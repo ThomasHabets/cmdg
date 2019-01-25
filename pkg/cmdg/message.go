@@ -81,7 +81,7 @@ func (msg *Message) Attachments(ctx context.Context) ([]*Attachment, error) {
 }
 
 func (msg *Message) Raw(ctx context.Context) (string, error) {
-	m, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).Format(string(LevelRaw)).Context(ctx).Do()
+	m, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).Format(levelRaw).Context(ctx).Do()
 	if err != nil {
 		return "", err
 	}

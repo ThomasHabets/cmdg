@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
@@ -37,7 +38,7 @@ type MessageView struct {
 func NewMessageView(ctx context.Context, label, q string, in *input.Input) *MessageView {
 	v := &MessageView{
 		label:     label,
-		errors:    make(chan error),
+		errors:    make(chan error, 20),
 		pageCh:    make(chan *cmdg.Page),
 		messageCh: make(chan *cmdg.Message),
 		keys:      in,
@@ -165,14 +166,15 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		// Get event.
 		select {
 		case err := <-mv.errors:
-			log.Errorf("MessageView got error: %v", err)
-			screen.Printf(10, 0, "Got error: %v", err)
+			showError(screen, mv.keys, err.Error())
+			screen.Draw()
+			continue
 		case m := <-mv.messageCh:
 			cur := messagePos[m.ID]
 			if err := drawMessage(cur); err != nil {
-				return err
+				mv.errors <- errors.Wrapf(err, "Drawing message")
 			}
-			screen.Draw()
+			screen.Draw() // TODO: avoid redrawing whole screen.
 			continue
 		case p := <-mv.pageCh:
 			log.Printf("Got page!")
@@ -195,21 +197,23 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			}
 
 		case key := <-mv.keys.Chan():
-			log.Debugf("Got key %d", key)
+			log.Debugf("MessageListView got key %d", key)
 			switch key {
-			case 13:
+			case input.Enter:
 				vo, err := NewOpenMessageView(ctx, mv.messages[mv.pos], mv.keys)
 				if err != nil {
-					return err
+					mv.errors <- errors.Wrapf(err, "Opening message")
+				} else {
+					op, err := vo.Run(ctx)
+					if err != nil {
+						mv.errors <- errors.Wrapf(err, "Running OpenMessageView")
+					}
+					op.Do(mv)
 				}
-				op, err := vo.Run(ctx)
-				if err != nil {
-					return err
-				}
-				op.Do(mv)
+
 			case 'c':
 				if err := composeNew(ctx, conn, mv.keys); err != nil {
-					return err
+					mv.errors <- errors.Wrapf(err, "Composing new message")
 				}
 			case 'N', 'n', input.CtrlN:
 				if (mv.messages != nil) && (mv.pos < len(mv.messages)-1) {
@@ -248,20 +252,21 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					})
 				}
 				label, err := dialog.Selection(opts, "Label> ", false, mv.keys)
-				if err != nil {
-					return err
+				if errors.Cause(err) == dialog.ErrAborted {
+					// No-op.
+				} else if err != nil {
+					mv.errors <- errors.Wrapf(err, "Selecting label")
+				} else {
+					nv := NewMessageView(ctx, label.Key, "", mv.keys)
+					// TODO: not optimal, since it adds a
+					// stack frame on every navigation.
+					return nv.Run(ctx)
 				}
-				nv := NewMessageView(ctx, label.Key, "", mv.keys)
-
-				// TODO: not optimal, since it adds a
-				// stack frame on every navigation.
-				return nv.Run(ctx)
 			case 's':
 				q, err := dialog.Entry("Query> ", mv.keys)
 				if err != nil {
-					return err
-				}
-				if q != "" {
+					mv.errors <- errors.Wrapf(err, "Getting query")
+				} else if q != "" {
 					nv := NewMessageView(ctx, "", q, mv.keys)
 					// TODO: not optimal, since it adds a
 					// stack frame on every navigation.
@@ -270,7 +275,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			case 'q':
 				return nil
 			default:
-				log.Infof("Unknown key %v", key)
+				log.Infof("MessageListView got unknown key %v", key)
 			}
 		}
 		if mv.messages != nil {
