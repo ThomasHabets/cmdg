@@ -141,7 +141,7 @@ func (m *Message) HasData(level DataLevel) bool {
 }
 
 func (m *Message) IsUnread() bool {
-	return m.HasLabel("UNREAD")
+	return m.HasLabel(Unread)
 }
 
 func (m *Message) HasLabel(label string) bool {
