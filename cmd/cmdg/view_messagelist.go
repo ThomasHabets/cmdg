@@ -29,6 +29,7 @@ N, n, j   — Next message
 P, p, k   — Previous message
 r         — Reload current view
 g         — Go to label
+1         — Go to inbox
 s         — Search
 q         — Quit
 
@@ -417,6 +418,10 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// stack frame on every navigation.
 					return nv.Run(ctx)
 				}
+			case '1':
+				// TODO: not optimal, since it adds a
+				// stack frame on every navigation.
+				return NewMessageView(ctx, cmdg.Inbox, "", mv.keys).Run(ctx)
 			case 's':
 				q, err := dialog.Entry("Query> ", mv.keys)
 				if err != nil {
