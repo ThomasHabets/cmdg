@@ -19,7 +19,47 @@ import (
 
 const (
 	tsLayout = "2006-01-02 15:04:05"
+
+	openMessageViewHelp = `?         — Help
+l         — Add label
+^R        — Reload
+L         — Remove label
+u         — Exit message
+U         — Mark unread
+n         — Scroll down
+space     — Page down
+backspace — Page up
+p         — Scroll up
+f         — Forward message
+r         — Reply
+a         — Reply all
+e         — Archive
+t         — Browse attachments (if any)
+\         — Show raw message source
+
+Press [enter] to exit
+`
 )
+
+func help(txt string, keys *input.Input) error {
+	screen, err := display.NewScreen()
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(txt, "\n")
+	screen.Printlnf(0, strings.Repeat("—", screen.Width))
+	for n, l := range lines {
+		screen.Printlnf(n+1, "%s", l)
+	}
+	for {
+		screen.Draw()
+		k := <-keys.Chan()
+		switch k {
+		case input.Enter:
+			return nil
+		}
+	}
+}
 
 type OpenMessageView struct {
 	msg    *cmdg.Message
@@ -251,6 +291,8 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					}
 					ov.update <- struct{}{}
 				}()
+			case '?':
+				help(openMessageViewHelp, ov.keys)
 			case 'l':
 				var opts []*dialog.Option
 				for _, l := range conn.Labels() {

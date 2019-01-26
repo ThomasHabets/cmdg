@@ -17,6 +17,23 @@ import (
 
 const (
 	scrollLimit = 5
+
+	messageListViewHelp = `?         — Help
+enter     — Open message
+x         — Mark message
+e         — Archive marked messages
+l         — Label marked messages
+L         — Unlabel marked messages
+c         — Compose new message
+N, n, j   — Next message
+P, p, k   — Previous message
+r         — Reload current view
+g         — Go to label
+s         — Search
+q         — Quit
+
+Press [enter] to exit
+`
 )
 
 var (
@@ -254,6 +271,8 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		case key := <-mv.keys.Chan():
 			log.Debugf("MessageListView got key %d", key)
 			switch key {
+			case '?':
+				help(messageListViewHelp, mv.keys)
 			case input.Enter:
 				vo, err := NewOpenMessageView(ctx, mv.messages[mv.pos], mv.keys)
 				if err != nil {
