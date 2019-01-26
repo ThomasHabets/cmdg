@@ -1,7 +1,6 @@
 // cmdg is the next generation cmdg.
 //
 // TODO before it can replace old code:
-// * HTML emails.
 // * Reconnecting (not needed?)
 // * Periodic refresh of inbox
 //

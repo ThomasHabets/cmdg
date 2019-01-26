@@ -1,6 +1,7 @@
 package cmdg
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"mime/multipart"
 	"mime/quotedprintable"
 	"net/mail"
+	"os/exec"
 	"regexp"
 	"strings"
 	"sync"
@@ -31,6 +33,8 @@ const (
 
 var (
 	GPG *gpg.GPG
+
+	Lynx = "lynx" // Binary
 )
 
 type Attachment struct {
@@ -459,20 +463,42 @@ func partIsAttachment(p *gmail.MessagePart) bool {
 	return false
 }
 
+func htmlRender(ctx context.Context, s string) (string, error) {
+	var stdout bytes.Buffer
+	st := time.Now()
+	cmd := exec.CommandContext(ctx, Lynx, "-dump", "-stdin")
+	cmd.Stdin = strings.NewReader(s)
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	log.Infof("Rendered HTML in %v", time.Since(st))
+	return fmt.Sprintf("%sRendered HTML%s\n%s", display.Blue, display.Reset, stdout.String()), nil
+}
+
 var errNoUsablePart = fmt.Errorf("could not find message part usable as message body")
 
 func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string, error) {
 	if len(part.Parts) == 0 {
 		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
 		data, err := mimeDecode(string(part.Body.Data))
-		data = stripUnprintable(data)
-		// log.Infof("… contents is %q", data)
 		if err != nil {
 			return "", err
 		}
+
+		data = stripUnprintable(data)
+		if part.MimeType == "text/html" {
+			var err error
+			data, err = htmlRender(ctx, data)
+			if err != nil {
+				return "", errors.Wrapf(err, "rendering HTML")
+			}
+		}
+
 		return data, nil
 	}
 
+	var html *gmail.MessagePart
 	log.Infof("Multi part body (%q) with input len %d", part.MimeType, len(part.Body.Data))
 	for _, p := range part.Parts {
 		if partIsAttachment(p) {
@@ -480,12 +506,28 @@ func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string
 		}
 		switch p.MimeType {
 		case "text/plain":
+			log.Infof("text/plain")
 			return m.makeBody(ctx, p)
+		case "text/html":
+			html = p
 		case "multipart/alternative":
+			log.Infof("multipart/alternative")
 			return m.makeBody(ctx, p)
 		default:
 			log.Infof("Ignoring part of type %q", p.MimeType)
 		}
+	}
+
+	if html != nil {
+		data, err := mimeDecode(string(html.Body.Data))
+		if err != nil {
+			return "", err
+		}
+		data, err = htmlRender(ctx, data)
+		if err != nil {
+			return "", errors.Wrapf(err, "rendering HTML")
+		}
+		return data, nil
 	}
 
 	// Could not find any part of message to use as body.
