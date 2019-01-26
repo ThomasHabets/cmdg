@@ -192,6 +192,23 @@ func (c *CmdG) BatchUnlabel(ctx context.Context, ids []string, labelID string) e
 	}).Context(ctx).Do()
 }
 
+func (c *CmdG) HistoryID(ctx context.Context) (uint64, error) {
+	p, err := c.gmail.Users.GetProfile(email).Context(ctx).Do()
+	if err != nil {
+		return 0, err
+	}
+	return p.HistoryId, nil
+}
+
+func (c *CmdG) MoreHistory(ctx context.Context, start uint64, labelID string) (bool, error) {
+	log.Infof("History for %d %s", start, labelID)
+	r, err := c.gmail.Users.History.List(email).Context(ctx).StartHistoryId(start).LabelId(labelID).Do()
+	if err != nil {
+		return false, err
+	}
+	return len(r.History) > 0, nil
+}
+
 func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*Page, error) {
 	nres := int64(pageSize)
 	q := c.gmail.Users.Messages.List(email).

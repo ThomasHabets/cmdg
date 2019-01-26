@@ -2,7 +2,6 @@
 //
 // TODO before it can replace old code:
 // * Reconnecting (not needed?)
-// * Periodic refresh of inbox
 //
 // Missing features that can wait:
 // * colors on labels

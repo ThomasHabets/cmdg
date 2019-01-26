@@ -38,7 +38,8 @@ Press [enter] to exit
 )
 
 var (
-	messageListReloadTime = time.Minute
+	messageListReloadTime       = time.Minute
+	messageListHistoryCheckTime = 10 * time.Second
 )
 
 type MessageView struct {
@@ -51,10 +52,12 @@ type MessageView struct {
 	errors    chan error
 	pageCh    chan *cmdg.Page
 	messageCh chan *cmdg.Message
+	historyCh chan uint64
 
 	// Only for use by main thread.
-	messages []*cmdg.Message
-	pos      int
+	messages  []*cmdg.Message
+	pos       int
+	historyID uint64
 }
 
 func NewMessageView(ctx context.Context, label, q string, in *input.Input) *MessageView {
@@ -62,6 +65,7 @@ func NewMessageView(ctx context.Context, label, q string, in *input.Input) *Mess
 		label:     label,
 		errors:    make(chan error, 20),
 		pageCh:    make(chan *cmdg.Page),
+		historyCh: make(chan uint64, 20),
 		messageCh: make(chan *cmdg.Message),
 		keys:      in,
 		query:     q,
@@ -71,6 +75,16 @@ func NewMessageView(ctx context.Context, label, q string, in *input.Input) *Mess
 }
 
 func (m *MessageView) fetchPage(ctx context.Context, token string) {
+	if token == "" {
+		// Only update history on first page.
+		hid, err := conn.HistoryID(ctx)
+		if err != nil {
+			log.Errorf("Failed to get history ID: %v", err)
+		} else {
+			m.historyCh <- hid
+		}
+	}
+
 	log.Infof("Listing messages on label %q query %q with token %q…", m.label, m.query, token)
 	page, err := conn.ListMessages(ctx, m.label, m.query, token)
 	if err != nil {
@@ -215,12 +229,23 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		return nil
 	}
 
-	timer := time.NewTimer(messageListReloadTime)
+	timer := time.NewTimer(messageListHistoryCheckTime)
 	defer timer.Stop()
 
 	for {
+		status := ""
 		select {
 		case <-timer.C:
+			if mv.label != "" {
+				h, err := conn.MoreHistory(ctx, mv.historyID, mv.label)
+				if err != nil {
+					mv.errors <- errors.Wrapf(err, "Getting history")
+				} else if h {
+					status = "History!"
+				} else {
+					status = "No new history"
+				}
+			}
 			if false {
 				// TODO: don't reset pos and scroll
 				log.Infof("Timed reload")
@@ -235,6 +260,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				// Screen failed to init. Yeah it's time to bail.
 				return err
 			}
+		case hid := <-mv.historyCh:
+			log.Infof("History ID: %d", hid)
+			mv.historyID = hid
 		case err := <-mv.errors:
 			showError(screen, mv.keys, err.Error())
 			screen.Draw()
@@ -459,7 +487,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			log.Infof("Print took %v", time.Since(st))
 		}
 		// Print status.
-		status := ""
 		if theresMore {
 			status += display.Color(50) + "Loading…"
 		}
