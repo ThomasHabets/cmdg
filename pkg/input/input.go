@@ -22,6 +22,10 @@ const (
 	CtrlV     = 22
 )
 
+var (
+	repeatProtection = 5 * time.Millisecond
+)
+
 type Input struct {
 	running chan struct{} // Closed (non-blocking) if running.
 	stop    chan struct{} // Close to stop.
@@ -85,21 +89,26 @@ func (i *Input) Start() error {
 				log.Errorf("syscall.Select(): %v", err)
 			}
 			if n == 1 {
+				//idle := keyTime.Sub(last)
 				b := make([]byte, 1, 1)
-				log.Infof("Non-iowait input time: %v", time.Since(last))
-				log.Infof("About to read")
+				//log.Infof("Non-iowait input time: %v", idle)
+				// log.Infof("About to read")
 				n, err := os.Stdin.Read(b)
-				log.Infof("read done")
-				last = time.Now()
-
-				if err != nil {
-					log.Errorf("Read returned error: %v", err)
-					return
-				} else if n != 1 {
-					log.Errorf("Read returned other than 1: %d", n)
-					return
+				// log.Infof("read done")
+				keyTime := time.Now()
+				if keyTime.Sub(last) < repeatProtection {
+					log.Warningf("Paste protection blocked a keypress registering. %v < %v", keyTime.Sub(last), repeatProtection)
+				} else {
+					if err != nil {
+						log.Errorf("Read returned error: %v", err)
+						return
+					} else if n != 1 {
+						log.Errorf("Read returned other than 1: %d", n)
+						return
+					}
+					i.keys <- b[0]
 				}
-				i.keys <- b[0]
+				last = keyTime
 			}
 			select {
 			case <-i.stop:
