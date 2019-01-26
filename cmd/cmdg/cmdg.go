@@ -10,6 +10,7 @@
 // * attach stuff on send
 // * sign on send
 // * encrypt on send
+// * signature (store on Drive)
 package main
 
 import (

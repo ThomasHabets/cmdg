@@ -18,20 +18,20 @@ import (
 const (
 	scrollLimit = 5
 
-	messageListViewHelp = `?         — Help
-enter     — Open message
-x         — Mark message
-e         — Archive marked messages
-l         — Label marked messages
-L         — Unlabel marked messages
-c         — Compose new message
-N, n, j   — Next message
-P, p, k   — Previous message
-r         — Reload current view
-g         — Go to label
-1         — Go to inbox
-s         — Search
-q         — Quit
+	messageListViewHelp = `?             — Help
+enter         — Open message
+x             — Mark message
+e             — Archive marked messages
+l             — Label marked messages
+L             — Unlabel marked messages
+c             — Compose new message
+N, n, ^N, j   — Next message
+P, p, ^P, k   — Previous message
+r, ^R         — Reload current view
+g             — Go to label
+1             — Go to inbox
+s             — Search
+q             — Quit
 
 Press [enter] to exit
 `
