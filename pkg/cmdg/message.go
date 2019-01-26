@@ -363,6 +363,8 @@ func colorMap(fgs, bgs string) string {
 		"#fbd3e0": 205, // NON-STANDARD pink.
 		"#fbe983": 11,  // NON-STANDARD yellow.
 		"#594c05": 58,  // NON-STANDARD dark yellow.
+		"#b3efd3": 79,  // NON-standard light greenish
+		"#0b4f30": 22,  // NON-standard green
 	}
 
 	fg, found := textColorMap[fgs]
