@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -250,6 +251,61 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					}
 					ov.update <- struct{}{}
 				}()
+			case 'l':
+				var opts []*dialog.Option
+				for _, l := range conn.Labels() {
+					opts = append(opts, &dialog.Option{
+						Key:   l.ID,
+						Label: l.Label,
+					})
+				}
+				label, err := dialog.Selection(opts, "Label> ", false, ov.keys)
+				if errors.Cause(err) == dialog.ErrAborted {
+					// No-op.
+				} else if err != nil {
+					ov.errors <- errors.Wrapf(err, "Selecting label")
+				} else {
+					st := time.Now()
+					if err := ov.msg.AddLabelID(ctx, label.Key); err != nil {
+						ov.errors <- errors.Wrapf(err, "Failed to label")
+					} else {
+						log.Infof("Labelled: %v", time.Since(st))
+					}
+					if err := ov.msg.ReloadLabels(ctx); err != nil {
+						ov.errors <- errors.Wrapf(err, "Failed to reload labels")
+					}
+				}
+				ov.Draw(lines, scroll)
+			case 'L':
+				var opts []*dialog.Option
+				labels, err := ov.msg.GetLabels(ctx, true)
+				if err != nil {
+					ov.errors <- errors.Wrapf(err, "Getting message labels")
+				} else {
+					for _, l := range labels {
+						opts = append(opts, &dialog.Option{
+							Key:   l.ID,
+							Label: l.Label,
+						})
+					}
+					label, err := dialog.Selection(opts, "Label> ", false, ov.keys)
+					if errors.Cause(err) == dialog.ErrAborted {
+						// No-op.
+					} else if err != nil {
+						ov.errors <- errors.Wrapf(err, "Selecting label")
+					} else {
+						st := time.Now()
+						if err := ov.msg.RemoveLabelID(ctx, label.Key); err != nil {
+							ov.errors <- errors.Wrapf(err, "Failed to unlabel")
+						} else {
+							log.Infof("Unlabelled: %v", time.Since(st))
+						}
+						if err := ov.msg.ReloadLabels(ctx); err != nil {
+							ov.errors <- errors.Wrapf(err, "Failed to reload labels")
+						}
+					}
+					ov.Draw(lines, scroll)
+				}
 			case 'u', 'q':
 				return nil, nil
 			case 'U':

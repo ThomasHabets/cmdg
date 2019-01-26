@@ -405,6 +405,9 @@ func (m *Message) ReloadLabels(ctx context.Context) error {
 		Format(string(LevelMinimal)).
 		Context(ctx).
 		Do()
+	if err != nil {
+		return err
+	}
 	m.m.Lock()
 	defer m.m.Unlock()
 	if m.Response == nil {
@@ -413,7 +416,7 @@ func (m *Message) ReloadLabels(ctx context.Context) error {
 	} else {
 		m.Response.LabelIds = msg.LabelIds
 	}
-	return err
+	return nil
 }
 
 func (m *Message) tryGPGSigned(ctx context.Context) error {

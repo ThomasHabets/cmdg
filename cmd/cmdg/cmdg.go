@@ -3,7 +3,6 @@
 // TODO before it can replace old code:
 // * HTML emails.
 // * Reconnecting (not needed?)
-// * Add/remove label
 // * Periodic refresh of inbox, labels, and contacts
 // * Configuration setup
 //
