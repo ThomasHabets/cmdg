@@ -242,8 +242,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					mv.errors <- errors.Wrapf(err, "Getting history")
 				} else if h {
 					status = "History!"
-				} else {
-					status = "No new history"
 				}
 			}
 			if false {

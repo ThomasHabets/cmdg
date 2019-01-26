@@ -128,6 +128,14 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 				// TODO: also archive.
 			}
 			return nil
+		case "d":
+			st := time.Now()
+			if err := conn.MakeDraft(ctx, msg); err != nil {
+				// TODO: ask to save on local filesystem.
+				return err
+			}
+			log.Infof("Took %v to make draft", time.Since(st))
+			return nil
 		default:
 			return fmt.Errorf("can't happen! Got %q from compose question", a)
 		}

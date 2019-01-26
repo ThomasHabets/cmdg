@@ -171,6 +171,15 @@ func (c *CmdG) Send(ctx context.Context, msg string) error {
 	return err
 }
 
+func (c *CmdG) MakeDraft(ctx context.Context, msg string) error {
+	_, err := c.gmail.Users.Drafts.Create(email, &gmail.Draft{
+		Message: &gmail.Message{
+			Raw: mimeEncode(msg),
+		},
+	}).Context(ctx).Do()
+	return err
+}
+
 func (c *CmdG) BatchArchive(ctx context.Context, ids []string) error {
 	return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
 		Ids:            ids,
