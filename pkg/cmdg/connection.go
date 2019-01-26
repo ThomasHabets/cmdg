@@ -13,10 +13,11 @@ import (
 )
 
 const (
-	version   = "0.4"
+	version   = "1.0"
 	userAgent = "cmdg med " + version
-	scope     = "https://www.googleapis.com/auth/gmail.modify https://www.google.com/m8/feeds"
-	pageSize  = 100
+	// Scope for email, contacts, and appdata.
+	scope    = "https://www.googleapis.com/auth/gmail.modify https://www.google.com/m8/feeds https://www.googleapis.com/auth/drive.appdata"
+	pageSize = 100
 
 	accessType = "offline"
 	email      = "me"
