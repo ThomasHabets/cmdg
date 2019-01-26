@@ -26,7 +26,7 @@ func (o *Option) String() string {
 }
 
 // ^C is always a valid option.
-func Question(opts []Option, keys *input.Input) (string, error) {
+func Question(title string, opts []Option, keys *input.Input) (string, error) {
 	screen, err := display.NewScreen()
 	if err != nil {
 		return "", err
@@ -41,10 +41,11 @@ func Question(opts []Option, keys *input.Input) (string, error) {
 
 	start := (screen.Height-len(opts))/2 - 2
 	screen.Printlnf(start, "%s", strings.Repeat("—", screen.Width))
+	screen.Printlnf(start+1, "%s%s", strings.Repeat(" ", (screen.Width-len(title))/2), title)
 	for n, l := range opts {
-		screen.Printlnf(start+n+1, "%s%s", prefix, l.String())
+		screen.Printlnf(start+n+2, "%s%s", prefix, l.String())
 	}
-	screen.Printlnf(start+len(opts)+1, "%s", strings.Repeat("—", screen.Width))
+	screen.Printlnf(start+len(opts)+2, "%s", strings.Repeat("—", screen.Width))
 	screen.Draw()
 	for {
 		key := <-keys.Chan()

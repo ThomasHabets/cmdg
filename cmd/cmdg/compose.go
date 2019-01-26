@@ -106,7 +106,7 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 		// TODO: send signed.
 		// TODO: attach.
 
-		a, err := dialog.Question(sendQ, keys)
+		a, err := dialog.Question("Send message?", sendQ, keys)
 		if err != nil {
 			return err
 		}
@@ -118,12 +118,44 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 		case "^C", "a": // Abandon.
 			return nil
 		case "s", "S":
-			st := time.Now()
-			if err := conn.Send(ctx, msg); err != nil {
-				// TODO: ask to save on local filesystem.
-				return err
+			for {
+				st := time.Now()
+				if err := conn.Send(ctx, msg); err != nil {
+					a, err := dialog.Question(fmt.Sprintf("Failed to send (%q). Save to local file?", err.Error()), []dialog.Option{
+						{Key: "y", Label: "Y — Yes, save to local file"},
+						{Key: "n", Label: "N — No, discard completely"},
+						{Key: "t", Label: "t — Try again"},
+					}, keys)
+					if errors.Cause(err) == dialog.ErrAborted {
+						// No no no, we won't let you passively cancel this. You say y or n.
+					} else if err != nil {
+						// OK, I give up.
+						return err
+					}
+					switch a {
+					case "y":
+						f, err := ioutil.TempFile(".", "cmdg-draft-*.txt")
+						if err != nil {
+							return errors.Wrapf(err, "couldn't open local file")
+						}
+						if _, err := f.Write([]byte(msg)); err != nil {
+							f.Close()
+							return errors.Wrapf(err, "couldn't write to local file")
+						}
+						if err := f.Close(); err != nil {
+							return errors.Wrapf(err, "couldn't close local file")
+						}
+						return nil
+					case "n":
+						return nil
+					case "t":
+						// Try again.
+					}
+				} else {
+					log.Infof("Took %v to send message", time.Since(st))
+					break
+				}
 			}
-			log.Infof("Took %v to send message", time.Since(st))
 			if a == "S" {
 				// TODO: also archive.
 			}

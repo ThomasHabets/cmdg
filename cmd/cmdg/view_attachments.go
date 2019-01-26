@@ -44,7 +44,7 @@ func listAttachments(ctx context.Context, keys *input.Input, msg *cmdg.Message) 
 			{Key: "o", Label: "o — Open"},
 			{Key: "a", Label: "a — Abort"},
 		}
-		a, err := dialog.Question(sendQ, keys)
+		a, err := dialog.Question("Action to do on attachment", sendQ, keys)
 		if err != nil {
 			return err
 		}
