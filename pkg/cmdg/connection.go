@@ -2,21 +2,25 @@ package cmdg
 
 import (
 	"context"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"sync"
 
-	"github.com/ThomasHabets/drive-du/lib"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/oauth2"
 	gmail "google.golang.org/api/gmail/v1"
+	"google.golang.org/api/googleapi/transport"
 )
 
 const (
 	version   = "1.0"
 	userAgent = "cmdg med " + version
 	// Scope for email, contacts, and appdata.
-	scope    = "https://www.googleapis.com/auth/gmail.modify https://www.google.com/m8/feeds https://www.googleapis.com/auth/drive.appdata"
+	scope = "https://www.googleapis.com/auth/gmail.modify https://www.google.com/m8/feeds https://www.googleapis.com/auth/drive.appdata"
+
 	pageSize = 100
 
 	accessType = "offline"
@@ -72,24 +76,50 @@ func New(fn string) (*CmdG, error) {
 	}
 
 	// Read config.
-	conf, err := lib.ReadConfig(fn)
-	if err != nil {
-		return nil, errors.Wrap(err, "reading config")
+	var conf Config
+	{
+		f, err := ioutil.ReadFile(fn)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(f, &conf); err != nil {
+			return nil, errors.Wrapf(err, "unmarshalling config")
+		}
 	}
 
+	// Attach APIkey, if any.
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{
+		Transport: &transport.APIKey{Key: conf.OAuth.ApiKey},
+	})
+
 	// Connect.
-	conn.authedClient, err = lib.Connect(conf.OAuth, scope, accessType)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to connect to gmail")
+	{
+		token := &oauth2.Token{
+			AccessToken:  conf.OAuth.AccessToken,
+			RefreshToken: conf.OAuth.RefreshToken,
+		}
+		cfg := oauth2.Config{
+			ClientID:     conf.OAuth.ClientID,
+			ClientSecret: conf.OAuth.ClientSecret,
+			Endpoint: oauth2.Endpoint{
+				AuthURL:  "https://accounts.google.com/o/oauth2/auth",
+				TokenURL: "https://accounts.google.com/o/oauth2/token",
+			},
+			Scopes:      []string{scope},
+			RedirectURL: oauthRedirectOffline,
+		}
+		conn.authedClient = cfg.Client(ctx, token)
 	}
 
 	// Set up client.
-	conn.gmail, err = gmail.New(conn.authedClient)
-	if err != nil {
-		return nil, err
+	{
+		var err error
+		conn.gmail, err = gmail.New(conn.authedClient)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating GMail client")
+		}
+		conn.gmail.UserAgent = userAgent
 	}
-	conn.gmail.UserAgent = userAgent
-
 	return conn, nil
 }
 

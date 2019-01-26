@@ -4,7 +4,6 @@
 // * HTML emails.
 // * Reconnecting (not needed?)
 // * Periodic refresh of inbox, labels, and contacts
-// * Configuration setup
 //
 // Missing features that can wait:
 // * colors on labels
@@ -28,9 +27,10 @@ import (
 )
 
 var (
-	cfgFile = flag.String("config", "", "Config file. Default is ~/"+path.Join(defaultConfigDir, configFileName))
-	gpgFlag = flag.String("gpg", "gpg", "Path to GnuPG.")
-	logFile = flag.String("log", "/dev/null", "Log debug data to this file.")
+	cfgFile   = flag.String("config", "", "Config file. Default is ~/"+path.Join(defaultConfigDir, configFileName))
+	gpgFlag   = flag.String("gpg", "gpg", "Path to GnuPG.")
+	logFile   = flag.String("log", "/dev/null", "Log debug data to this file.")
+	configure = flag.Bool("configure", false, "Configure OAuth.")
 
 	conn *cmdg.CmdG
 
@@ -71,6 +71,13 @@ func run(ctx context.Context) error {
 func main() {
 	syscall.Umask(0077)
 	flag.Parse()
+
+	if *configure {
+		if err := cmdg.Configure(configFilePath()); err != nil {
+			log.Fatalf("Configuring: %v", err)
+		}
+		return
+	}
 
 	ctx := context.Background()
 
