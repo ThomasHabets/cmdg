@@ -4,6 +4,7 @@
 // * HTML emails.
 // * Reconnecting (not needed?)
 // * Periodic refresh of inbox
+// * Help messages.
 //
 // Missing features that can wait:
 // * colors on labels

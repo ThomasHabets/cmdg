@@ -384,7 +384,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					}
 					opts = append(opts, &dialog.Option{
 						Key:   l.ID,
-						Label: l.Label,
+						Label: l.LabelString(),
 					})
 				}
 				label, err := dialog.Selection(opts, "Label> ", false, mv.keys)

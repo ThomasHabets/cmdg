@@ -199,6 +199,8 @@ func parseTime(s string) (time.Time, error) {
 		"Mon, 2 Jan 2006 15:04:05 -0700 (GMT-07:00)",
 		"Mon, _2 Jan 2006 15:04:05 -0700 (GMT-07:00)",
 		"Mon, _2 Jan 06 15:04:05 -0700",
+		"2 Jan 06 15:04:05",
+		"_2 Jan 06 15:04:05",
 		time.RFC1123Z,
 	} {
 		t, err = time.Parse(layout, s)
@@ -256,6 +258,13 @@ type Label struct {
 	Response *gmail.Label
 }
 
+func (l *Label) LabelString() string {
+	if l.Response.Color == nil {
+		return l.Label
+	}
+	return fmt.Sprintf("%s%s%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label, display.Reset)
+}
+
 func (m *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, error) {
 	if err := m.Preload(ctx, LevelMinimal); err != nil {
 		return nil, err
@@ -274,6 +283,96 @@ func (m *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, err
 	return ret, nil
 }
 
+func colorMap(fgs, bgs string) string {
+	// Textcolor.
+	textColorMap := map[string]int{
+		// Shades of grey.
+		"#000000": 232,
+		"#434343": 240,
+		"#666666": 238,
+		"#999999": 248,
+		"#cccccc": 240,
+		"#efefef": 240,
+		"#f3f3f3": 240,
+		"#ffffff": 255,
+
+		"#4986e7": 21, // NON-STANDARD blue
+
+		"#fb4c2f": 9,   // Orange-ish.
+		"#ffad46": 208, // NON-STANDARD orange
+		"#ffad47": 240, // Yellow-orange
+		"#fad165": 240, // Yellow
+
+		"#16a766": 240, // Green-ish.
+		"#16a765": 28,  // NON-STANDARD green.
+		"#43d692": 240, // Lighter puke-green.
+
+		"#4a86e8": 240, // Light blue
+		"#a479e2": 240, // Purple
+		"#f691b3": 240, // Pink
+		"#f6c5be": 240, // Pig-pink
+		"#ffe6c7": 240, // White-yellow
+		"#fef1d1": 240, // Even lighter.
+		"#b9e4d0": 240, // Puke-green.
+		"#c6f3de": 200,
+		"#c9daf8": 200,
+		"#e4d7f5": 200,
+		"#fcdee8": 200,
+		"#efa093": 200,
+		"#ffd6a2": 200,
+		"#fce8b3": 200,
+		"#89d3b2": 200,
+		"#a0eac9": 200,
+		"#a4c2f4": 200,
+		"#d0bcf1": 200,
+		"#fbc8d9": 200,
+		"#e66550": 200,
+		"#ffbc6b": 200,
+		"#fcda83": 200,
+		"#44b984": 200,
+		"#68dfa9": 200,
+		"#6d9eeb": 200,
+		"#b694e8": 200,
+		"#f7a7c0": 200,
+		"#cc3a21": 200,
+		"#eaa041": 200,
+		"#f2c960": 200,
+		"#149e60": 200,
+		"#3dc789": 200,
+		"#3c78d8": 200,
+		"#8e63ce": 200,
+		"#e07798": 200,
+		"#ac2b16": 200,
+		"#cf8933": 200,
+		"#d5ae49": 200,
+		"#0b804b": 200,
+		"#2a9c68": 200,
+		"#285bac": 200,
+		"#653e9b": 200,
+		"#b65775": 200,
+		"#822111": 200,
+		"#a46a21": 200,
+		"#aa8831": 200,
+		"#076239": 200,
+		"#1a764d": 200,
+		"#1c4587": 200,
+		"#41236d": 200,
+		"#83334c": 200,
+	}
+
+	fg, found := textColorMap[fgs]
+	if !found {
+		log.Infof("Could not find foreground %q", fgs)
+		fg = 200
+	}
+	bg, found := textColorMap[bgs]
+	if !found {
+		log.Infof("Could not find background %q", bgs)
+		bg = 200
+	}
+	return fmt.Sprintf("\033[38;5;%dm\033[48;5;%dm", fg, bg)
+}
+
 // Return labels as a printable string. With colors, but without "UNREAD".
 func (m *Message) GetLabelsString(ctx context.Context) (string, error) {
 	var s []string
@@ -282,7 +381,7 @@ func (m *Message) GetLabelsString(ctx context.Context) (string, error) {
 		return "", err
 	}
 	for _, l := range ls {
-		s = append(s, l.Label)
+		s = append(s, l.LabelString())
 	}
 	return strings.Join(s, ", "), nil
 }
