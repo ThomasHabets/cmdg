@@ -288,6 +288,47 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						} else {
 							log.Infof("Batch labelled %d: %v", len(ids), time.Since(st))
 						}
+						for _, id := range ids {
+							go mv.messages[messagePos[id]].ReloadLabels(ctx)
+						}
+					}
+				}
+			case 'L':
+				ids, _, _ := filterMarked(mv.messages, marked, mv.pos)
+				if len(ids) != 0 {
+					var opts []*dialog.Option
+				outer:
+					for _, l := range conn.Labels() {
+						if l.ID == cmdg.Inbox {
+							continue
+						}
+						for _, m := range ids {
+							if !mv.messages[messagePos[m]].HasLabel(l.ID) {
+								continue outer
+							}
+						}
+						opts = append(opts, &dialog.Option{
+							Key:   l.ID,
+							Label: l.Label,
+						})
+					}
+					if len(opts) > 0 {
+						label, err := dialog.Selection(opts, "Label> ", false, mv.keys)
+						if errors.Cause(err) == dialog.ErrAborted {
+							// No-op.
+						} else if err != nil {
+							mv.errors <- errors.Wrapf(err, "Selecting label")
+						} else {
+							st := time.Now()
+							if err := conn.BatchUnlabel(ctx, ids, label.Key); err != nil {
+								mv.errors <- errors.Wrapf(err, "Batch labelling")
+							} else {
+								log.Infof("Batch unlabelled %d: %v", len(ids), time.Since(st))
+							}
+						}
+						for _, id := range ids {
+							go mv.messages[messagePos[id]].ReloadLabels(ctx)
+						}
 					}
 				}
 			case 'c':

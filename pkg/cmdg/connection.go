@@ -154,6 +154,13 @@ func (c *CmdG) BatchLabel(ctx context.Context, ids []string, labelID string) err
 	}).Context(ctx).Do()
 }
 
+func (c *CmdG) BatchUnlabel(ctx context.Context, ids []string, labelID string) error {
+	return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
+		Ids:            ids,
+		RemoveLabelIds: []string{labelID},
+	}).Context(ctx).Do()
+}
+
 func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*Page, error) {
 	nres := int64(pageSize)
 	q := c.gmail.Users.Messages.List(email).

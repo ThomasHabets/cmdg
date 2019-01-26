@@ -5,6 +5,7 @@
 // * Reconnecting (not needed?)
 // * Add/remove label
 // * Periodic refresh of inbox, labels, and contacts
+// * Configuration setup
 //
 // Missing features that can wait:
 // * colors on labels
