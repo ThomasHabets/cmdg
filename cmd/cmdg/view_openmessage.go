@@ -398,7 +398,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				if err := ov.showRaw(ctx); err != nil {
 					ov.errors <- err
 				}
-			case input.Backspace:
+			case input.Backspace, input.CtrlH:
 				scroll = ov.scroll(ctx, len(lines), scroll, -(ov.screen.Height - 10))
 				ov.Draw(lines, scroll)
 			default:

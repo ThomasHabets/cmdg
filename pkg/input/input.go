@@ -18,6 +18,7 @@ const (
 	CtrlC     = 3
 	CtrlR     = 18
 	CtrlN     = 14
+	CtrlH     = 8
 	CtrlP     = 16
 	CtrlV     = 22
 )
