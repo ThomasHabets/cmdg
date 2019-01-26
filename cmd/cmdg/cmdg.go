@@ -3,7 +3,7 @@
 // TODO before it can replace old code:
 // * HTML emails.
 // * Reconnecting (not needed?)
-// * Periodic refresh of inbox, labels, and contacts
+// * Periodic refresh of inbox
 //
 // Missing features that can wait:
 // * colors on labels
@@ -18,6 +18,7 @@ import (
 	"os"
 	"path"
 	"syscall"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -42,6 +43,8 @@ var (
 
 	pagerBinary  string
 	visualBinary string
+
+	labelReloadTime = time.Minute
 )
 
 func configFilePath() string {
@@ -110,6 +113,23 @@ func main() {
 		log.Fatalf("Loading contacts: %v", err)
 	}
 	log.Infof("Contacts loaded")
+
+	go func() {
+		ch := time.Tick(labelReloadTime)
+		for {
+			<-ch
+			if err := conn.LoadLabels(ctx); err != nil {
+				log.Errorf("Loading labels: %v", err)
+			} else {
+				log.Infof("Reloaded labels")
+			}
+			if err := conn.LoadContacts(ctx); err != nil {
+				log.Errorf("Loading contacts: %v", err)
+			} else {
+				log.Infof("Reloaded contacts")
+			}
+		}
+	}()
 
 	// Redirect logging.
 	{
