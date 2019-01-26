@@ -165,7 +165,22 @@ func (m *Message) RemoveLabelID(ctx context.Context, labelID string) error {
 	if err != nil {
 		return errors.Wrapf(err, "removing label ID %q from %q", labelID, m.ID)
 	}
-	log.Infof("Removed label %q from %q: %v", labelID, m.ID, time.Since(st))
+	log.Infof("Removed label ID %q from %q: %v", labelID, m.ID, time.Since(st))
+	if err := m.ReloadLabels(ctx); err != nil {
+		return errors.Wrapf(err, "reloading labels from %q", m.ID)
+	}
+	return err
+}
+
+func (m *Message) AddLabelID(ctx context.Context, labelID string) error {
+	st := time.Now()
+	_, err := m.conn.gmail.Users.Messages.Modify(email, m.ID, &gmail.ModifyMessageRequest{
+		AddLabelIds: []string{labelID},
+	}).Context(ctx).Do()
+	if err != nil {
+		return errors.Wrapf(err, "removing label ID %q from %q", labelID, m.ID)
+	}
+	log.Infof("Added label ID %q to %q: %v", labelID, m.ID, time.Since(st))
 	if err := m.ReloadLabels(ctx); err != nil {
 		return errors.Wrapf(err, "reloading labels from %q", m.ID)
 	}

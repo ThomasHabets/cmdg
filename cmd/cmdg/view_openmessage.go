@@ -252,6 +252,12 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				}()
 			case 'u', 'q':
 				return nil, nil
+			case 'U':
+				if err := ov.msg.AddLabelID(ctx, cmdg.Unread); err != nil {
+					ov.errors <- fmt.Errorf("Failed to mark unread : %v", err)
+				} else {
+					return nil, nil
+				}
 			case 'n':
 				scroll = ov.scroll(ctx, len(lines), scroll, 1)
 				ov.Draw(lines, scroll)
