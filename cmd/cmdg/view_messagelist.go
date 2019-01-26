@@ -19,6 +19,10 @@ const (
 	scrollLimit = 5
 )
 
+var (
+	messageListReloadTime = time.Minute
+)
+
 type MessageView struct {
 	// Static state.
 	label string
@@ -193,8 +197,20 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		return nil
 	}
 
+	timer := time.NewTimer(messageListReloadTime)
+	defer timer.Stop()
+
 	for {
 		select {
+		case <-timer.C:
+			if false {
+				// TODO: don't reset pos and scroll
+				log.Infof("Timed reload")
+				empty()
+				screen.Clear()
+				go mv.fetchPage(ctx, "")
+			}
+
 		case <-mv.keys.Winch():
 			log.Infof("MessageListView got WINCH!")
 			if err := initScreen(); err != nil {
