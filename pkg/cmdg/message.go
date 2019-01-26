@@ -358,12 +358,15 @@ func colorMap(fgs, bgs string) string {
 		"#1c4587": 200,
 		"#41236d": 200,
 		"#83334c": 200,
+
+		"#711a36": 52,  // NON-STANDARD maroon.
+		"#fbd3e0": 205, // NON-STANDARD pink.
 	}
 
 	fg, found := textColorMap[fgs]
 	if !found {
 		log.Infof("Could not find foreground %q", fgs)
-		fg = 200
+		fg = 50
 	}
 	bg, found := textColorMap[bgs]
 	if !found {
