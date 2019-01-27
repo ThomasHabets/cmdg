@@ -229,7 +229,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		return nil
 	}
 
-	timer := time.NewTimer(messageListHistoryCheckTime)
+	timer := time.NewTicker(messageListHistoryCheckTime)
 	defer timer.Stop()
 
 	for {
