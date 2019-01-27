@@ -337,6 +337,20 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					mv.messages = nm
 					marked = map[string]bool{}
 				}
+			case '*':
+				curmsg := mv.messages[mv.pos]
+				if curmsg.HasLabel(cmdg.Starred) {
+					if err := curmsg.RemoveLabelID(ctx, cmdg.Starred); err != nil {
+						mv.errors <- errors.Wrap(err, "Removing STARRED label")
+					}
+				} else {
+					if err := curmsg.AddLabelID(ctx, cmdg.Starred); err != nil {
+						mv.errors <- errors.Wrap(err, "Adding STARRED label")
+					}
+				}
+				if err := curmsg.ReloadLabels(ctx); err != nil {
+					mv.errors <- errors.Wrapf(err, "Failed to reload labels")
+				}
 			case 'l':
 				ids, _, _ := filterMarked(mv.messages, marked, mv.pos)
 				if len(ids) != 0 {
