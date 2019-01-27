@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"mime"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -87,6 +89,25 @@ Subject:
 	return compose(ctx, conn, keys, prefill)
 }
 
+var fixSubjectRE = regexp.MustCompile("(?smi)^Subject: ([^\n]+)$")
+
+func fixSubject(msg string) string {
+	parts := strings.SplitN(msg, "\n\n", 2)
+	if len(parts) != 2 {
+		log.Warningf("Message is not two parts: %d", len(parts))
+		return msg
+	}
+	m := fixSubjectRE.FindStringSubmatch(parts[0])
+	if len(m) != 2 {
+		log.Infof("Not there in %q", parts[0])
+		return msg
+	}
+	return strings.Join([]string{
+		fixSubjectRE.ReplaceAllString(parts[0], fmt.Sprintf("Subject: %s", mime.QEncoding.Encode("utf-8", m[1]))),
+		parts[1],
+	}, "\n\n")
+}
+
 func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill string) error {
 	for {
 		// Get message content.
@@ -94,6 +115,8 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 		if err != nil {
 			return err
 		}
+
+		msg = fixSubject(msg)
 
 		// Ask to send it.
 		sendQ := []dialog.Option{
