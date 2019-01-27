@@ -19,8 +19,8 @@ const (
 )
 
 var (
-	replyPrefixes   = regexp.MustCompile(`^(Re|Sv|Aw): `)
-	forwardPrefixes = regexp.MustCompile(`^(Fwd): `)
+	replyPrefixes   = regexp.MustCompile(`(?i)^(Re|Sv|Aw): `)
+	forwardPrefixes = regexp.MustCompile(`(?i)^(Fwd): `)
 )
 
 func replyQuoted(s string) string {

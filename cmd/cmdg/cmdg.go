@@ -1,4 +1,28 @@
 // cmdg is the next generation cmdg.
+/*
+ *  Copyright (C) 2015-2018 Thomas Habets <thomas@habets.se>
+ *
+ *  This software is dual-licensed GPL and "Thomas is allowed to release a
+ *  binary version that adds shared API keys and nothing else".
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Some more interesting stuff can be found in doc for:
+ *  golang.org/x/text/encoding
+ * golang.org/x/text/encoding/charmap
+ */
 //
 // TODO before it can replace old code:
 // * Reconnecting (not needed?)
@@ -8,7 +32,7 @@
 // * attach stuff on send
 // * sign on send
 // * encrypt on send
-// * signature (store on Drive)
+// * proproduce license with -license
 package main
 
 import (
