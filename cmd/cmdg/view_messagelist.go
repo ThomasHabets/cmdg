@@ -219,13 +219,18 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			prefix += " "
 		}
 
+		star := " "
+		if curmsg.HasLabel(cmdg.Starred) {
+			star = "*"
+		}
+
 		if curmsg.IsUnread() {
 			prefix = display.Bold + prefix + ">"
 		} else {
 			prefix += " "
 		}
 
-		screen.Printlnf(cur-scroll, "%s %s", prefix, s)
+		screen.Printlnf(cur-scroll, "%s%s%s", prefix, star, s)
 		return nil
 	}
 

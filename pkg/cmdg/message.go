@@ -27,8 +27,12 @@ import (
 )
 
 const (
-	Inbox  = "INBOX"
-	Unread = "UNREAD"
+	Inbox = "INBOX"
+
+	// Special labels.
+
+	Unread  = "UNREAD"
+	Starred = "STARRED"
 )
 
 var (
