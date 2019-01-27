@@ -1,12 +1,16 @@
 #!/bin/bash
 set -e
+
 [[ -x ~/bin/fmt-check ]] && (
     echo "--- Precommit: gofmt ---"
     ~/bin/fmt-check
 )
+
 #echo "--- Precommit: lint ---"
 #~/bin/golint-check
+
 echo "--- Precommit: govet ---"
 go vet github.com/ThomasHabets/cmdg/...
+
 echo "--- Precommit: unit tests ---"
 go test github.com/ThomasHabets/cmdg/...

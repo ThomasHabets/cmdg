@@ -1,4 +1,3 @@
-// cmdg is the next generation cmdg.
 /*
  *  Copyright (C) 2015-2018 Thomas Habets <thomas@habets.se>
  *
