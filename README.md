@@ -1,6 +1,6 @@
 # cmdg - A command line client to Gmail
 
-Copyright Thomas Habets <thomas@habets.se> 2015-2016
+Copyright Thomas Habets <thomas@habets.se> 2015-2018
 
 https://github.com/ThomasHabets/cmdg
 
@@ -57,7 +57,7 @@ $ sudo apt-get install libncurses-dev pkg-config
 $ mkdir go
 $ cd go
 $ GOPATH=$(pwd) go get github.com/ThomasHabets/cmdg
-$ GOPATH=$(pwd) go build github.com/ThomasHabets/cmdg
+$ GOPATH=$(pwd) go build github.com/ThomasHabets/cmdg/cmd/cmdg
 $ sudo cp cmdg /usr/local/bin
 ```
 

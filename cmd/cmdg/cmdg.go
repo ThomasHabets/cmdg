@@ -33,11 +33,14 @@
 // * sign on send
 // * encrypt on send
 // * proproduce license with -license
+// * continue draft
+// * up/down/left/right keys
 package main
 
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -56,6 +59,7 @@ const (
 )
 
 var (
+	license         = flag.Bool("license", false, "Show program license.")
 	cfgFile         = flag.String("config", "", "Config file. Default is ~/"+path.Join(defaultConfigDir, configFileName))
 	gpgFlag         = flag.String("gpg", "gpg", "Path to GnuPG.")
 	logFile         = flag.String("log", "/dev/null", "Log debug data to this file.")
@@ -117,6 +121,11 @@ func run(ctx context.Context) error {
 func main() {
 	syscall.Umask(0077)
 	flag.Parse()
+
+	if *license {
+		fmt.Printf("%s\n", licenseText)
+		return
+	}
 
 	if *configure {
 		if err := cmdg.Configure(configFilePath()); err != nil {
