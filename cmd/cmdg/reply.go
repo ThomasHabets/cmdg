@@ -61,6 +61,10 @@ func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to,
 		fmt.Sprintf("On %s, %s said:", date.Format("Mon, 2 Jan 2006 15:04:05 -0700"), orig),
 		replyQuoted(b),
 	}
+	if signature != "" {
+		body = append(body, "", "--", signature)
+	}
+
 	prefill := strings.Join(headers, "\n") + "\n\n" + strings.Join(body, "\n")
 	return compose(ctx, conn, keys, prefill)
 }

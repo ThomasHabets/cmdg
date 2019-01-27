@@ -74,7 +74,6 @@ func composeNew(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
 		to = p.EmailAddress
 	}
 
-	signature := "" // TODO
 	if signature != "" {
 		signature = "--\n" + signature + "\n"
 	}

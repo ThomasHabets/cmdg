@@ -1,16 +1,19 @@
 package cmdg
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"sort"
 	"sync"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
+	drive "google.golang.org/api/drive/v3"
 	gmail "google.golang.org/api/gmail/v1"
 	"google.golang.org/api/googleapi/transport"
 )
@@ -34,6 +37,8 @@ const (
 
 	// Not so much a level as a separate request. Type `string` so that it won't be usable as a `DataLevel`.
 	levelRaw string = "RAW"
+
+	appDataFolder = "appDataFolder"
 )
 
 type (
@@ -44,6 +49,7 @@ type CmdG struct {
 	m            sync.RWMutex
 	authedClient *http.Client
 	gmail        *gmail.Service
+	drive        *drive.Service
 	messageCache map[string]*Message
 	labelCache   map[string]*Label
 	contacts     contacts
@@ -111,7 +117,7 @@ func New(fn string) (*CmdG, error) {
 		conn.authedClient = cfg.Client(ctx, token)
 	}
 
-	// Set up client.
+	// Set up gmail client.
 	{
 		var err error
 		conn.gmail, err = gmail.New(conn.authedClient)
@@ -119,6 +125,16 @@ func New(fn string) (*CmdG, error) {
 			return nil, errors.Wrap(err, "creating GMail client")
 		}
 		conn.gmail.UserAgent = userAgent
+	}
+
+	// Set up drive client.
+	{
+		var err error
+		conn.drive, err = drive.New(conn.authedClient)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating Drive client")
+		}
+		conn.drive.UserAgent = userAgent
 	}
 	return conn, nil
 }
@@ -169,6 +185,85 @@ func (c *CmdG) Send(ctx context.Context, msg string) error {
 		Raw: mimeEncode(msg),
 	}).Context(ctx).Do()
 	return err
+}
+
+func (c *CmdG) PutFile(ctx context.Context, fn string, contents []byte) error {
+	if _, err := c.drive.Files.Create(&drive.File{
+		Name:    "signature.txt",
+		Parents: []string{"appDataFolder"},
+	}).Context(ctx).Media(bytes.NewBuffer(contents)).Do(); err != nil {
+		return errors.Wrapf(err, "creating file %q with %d bytes of data", fn, len(contents))
+	}
+	return nil
+}
+
+func (c *CmdG) getFileID(ctx context.Context, fn string) (string, error) {
+	var token string
+	for {
+		l, err := c.drive.Files.List().Context(ctx).Spaces(appDataFolder).PageToken(token).Do()
+		if err != nil {
+			return "", err
+		}
+		for _, f := range l.Files {
+			if f.Name == fn {
+				return f.Id, nil
+			}
+		}
+		token = l.NextPageToken
+		if token == "" {
+			break
+		}
+	}
+	return "", os.ErrNotExist
+}
+
+func (c *CmdG) UpdateFile(ctx context.Context, fn string, contents []byte) error {
+	id, err := c.getFileID(ctx, fn)
+	if err != nil {
+		if err == os.ErrNotExist {
+			if _, err := c.drive.Files.Create(&drive.File{
+				Name:    fn,
+				Parents: []string{appDataFolder},
+			}).Context(ctx).Media(bytes.NewBuffer(contents)).Do(); err != nil {
+				return errors.Wrapf(err, "creating file %q with %d bytes of data", fn, len(contents))
+			}
+			return nil
+		}
+		return errors.Wrapf(err, "getting file ID for %q", fn)
+	}
+
+	if _, err := c.drive.Files.Update(id, &drive.File{
+		Name: fn,
+	}).Context(ctx).Media(bytes.NewBuffer(contents)).Do(); err != nil {
+		return errors.Wrapf(err, "updating file %q, id %q", fn, id)
+	}
+	return nil
+}
+
+func (c *CmdG) GetFile(ctx context.Context, fn string) ([]byte, error) {
+	var token string
+	for {
+		l, err := c.drive.Files.List().Context(ctx).Spaces("appDataFolder").PageToken(token).Do()
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range l.Files {
+			if f.Name == fn {
+				r, err := c.drive.Files.Get(f.Id).Context(ctx).Download()
+				if err != nil {
+					return nil, err
+				}
+				defer r.Body.Close()
+				return ioutil.ReadAll(r.Body)
+			}
+		}
+		token = l.NextPageToken
+		if token == "" {
+			break
+		}
+	}
+
+	return nil, os.ErrNotExist
 }
 
 func (c *CmdG) MakeDraft(ctx context.Context, msg string) error {

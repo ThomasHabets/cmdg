@@ -14,6 +14,7 @@ package main
 import (
 	"context"
 	"flag"
+	"io/ioutil"
 	"os"
 	"path"
 	"syscall"
@@ -26,11 +27,16 @@ import (
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
 
+const (
+	signatureFilename = "signature.txt"
+)
+
 var (
-	cfgFile   = flag.String("config", "", "Config file. Default is ~/"+path.Join(defaultConfigDir, configFileName))
-	gpgFlag   = flag.String("gpg", "gpg", "Path to GnuPG.")
-	logFile   = flag.String("log", "/dev/null", "Log debug data to this file.")
-	configure = flag.Bool("configure", false, "Configure OAuth.")
+	cfgFile         = flag.String("config", "", "Config file. Default is ~/"+path.Join(defaultConfigDir, configFileName))
+	gpgFlag         = flag.String("gpg", "gpg", "Path to GnuPG.")
+	logFile         = flag.String("log", "/dev/null", "Log debug data to this file.")
+	configure       = flag.Bool("configure", false, "Configure OAuth.")
+	updateSignature = flag.Bool("update_signature", false, "Upload ~/.signature to app settings.")
 
 	conn *cmdg.CmdG
 
@@ -44,6 +50,8 @@ var (
 	visualBinary string
 
 	labelReloadTime = time.Minute
+
+	signature string
 )
 
 func configFilePath() string {
@@ -51,6 +59,18 @@ func configFilePath() string {
 		return *cfgFile
 	}
 	return path.Join(os.Getenv("HOME"), defaultConfigDir, configFileName)
+}
+
+func loadSignature(ctx context.Context) error {
+	b, err := conn.GetFile(ctx, signatureFilename)
+	if err == os.ErrNotExist {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	signature = string(b)
+	return nil
 }
 
 func run(ctx context.Context) error {
@@ -104,6 +124,22 @@ func main() {
 		log.Fatalf("Failed to connect: %v", err)
 	}
 	log.Infof("Connected")
+
+	if *updateSignature {
+		p := path.Join(os.Getenv("HOME"), ".signature")
+		b, err := ioutil.ReadFile(p)
+		if err != nil {
+			log.Fatalf("Reading %q: %v", p, err)
+		}
+		if err := conn.UpdateFile(ctx, signatureFilename, b); err != nil {
+			log.Fatalf("Uploading signature file: %v", err)
+		}
+	}
+
+	if err := loadSignature(ctx); err != nil {
+		log.Fatalf("Failed to load signature from Drive appdata: %v", err)
+	}
+
 	if err := conn.LoadLabels(ctx); err != nil {
 		log.Fatalf("Loading labels: %v", err)
 	}

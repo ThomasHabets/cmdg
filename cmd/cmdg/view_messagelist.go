@@ -241,7 +241,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				if err != nil {
 					mv.errors <- errors.Wrapf(err, "Getting history")
 				} else if h {
-					status = "History!"
+					status = display.Green + "New info. Refresh to see updates" + display.Reset
 				}
 			}
 			if false {
