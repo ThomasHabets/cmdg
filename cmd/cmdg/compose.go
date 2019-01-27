@@ -82,14 +82,14 @@ func composeNew(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
 
 	prefill := fmt.Sprintf(`To: %s
 CC:
-Subject: 
+Subject:
 
 %s`, to, signature)
 
 	return compose(ctx, conn, keys, prefill)
 }
 
-var fixSubjectRE = regexp.MustCompile("(?smi)^Subject: ([^\n]+)$")
+var fixSubjectRE = regexp.MustCompile("(?smi)^Subject:\\s?([^\n]+)$")
 
 func fixSubject(msg string) string {
 	parts := strings.SplitN(msg, "\n\n", 2)
@@ -194,5 +194,4 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 			return fmt.Errorf("can't happen! Got %q from compose question", a)
 		}
 	}
-	return nil
 }

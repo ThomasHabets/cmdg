@@ -52,7 +52,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-	conn = conn
 	log.Infof("Connected")
 
 	ctx := context.Background()
