@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	version   = "1.0"
-	userAgent = "cmdg med " + version
+	version   = "1.0-beta"
+	userAgent = "cmdg " + version
 	// Scope for email, contacts, and appdata.
 	scope = "https://www.googleapis.com/auth/gmail.modify https://www.google.com/m8/feeds https://www.googleapis.com/auth/drive.appdata"
 
