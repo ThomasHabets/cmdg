@@ -242,7 +242,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					mv.errors <- errors.Wrapf(err, "Getting history")
 				} else if h {
 					status = display.Green + "New info. Refresh to see updates" + display.Reset
+				} else {
+					log.Infof("No history since last check")
 				}
+			} else {
+				log.Infof("Not checking history because not in a label")
 			}
 			if false {
 				// TODO: don't reset pos and scroll
