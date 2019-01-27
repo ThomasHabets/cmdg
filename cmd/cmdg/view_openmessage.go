@@ -48,9 +48,15 @@ func help(txt string, keys *input.Input) error {
 		return err
 	}
 	lines := strings.Split(txt, "\n")
+	maxlen := 0
+	for _, l := range lines {
+		if n := len(l); n > maxlen {
+			maxlen = n
+		}
+	}
 	screen.Printlnf(0, strings.Repeat("—", screen.Width))
 	for n, l := range lines {
-		screen.Printlnf(n+1, "%s", l)
+		screen.Printlnf(n+1, "%s%s", strings.Repeat(" ", (screen.Width-maxlen)/2), l)
 	}
 	for {
 		screen.Draw()

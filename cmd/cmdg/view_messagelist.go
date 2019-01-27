@@ -24,6 +24,7 @@ x             — Mark message
 e             — Archive marked messages
 l             — Label marked messages
 L             — Unlabel marked messages
+*             — Toggle starred on hilighted message
 c             — Compose new message
 N, n, ^N, j   — Next message
 P, p, ^P, k   — Previous message
