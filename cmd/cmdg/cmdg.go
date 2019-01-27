@@ -44,6 +44,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sync"
 	"syscall"
 	"time"
 
@@ -169,18 +170,33 @@ func main() {
 		}
 	}
 
-	if err := loadSignature(ctx); err != nil {
-		log.Fatalf("Failed to load signature from Drive appdata: %v", err)
-	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := loadSignature(ctx); err != nil {
+			log.Fatalf("Failed to load signature from Drive appdata: %v", err)
+		}
+	}()
 
-	if err := conn.LoadLabels(ctx); err != nil {
-		log.Fatalf("Loading labels: %v", err)
-	}
-	log.Infof("Labels loaded")
-	if err := conn.LoadContacts(ctx); err != nil {
-		log.Fatalf("Loading contacts: %v", err)
-	}
-	log.Infof("Contacts loaded")
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := conn.LoadLabels(ctx); err != nil {
+			log.Fatalf("Loading labels: %v", err)
+		}
+		log.Infof("Labels loaded")
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := conn.LoadContacts(ctx); err != nil {
+			log.Fatalf("Loading contacts: %v", err)
+		}
+		log.Infof("Contacts loaded")
+	}()
+	wg.Wait()
 
 	go func() {
 		ch := time.Tick(labelReloadTime)

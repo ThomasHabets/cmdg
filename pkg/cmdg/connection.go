@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -140,10 +141,12 @@ func New(fn string) (*CmdG, error) {
 
 func (c *CmdG) LoadLabels(ctx context.Context) error {
 	// Load initial labels.
+	st := time.Now()
 	res, err := c.gmail.Users.Labels.List(email).Context(ctx).Do()
 	if err != nil {
 		return err
 	}
+	log.Infof("Loaded labels in %v", time.Since(st))
 	c.m.Lock()
 	defer c.m.Unlock()
 	for _, l := range res.Labels {
