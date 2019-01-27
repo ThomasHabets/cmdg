@@ -11,15 +11,24 @@ import (
 )
 
 const (
+	//
 	// In 8 color mode.
+	//
+
 	Red8   = "\033[31m"
 	BgRed8 = "\033[41m"
 
+	//
 	// Bright colors (16 color mode).
+	//
+
 	BrightRed   = "\033[31;1m"
 	BgBrightRed = "\033[41;1m"
 
+	//
 	// 256 color mode.
+	//
+
 	Black   = "\033[38;5;0m"
 	Red     = "\033[38;5;1m"
 	Green   = "\033[38;5;2m"
@@ -29,16 +38,21 @@ const (
 	Cyan    = "\033[38;5;6m"
 	Grey    = "\033[38;5;7m"
 
+	//
 	// 256 color backgrounds.
+	//
+
 	BgRed256  = "\033[48;5;1m"
 	BgGrey256 = "\033[48;5;7m"
 
+	//
 	// Style
+	//
+
 	Bold      = "\033[1m"
 	Underline = "\033[4m"
 	Reverse   = "\033[7m"
-
-	Reset = "\033[0m"
+	Reset     = "\033[0m"
 )
 
 func Color(n int) string {

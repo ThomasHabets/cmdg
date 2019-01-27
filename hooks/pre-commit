@@ -6,8 +6,10 @@ set -e
     ~/bin/fmt-check
 )
 
+# Disabled: Too noisy at the moment because of all the undocumented
+# exported functions.
 #echo "--- Precommit: lint ---"
-#~/bin/golint-check
+#golint github.com/ThomasHabets/cmdg/...
 
 echo "--- Precommit: govet ---"
 go vet github.com/ThomasHabets/cmdg/...

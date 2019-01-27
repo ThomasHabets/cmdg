@@ -74,30 +74,30 @@ func NewMessageView(ctx context.Context, label, q string, in *input.Input) *Mess
 	return v
 }
 
-func (m *MessageView) fetchPage(ctx context.Context, token string) {
+func (mv *MessageView) fetchPage(ctx context.Context, token string) {
 	if token == "" {
 		// Only update history on first page.
 		hid, err := conn.HistoryID(ctx)
 		if err != nil {
 			log.Errorf("Failed to get history ID: %v", err)
 		} else {
-			m.historyCh <- hid
+			mv.historyCh <- hid
 		}
 	}
 
-	log.Infof("Listing messages on label %q query %q with token %q…", m.label, m.query, token)
-	page, err := conn.ListMessages(ctx, m.label, m.query, token)
+	log.Infof("Listing messages on label %q query %q with token %q…", mv.label, mv.query, token)
+	page, err := conn.ListMessages(ctx, mv.label, mv.query, token)
 	if err != nil {
-		m.errors <- err
+		mv.errors <- err
 		return
 	}
 	go func() {
 		if err := page.PreloadSubjects(ctx); err != nil {
-			m.errors <- err
+			mv.errors <- err
 			return
 		}
 	}()
-	m.pageCh <- page
+	mv.pageCh <- page
 }
 
 type MessageViewOp struct {

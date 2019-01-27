@@ -21,7 +21,7 @@ const (
 )
 
 type ConfigOAuth struct {
-	ClientID, ClientSecret, RefreshToken, AccessToken, ApiKey string
+	ClientID, ClientSecret, RefreshToken, AccessToken, APIKey string
 }
 
 type Config struct {

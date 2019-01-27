@@ -25,6 +25,7 @@ func (o *Option) String() string {
 	return o.Label
 }
 
+// Question asks the user a multiple-choice question.
 // ^C is always a valid option.
 func Question(title string, opts []Option, keys *input.Input) (string, error) {
 	screen, err := display.NewScreen()

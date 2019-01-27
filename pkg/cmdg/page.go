@@ -22,7 +22,7 @@ func (p *Page) Next(ctx context.Context) (*Page, error) {
 	return p.conn.ListMessages(ctx, p.Label, p.Query, p.Response.NextPageToken)
 }
 
-// Async start loading message info.
+// PreloadSubjects async loads message basic info.
 func (p *Page) PreloadSubjects(ctx context.Context) error {
 	conc := 100
 	sem := make(chan struct{}, conc)

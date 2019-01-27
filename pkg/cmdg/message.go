@@ -115,8 +115,8 @@ func (msg *Message) annotateAttachments() error {
 	return nil
 }
 
-func (m *Message) GPGStatus() *gpg.Status {
-	return m.gpgStatus
+func (msg *Message) GPGStatus() *gpg.Status {
+	return msg.gpgStatus
 }
 
 func NewMessage(c *CmdG, msgID string) *Message {
@@ -126,12 +126,12 @@ func NewMessage(c *CmdG, msgID string) *Message {
 	})
 }
 
-// assumes R lock held!
-func (m *Message) HasData(level DataLevel) bool {
-	m.m.RLock()
-	defer m.m.RUnlock()
+// HasData returns if the message has at least the given level.
+func (msg *Message) HasData(level DataLevel) bool {
+	msg.m.RLock()
+	defer msg.m.RUnlock()
 
-	switch m.level {
+	switch msg.level {
 	case LevelFull:
 		return true
 	case LevelMetadata:
@@ -141,19 +141,19 @@ func (m *Message) HasData(level DataLevel) bool {
 	case LevelEmpty:
 		return false
 	}
-	panic(fmt.Sprintf("can't happen: current level is %q", m.level))
+	panic(fmt.Sprintf("can't happen: current level is %q", msg.level))
 }
 
-func (m *Message) IsUnread() bool {
-	return m.HasLabel(Unread)
+func (msg *Message) IsUnread() bool {
+	return msg.HasLabel(Unread)
 }
 
-func (m *Message) HasLabel(label string) bool {
+func (msg *Message) HasLabel(label string) bool {
 	// TODO: this only works for label IDs.
-	if m.Response == nil {
+	if msg.Response == nil {
 		return false
 	}
-	for _, l := range m.Response.LabelIds {
+	for _, l := range msg.Response.LabelIds {
 		if label == l {
 			return true
 		}
@@ -161,34 +161,34 @@ func (m *Message) HasLabel(label string) bool {
 	return false
 }
 
-func (m *Message) RemoveLabelID(ctx context.Context, labelID string) error {
+func (msg *Message) RemoveLabelID(ctx context.Context, labelID string) error {
 	st := time.Now()
-	_, err := m.conn.gmail.Users.Messages.Modify(email, m.ID, &gmail.ModifyMessageRequest{
+	if _, err := msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
 		RemoveLabelIds: []string{labelID},
-	}).Context(ctx).Do()
-	if err != nil {
-		return errors.Wrapf(err, "removing label ID %q from %q", labelID, m.ID)
+	}).Context(ctx).Do(); err != nil {
+		return errors.Wrapf(err, "removing label ID %q from %q", labelID, msg.ID)
 	}
-	log.Infof("Removed label ID %q from %q: %v", labelID, m.ID, time.Since(st))
-	if err := m.ReloadLabels(ctx); err != nil {
-		return errors.Wrapf(err, "reloading labels from %q", m.ID)
+
+	log.Infof("Removed label ID %q from %q: %v", labelID, msg.ID, time.Since(st))
+
+	if err := msg.ReloadLabels(ctx); err != nil {
+		return errors.Wrapf(err, "reloading labels from %q", msg.ID)
 	}
-	return err
+	return nil
 }
 
-func (m *Message) AddLabelID(ctx context.Context, labelID string) error {
+func (msg *Message) AddLabelID(ctx context.Context, labelID string) error {
 	st := time.Now()
-	_, err := m.conn.gmail.Users.Messages.Modify(email, m.ID, &gmail.ModifyMessageRequest{
+	if _, err := msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
 		AddLabelIds: []string{labelID},
-	}).Context(ctx).Do()
-	if err != nil {
-		return errors.Wrapf(err, "removing label ID %q from %q", labelID, m.ID)
+	}).Context(ctx).Do(); err != nil {
+		return errors.Wrapf(err, "removing label ID %q from %q", labelID, msg.ID)
 	}
-	log.Infof("Added label ID %q to %q: %v", labelID, m.ID, time.Since(st))
-	if err := m.ReloadLabels(ctx); err != nil {
-		return errors.Wrapf(err, "reloading labels from %q", m.ID)
+	log.Infof("Added label ID %q to %q: %v", labelID, msg.ID, time.Since(st))
+	if err := msg.ReloadLabels(ctx); err != nil {
+		return errors.Wrapf(err, "reloading labels from %q", msg.ID)
 	}
-	return err
+	return nil
 }
 
 // ParseTime tries a few time formats and returns the one that works.
@@ -215,33 +215,33 @@ func parseTime(s string) (time.Time, error) {
 	return t, err
 }
 
-func (m *Message) GetReplyTo(ctx context.Context) (string, error) {
-	s, err := m.GetHeader(ctx, "Reply-To")
+func (msg *Message) GetReplyTo(ctx context.Context) (string, error) {
+	s, err := msg.GetHeader(ctx, "Reply-To")
 	if err == nil && s != "" {
 		return s, nil
 	}
-	return m.GetHeader(ctx, "From")
+	return msg.GetHeader(ctx, "From")
 }
 
-func (m *Message) GetReplyToAll(ctx context.Context) (string, string, error) {
-	to, err := m.GetReplyTo(ctx)
+func (msg *Message) GetReplyToAll(ctx context.Context) (string, string, error) {
+	to, err := msg.GetReplyTo(ctx)
 	if err != nil {
 		return "", "", err
 	}
 	cc := []string{}
-	if f, err := m.GetHeader(ctx, "From"); err != nil {
+	if f, err := msg.GetHeader(ctx, "From"); err != nil {
 		return "", "", err
 	} else if f != to {
 		cc = append(cc, f)
 	}
-	if c, err := m.GetHeader(ctx, "CC"); err != nil && len(c) != 0 {
+	if c, err := msg.GetHeader(ctx, "CC"); err != nil && len(c) != 0 {
 		cc = append(cc, c)
 	}
 	return to, strings.Join(cc, ", "), err
 }
 
-func (m *Message) GetFrom(ctx context.Context) (string, error) {
-	s, err := m.GetHeader(ctx, "From")
+func (msg *Message) GetFrom(ctx context.Context) (string, error) {
+	s, err := msg.GetHeader(ctx, "From")
 	if err != nil {
 		return "", err
 	}
@@ -269,12 +269,12 @@ func (l *Label) LabelString() string {
 	return fmt.Sprintf("%s%s%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label, display.Reset)
 }
 
-func (m *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, error) {
-	if err := m.Preload(ctx, LevelMinimal); err != nil {
+func (msg *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, error) {
+	if err := msg.Preload(ctx, LevelMinimal); err != nil {
 		return nil, err
 	}
 	var ret []*Label
-	for _, l := range m.Response.LabelIds {
+	for _, l := range msg.Response.LabelIds {
 		if l == Unread {
 			continue
 		}
@@ -282,7 +282,7 @@ func (m *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, err
 			ID:    l,
 			Label: "<unknown>",
 		}
-		ret = append(ret, m.conn.LabelCache(l2))
+		ret = append(ret, msg.conn.LabelCache(l2))
 	}
 	return ret, nil
 }
@@ -384,10 +384,10 @@ func colorMap(fgs, bgs string) string {
 	return fmt.Sprintf("\033[38;5;%dm\033[48;5;%dm", fg, bg)
 }
 
-// Return labels as a printable string. With colors, but without "UNREAD".
-func (m *Message) GetLabelsString(ctx context.Context) (string, error) {
+// GetLabelsString returns labels as a printable string. With colors, but without "UNREAD".
+func (msg *Message) GetLabelsString(ctx context.Context) (string, error) {
 	var s []string
-	ls, err := m.GetLabels(ctx, false)
+	ls, err := msg.GetLabels(ctx, false)
 	if err != nil {
 		return "", err
 	}
@@ -397,8 +397,8 @@ func (m *Message) GetLabelsString(ctx context.Context) (string, error) {
 	return strings.Join(s, ", "), nil
 }
 
-func (m *Message) GetTime(ctx context.Context) (time.Time, error) {
-	s, err := m.GetHeader(ctx, "Date")
+func (msg *Message) GetTime(ctx context.Context) (time.Time, error) {
+	s, err := msg.GetHeader(ctx, "Date")
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -409,8 +409,8 @@ func (m *Message) GetTime(ctx context.Context) (time.Time, error) {
 	ts = ts.Local()
 	return ts, nil
 }
-func (m *Message) GetTimeFmt(ctx context.Context) (string, error) {
-	ts, err := m.GetTime(ctx)
+func (msg *Message) GetTimeFmt(ctx context.Context) (string, error) {
+	ts, err := msg.GetTime(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -423,15 +423,15 @@ func (m *Message) GetTimeFmt(ctx context.Context) (string, error) {
 	return ts.Format("15:04"), nil
 }
 
-func (m *Message) GetHeader(ctx context.Context, k string) (string, error) {
-	if err := m.Preload(ctx, LevelMetadata); err != nil {
+func (msg *Message) GetHeader(ctx context.Context, k string) (string, error) {
+	if err := msg.Preload(ctx, LevelMetadata); err != nil {
 		return "", err
 	}
-	h, ok := m.headers[strings.ToLower(k)]
+	h, ok := msg.headers[strings.ToLower(k)]
 	if ok {
 		return stripUnprintable(h), nil
 	}
-	return "", fmt.Errorf("header not found in msg %q: %q", m.ID, k)
+	return "", fmt.Errorf("header not found in msg %q: %q", msg.ID, k)
 }
 
 // mime decode for gmail. Seems to be special version of base64.
@@ -478,7 +478,7 @@ func htmlRender(ctx context.Context, s string) (string, error) {
 
 var errNoUsablePart = fmt.Errorf("could not find message part usable as message body")
 
-func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string, error) {
+func (msg *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string, error) {
 	if len(part.Parts) == 0 {
 		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
 		data, err := mimeDecode(string(part.Body.Data))
@@ -507,12 +507,12 @@ func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string
 		switch p.MimeType {
 		case "text/plain":
 			log.Infof("text/plain")
-			return m.makeBody(ctx, p)
+			return msg.makeBody(ctx, p)
 		case "text/html":
 			html = p
 		case "multipart/alternative":
 			log.Infof("multipart/alternative")
-			return m.makeBody(ctx, p)
+			return msg.makeBody(ctx, p)
 		default:
 			log.Infof("Ignoring part of type %q", p.MimeType)
 		}
@@ -534,47 +534,47 @@ func (m *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string
 	return "", errNoUsablePart
 }
 
-func (m *Message) GetBody(ctx context.Context) (string, error) {
-	if err := m.Preload(ctx, LevelFull); err != nil {
+func (msg *Message) GetBody(ctx context.Context) (string, error) {
+	if err := msg.Preload(ctx, LevelFull); err != nil {
 		return "", err
 	}
-	return m.body, nil
+	return msg.body, nil
 }
 
-func (m *Message) GetUnpatchedBody(ctx context.Context) (string, error) {
-	if err := m.Preload(ctx, LevelFull); err != nil {
+func (msg *Message) GetUnpatchedBody(ctx context.Context) (string, error) {
+	if err := msg.Preload(ctx, LevelFull); err != nil {
 		return "", err
 	}
-	return m.originalBody, nil
+	return msg.originalBody, nil
 }
 
-func (m *Message) ReloadLabels(ctx context.Context) error {
-	msg, err := m.conn.gmail.Users.Messages.Get(email, m.ID).
+func (msg *Message) ReloadLabels(ctx context.Context) error {
+	msg2, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).
 		Format(string(LevelMinimal)).
 		Context(ctx).
 		Do()
 	if err != nil {
 		return err
 	}
-	m.m.Lock()
-	defer m.m.Unlock()
-	if m.Response == nil {
-		m.Response = msg
-		m.level = LevelMinimal
+	msg.m.Lock()
+	defer msg.m.Unlock()
+	if msg.Response == nil {
+		msg.Response = msg2
+		msg.level = LevelMinimal
 	} else {
-		m.Response.LabelIds = msg.LabelIds
+		msg.Response.LabelIds = msg2.LabelIds
 	}
 	return nil
 }
 
-func (m *Message) tryGPGSigned(ctx context.Context) error {
+func (msg *Message) tryGPGSigned(ctx context.Context) error {
 	// https://tools.ietf.org/html/rfc3156
-	if m.Response.Payload.MimeType != "multipart/signed" {
+	if msg.Response.Payload.MimeType != "multipart/signed" {
 		return nil
 	}
 	var partSig *gmail.MessagePart
 	var dec string
-	for _, p := range m.Response.Payload.Parts {
+	for _, p := range msg.Response.Payload.Parts {
 		switch p.MimeType {
 		case "text/plain":
 			var err error
@@ -597,7 +597,7 @@ func (m *Message) tryGPGSigned(ctx context.Context) error {
 	}
 
 	// Fetch attachment.
-	body, err := m.conn.gmail.Users.Messages.Attachments.Get(email, m.ID, partSig.Body.AttachmentId).Context(ctx).Do()
+	body, err := msg.conn.gmail.Users.Messages.Attachments.Get(email, msg.ID, partSig.Body.AttachmentId).Context(ctx).Do()
 	if err != nil {
 		return errors.Wrap(err, "failed to download signature attachment")
 	}
@@ -609,15 +609,15 @@ func (m *Message) tryGPGSigned(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	m.gpgStatus = st
+	msg.gpgStatus = st
 	return nil
 }
 
 var inlineGPG = regexp.MustCompile(`(?sm)(-----BEGIN PGP SIGNED MESSAGE-----.*-----BEGIN PGP SIGNATURE-----.*-----END PGP SIGNATURE-----)`)
 
-func (m *Message) tryGPGInlineSigned(ctx context.Context) error {
+func (msg *Message) tryGPGInlineSigned(ctx context.Context) error {
 	var e2 error
-	b2 := inlineGPG.ReplaceAllStringFunc(m.body, func(in string) string {
+	b2 := inlineGPG.ReplaceAllStringFunc(msg.body, func(in string) string {
 		st, err := GPG.VerifyInline(ctx, in)
 		if err != nil {
 			e2 = err
@@ -633,20 +633,20 @@ func (m *Message) tryGPGInlineSigned(ctx context.Context) error {
 	if e2 != nil {
 		return e2
 	}
-	m.body = b2
+	msg.body = b2
 	return nil
 }
 
-func (m *Message) tryGPGEncrypted(ctx context.Context) error {
+func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 	// https://tools.ietf.org/html/rfc3156
-	if m.Response.Payload.MimeType != "multipart/encrypted" {
+	if msg.Response.Payload.MimeType != "multipart/encrypted" {
 		return nil
 	}
 
 	// Expect two subparts.
 	var partMeta *gmail.MessagePart
 	var partData *gmail.MessagePart
-	for _, p := range m.Response.Payload.Parts {
+	for _, p := range msg.Response.Payload.Parts {
 		switch p.MimeType {
 		case "application/pgp-encrypted":
 			partMeta = p
@@ -661,7 +661,7 @@ func (m *Message) tryGPGEncrypted(ctx context.Context) error {
 	}
 
 	// Fetch data attachment.
-	body, err := m.conn.gmail.Users.Messages.Attachments.Get(email, m.ID, partData.Body.AttachmentId).Context(ctx).Do()
+	body, err := msg.conn.gmail.Users.Messages.Attachments.Get(email, msg.ID, partData.Body.AttachmentId).Context(ctx).Do()
 	if err != nil {
 		return errors.Wrap(err, "failed to download encrypted data attachment")
 	}
@@ -676,18 +676,18 @@ func (m *Message) tryGPGEncrypted(ctx context.Context) error {
 		return err
 	}
 
-	msg, err := mail.ReadMessage(strings.NewReader(dec2))
+	msg2, err := mail.ReadMessage(strings.NewReader(dec2))
 	if err != nil {
 		return err
 	}
 
-	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	mediaType, params, err := mime.ParseMediaType(msg2.Header.Get("Content-Type"))
 	if err != nil {
 		return err
 	}
 	if strings.HasPrefix(mediaType, "multipart/") {
 		log.Infof("Multipart encrypted with media type %q", mediaType)
-		mr := multipart.NewReader(msg.Body, params["boundary"])
+		mr := multipart.NewReader(msg2.Body, params["boundary"])
 		for {
 			p, err := mr.NextPart()
 			if err == io.EOF {
@@ -713,7 +713,7 @@ func (m *Message) tryGPGEncrypted(ctx context.Context) error {
 						Data: mimeEncode(string(t)),
 					},
 				}
-				m.body, err = m.makeBody(ctx, np)
+				msg.body, err = msg.makeBody(ctx, np)
 				if err != nil {
 					return errors.Wrap(err, "failed to decrypt")
 				}
@@ -723,15 +723,15 @@ func (m *Message) tryGPGEncrypted(ctx context.Context) error {
 		}
 
 	} else {
-		r, err := toUTF8Reader(map[string][]string(msg.Header), msg.Body)
+		r, err := toUTF8Reader(map[string][]string(msg2.Header), msg2.Body)
 		t, err := ioutil.ReadAll(r)
 		if err != nil {
 			return err
 		}
-		m.body = string(t)
+		msg.body = string(t)
 	}
 
-	m.gpgStatus = status
+	msg.gpgStatus = status
 	return nil
 }
 
@@ -754,52 +754,52 @@ func toUTF8Reader(header mail.Header, r io.Reader) (io.Reader, error) {
 	return r, nil
 }
 
-func (m *Message) Reload(ctx context.Context, level DataLevel) error {
-	return m.load(ctx, level)
+func (msg *Message) Reload(ctx context.Context, level DataLevel) error {
+	return msg.load(ctx, level)
 }
 
-func (m *Message) Preload(ctx context.Context, level DataLevel) error {
-	if m.HasData(level) {
+func (msg *Message) Preload(ctx context.Context, level DataLevel) error {
+	if msg.HasData(level) {
 		return nil
 	}
-	return m.load(ctx, level)
+	return msg.load(ctx, level)
 }
 
-func (m *Message) load(ctx context.Context, level DataLevel) error {
+func (msg *Message) load(ctx context.Context, level DataLevel) error {
 	st := time.Now()
-	msg, err := m.conn.gmail.Users.Messages.Get(email, m.ID).
+	msg2, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).
 		Format(string(level)).
 		Context(ctx).
 		Do()
 	if err != nil {
 		return err
 	}
-	log.Debugf("Downloading message %q level %q took %v", m.ID, level, time.Since(st))
+	log.Debugf("Downloading message %q level %q took %v", msg.ID, level, time.Since(st))
 
-	m.m.Lock()
-	defer m.m.Unlock()
-	m.Response = msg
-	m.level = level
-	m.headers = make(map[string]string)
-	for _, h := range m.Response.Payload.Headers {
-		m.headers[strings.ToLower(h.Name)] = h.Value
+	msg.m.Lock()
+	defer msg.m.Unlock()
+	msg.Response = msg2
+	msg.level = level
+	msg.headers = make(map[string]string)
+	for _, h := range msg.Response.Payload.Headers {
+		msg.headers[strings.ToLower(h.Name)] = h.Value
 	}
 	if level == LevelFull {
-		m.body, err = m.makeBody(ctx, m.Response.Payload)
+		msg.body, err = msg.makeBody(ctx, msg.Response.Payload)
 		if err != nil && err != errNoUsablePart {
 			return err
 		}
-		if err := m.tryGPGEncrypted(ctx); err != nil {
-			m.body = fmt.Sprintf("%sDecrypting GPG: %v%s", display.Red, err, display.Grey)
+		if err := msg.tryGPGEncrypted(ctx); err != nil {
+			msg.body = fmt.Sprintf("%sDecrypting GPG: %v%s", display.Red, err, display.Grey)
 		}
-		if err := m.tryGPGSigned(ctx); err != nil {
+		if err := msg.tryGPGSigned(ctx); err != nil {
 			log.Errorf("Checking GPG signature: %v", err)
 		}
-		m.originalBody = m.body
-		if err := m.tryGPGInlineSigned(ctx); err != nil {
+		msg.originalBody = msg.body
+		if err := msg.tryGPGInlineSigned(ctx); err != nil {
 			log.Errorf("Checking GPG inline signature: %v", err)
 		}
-		if err := m.annotateAttachments(); err != nil {
+		if err := msg.annotateAttachments(); err != nil {
 			log.Errorf("Failed to annotate attachments: %v", err)
 		}
 	}

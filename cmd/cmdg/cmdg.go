@@ -1,3 +1,4 @@
+// cmdg is a command-line GMail client.
 /*
  *  Copyright (C) 2015-2018 Thomas Habets <thomas@habets.se>
  *

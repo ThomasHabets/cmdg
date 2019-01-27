@@ -29,7 +29,6 @@ const (
 	accessType = "offline"
 	email      = "me"
 
-	// Messages.Get()
 	LevelEmpty    DataLevel = ""         // Nothing
 	LevelMinimal  DataLevel = "minimal"  // ID, labels
 	LevelMetadata DataLevel = "metadata" // ID, labels, headers
@@ -95,7 +94,7 @@ func New(fn string) (*CmdG, error) {
 
 	// Attach APIkey, if any.
 	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{
-		Transport: &transport.APIKey{Key: conf.OAuth.ApiKey},
+		Transport: &transport.APIKey{Key: conf.OAuth.APIKey},
 	})
 
 	// Connect.
@@ -190,7 +189,7 @@ func (c *CmdG) Send(ctx context.Context, msg string) error {
 func (c *CmdG) PutFile(ctx context.Context, fn string, contents []byte) error {
 	if _, err := c.drive.Files.Create(&drive.File{
 		Name:    "signature.txt",
-		Parents: []string{"appDataFolder"},
+		Parents: []string{appDataFolder},
 	}).Context(ctx).Media(bytes.NewBuffer(contents)).Do(); err != nil {
 		return errors.Wrapf(err, "creating file %q with %d bytes of data", fn, len(contents))
 	}

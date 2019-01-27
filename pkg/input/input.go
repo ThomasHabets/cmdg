@@ -1,4 +1,4 @@
-// Raw input handling.
+// Package input provides raw input handling.
 package input
 
 import (
@@ -52,13 +52,13 @@ func (i *Input) Stop() {
 	default:
 	}
 	close(i.stop)
-	for _ = range i.keys {
+	for range i.keys {
 	}
 	<-i.running
 	log.Infof("Keyboard input stopped")
 }
 
-// Turn on raw mode and receive keys.
+// Start turns on raw mode and the key-receive loop.
 func (i *Input) Start() error {
 	log.Infof("Starting keyboard input")
 	oldState, err := terminal.MakeRaw(fd)
