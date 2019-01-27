@@ -21,9 +21,10 @@ const (
 	tsLayout = "2006-01-02 15:04:05"
 
 	openMessageViewHelp = `?         — Help
-l         — Add label
 ^R        — Reload
+l         — Add label
 L         — Remove label
+*         — Toggle "starred"
 u         — Exit message
 U         — Mark unread
 n         — Scroll down
@@ -293,6 +294,20 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				}()
 			case '?':
 				help(openMessageViewHelp, ov.keys)
+			case '*':
+				if ov.msg.HasLabel(cmdg.Starred) {
+					if err := ov.msg.RemoveLabelID(ctx, cmdg.Starred); err != nil {
+						ov.errors <- errors.Wrap(err, "Removing STARRED label")
+					}
+				} else {
+					if err := ov.msg.AddLabelID(ctx, cmdg.Starred); err != nil {
+						ov.errors <- errors.Wrap(err, "Adding STARRED label")
+					}
+				}
+				if err := ov.msg.ReloadLabels(ctx); err != nil {
+					ov.errors <- errors.Wrapf(err, "Failed to reload labels")
+				}
+				ov.Draw(lines, scroll)
 			case 'l':
 				var opts []*dialog.Option
 				for _, l := range conn.Labels() {
