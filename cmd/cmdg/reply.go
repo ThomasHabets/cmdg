@@ -62,7 +62,7 @@ func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to,
 		replyQuoted(b),
 	}
 	if signature != "" {
-		body = append(body, "", "--", signature)
+		body = append(body, "\n--\n"+signature+"\n")
 	}
 
 	prefill := strings.Join(headers, "\n") + "\n\n" + strings.Join(body, "\n")

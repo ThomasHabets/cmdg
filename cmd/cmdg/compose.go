@@ -76,15 +76,16 @@ func composeNew(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
 		to = p.EmailAddress
 	}
 
+	var sig string
 	if signature != "" {
-		signature = "--\n" + signature + "\n"
+		sig = "--\n" + signature + "\n"
 	}
 
 	prefill := fmt.Sprintf(`To: %s
 CC:
 Subject:
 
-%s`, to, signature)
+%s`, to, sig)
 
 	return compose(ctx, conn, keys, prefill)
 }
