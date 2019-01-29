@@ -88,7 +88,9 @@ func replyAll(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg
 func forward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
 	// Get recipient
 	toOpt, err := dialog.Selection(dialog.Strings2Options(conn.Contacts()), "To> ", true, keys)
-	if err != nil {
+	if err == dialog.ErrAborted {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	to := toOpt.Key

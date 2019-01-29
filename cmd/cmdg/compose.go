@@ -63,7 +63,9 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 
 func composeNew(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
 	toOpt, err := dialog.Selection(dialog.Strings2Options(conn.Contacts()), "To> ", true, keys)
-	if err != nil {
+	if err == dialog.ErrAborted {
+		return nil
+	} else if err != nil {
 		return err
 	}
 
