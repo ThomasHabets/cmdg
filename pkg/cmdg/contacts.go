@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -59,25 +60,33 @@ func (c *CmdG) GetContacts(ctx context.Context) ([]string, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p, err := c.people.People.GetBatchGet().Context(ctx).ResourceNames(batch...).PersonFields("names,emailAddresses").Do()
-			if err != nil {
-				perr <- err
-				return
-			}
-			for _, r := range p.Responses {
-				// Use name first listed.
-				name := ""
-				if len(r.Person.Names) > 0 {
-					name = r.Person.Names[0].DisplayName + " "
+			for {
+				p, err := c.people.People.GetBatchGet().Context(ctx).ResourceNames(batch...).PersonFields("names,emailAddresses").Do()
+				if err != nil {
+					log.Warningf("Error loading contacts: %v", err)
+					if strings.Contains(err.Error(), "quota") {
+						time.Sleep(time.Second)
+						continue
+					}
+					perr <- err
+					return
 				}
-				for _, e := range r.Person.EmailAddresses {
-					if strings.Contains(e.Value, " ") {
-						// Name already there.
-						pchan <- e.Value
-					} else {
-						pchan <- fmt.Sprintf("%s%s", name, e.Value)
+				for _, r := range p.Responses {
+					// Use name first listed.
+					name := ""
+					if len(r.Person.Names) > 0 {
+						name = r.Person.Names[0].DisplayName + " "
+					}
+					for _, e := range r.Person.EmailAddresses {
+						if strings.Contains(e.Value, " ") {
+							// Name already there.
+							pchan <- e.Value
+						} else {
+							pchan <- fmt.Sprintf("%s%s", name, e.Value)
+						}
 					}
 				}
+				return
 			}
 		}()
 	}
