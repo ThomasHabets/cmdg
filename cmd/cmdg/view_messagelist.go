@@ -263,9 +263,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 
 						for range hist.LabelsAdded {
 							// Messages moved into this label (and other labels).
+							status = display.Green + "New info. Refresh to see updates" + display.Reset
 						}
 						for range hist.MessagesAdded {
 							// New messages… also in this view.
+							status = display.Green + "New info. Refresh to see updates" + display.Reset
 							//madd = madd
 						}
 						for _, lrm := range hist.LabelsRemoved {
