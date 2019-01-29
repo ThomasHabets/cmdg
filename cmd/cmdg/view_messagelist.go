@@ -192,6 +192,14 @@ func (mv *MessageView) Run(ctx context.Context) error {
 	drawMessage := func(cur int) error {
 		s := "Loading…"
 		curmsg := mv.messages[cur]
+
+		prefix := " "
+		reset := display.Reset
+		if cur == mv.pos {
+			reset = display.Reverse
+			prefix = "*"
+		}
+
 		if curmsg.HasData(cmdg.LevelMetadata) {
 			subj, err := curmsg.GetHeader(ctx, "subject")
 			if err != nil {
@@ -205,20 +213,22 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			colors, err := curmsg.GetLabelColors(ctx)
+			if err != nil {
+				return err
+			}
+			if len(colors) > 0 {
+				colors = " | " + colors
+			}
 			from = display.FixedWidth(from, 20)
-			s = fmt.Sprintf("%[1]*.[1]*[2]s | %[3]s | %[4]s",
+			s = fmt.Sprintf("%[1]*.[1]*[2]s | %[3]s | %[4]s%[5]s%[6]s",
 				6, tm,
-				from, subj)
+				from, subj, colors, reset)
 		} else {
 			go func(cur int) {
 				curmsg.Preload(ctx, cmdg.LevelMetadata)
 				mv.messageCh <- curmsg
 			}(cur)
-		}
-		// Show current.
-		prefix := " "
-		if cur == mv.pos {
-			prefix = display.Reverse + "*"
 		}
 
 		if marked[curmsg.ID] {
@@ -238,7 +248,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			prefix += " "
 		}
 
-		screen.Printlnf(cur-scroll, "%s%s%s", prefix, star, s)
+		screen.Printlnf(cur-scroll, "%s%s%s%s", reset, prefix, star, s)
 		return nil
 	}
 

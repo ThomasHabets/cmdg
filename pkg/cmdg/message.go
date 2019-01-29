@@ -273,6 +273,26 @@ func (l *Label) LabelString() string {
 	return fmt.Sprintf("%s%s%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label, display.Reset)
 }
 
+func (l *Label) LabelColor() string {
+	if l.Response.Color == nil {
+		return ""
+	}
+	// TODO: use first *character*, not just first byte.
+	return fmt.Sprintf("%s%c%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label[0], display.Reset)
+}
+
+func (msg *Message) GetLabelColors(ctx context.Context) (string, error) {
+	ls, err := msg.GetLabels(ctx, false)
+	if err != nil {
+		return "", err
+	}
+	var ret []string
+	for _, l := range ls {
+		ret = append(ret, l.LabelColor())
+	}
+	return strings.Join(ret, ""), nil
+}
+
 func (msg *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, error) {
 	if err := msg.Preload(ctx, LevelMinimal); err != nil {
 		return nil, err
