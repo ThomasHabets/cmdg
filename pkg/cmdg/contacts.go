@@ -2,70 +2,97 @@ package cmdg
 
 import (
 	"context"
-	"encoding/xml"
 	"fmt"
-	"io/ioutil"
-	"time"
+	"sort"
+	"strings"
+	"sync"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
-type contactEmail struct {
-	Primary bool   `xml:"primary,attr"`
-	Rel     string `xml:"rel,attr"`
-	Email   string `xml:"address,attr"`
-}
-type contactEntry struct {
-	ID    string         `xml:"id"`
-	Title string         `xml:"title"`
-	Email []contactEmail `xml:"email"`
-}
-type contacts struct {
-	ID    string         `xml:"id"`
-	Title string         `xml:"title"`
-	Entry []contactEntry `xml:"entry"`
-}
+const (
+	maxContacts      = 10000
+	contactBatchSize = 50
+)
 
 func (c *CmdG) Contacts() []string {
-	ret := []string{"me"}
 	c.m.RLock()
 	defer c.m.RUnlock()
-	for _, c := range c.contacts.Entry {
-		for _, e := range c.Email {
-			if c.Title != "" {
-				ret = append(ret, fmt.Sprintf("%s <%s>", c.Title, e.Email))
-			} else {
-				ret = append(ret, e.Email)
-			}
-		}
-	}
-	return ret
+	return append([]string{"me"}, c.contacts...)
 }
 
 func (c *CmdG) LoadContacts(ctx context.Context) error {
-	// Make request.
-	// TODO: Context
-	st := time.Now()
-	resp, err := c.authedClient.Get("https://www.google.com/m8/feeds/contacts/default/full")
+	co, err := c.GetContacts(ctx)
 	if err != nil {
-		return errors.Wrap(err, "getting contacts")
+		return err
 	}
-	defer resp.Body.Close()
-
-	// Read response.
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return errors.Wrap(err, "reading contacts")
-	}
-	et := time.Now()
-	var con contacts
-	if err := xml.Unmarshal(b, &con); err != nil {
-		return errors.Wrap(err, "decoding contacts XML")
-	}
-	log.Infof("Got %d contacts in %v", len(con.Entry), et.Sub(st))
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.contacts = con
+	c.contacts = co
 	return nil
+}
+
+// GetContacts gets all contact's email addresses in "Name Name <email@example.com>" format.
+func (c *CmdG) GetContacts(ctx context.Context) ([]string, error) {
+	// List contacts.
+	r, err := c.people.ContactGroups.Get("contactGroups/all").Context(ctx).MaxMembers(maxContacts).Do()
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Retrieved %d of %d contacts", len(r.MemberResourceNames), r.MemberCount)
+
+	// Get contact names/email addresses.
+	var wg sync.WaitGroup
+	pchan := make(chan string)
+	batches := len(r.MemberResourceNames)/contactBatchSize + 1
+	perr := make(chan error, batches)
+	for n := 0; ; n++ {
+		start := n * contactBatchSize
+		end := (n + 1) * contactBatchSize
+		if start >= len(r.MemberResourceNames) {
+			break
+		}
+		if end > len(r.MemberResourceNames) {
+			end = len(r.MemberResourceNames)
+		}
+		batch := r.MemberResourceNames[start:end]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p, err := c.people.People.GetBatchGet().Context(ctx).ResourceNames(batch...).PersonFields("names,emailAddresses").Do()
+			if err != nil {
+				perr <- err
+				return
+			}
+			for _, r := range p.Responses {
+				// Use name first listed.
+				name := ""
+				if len(r.Person.Names) > 0 {
+					name = r.Person.Names[0].DisplayName + " "
+				}
+				for _, e := range r.Person.EmailAddresses {
+					if strings.Contains(e.Value, " ") {
+						// Name already there.
+						pchan <- e.Value
+					} else {
+						pchan <- fmt.Sprintf("%s%s", name, e.Value)
+					}
+				}
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(pchan)
+		close(perr)
+	}()
+	var ret []string
+	for s := range pchan {
+		ret = append(ret, s)
+	}
+	for e := range perr {
+		return nil, e
+	}
+	sort.Strings(ret)
+	return ret, nil
 }

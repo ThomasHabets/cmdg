@@ -17,13 +17,14 @@ import (
 	drive "google.golang.org/api/drive/v3"
 	gmail "google.golang.org/api/gmail/v1"
 	"google.golang.org/api/googleapi/transport"
+	people "google.golang.org/api/people/v1"
 )
 
 const (
 	version   = "1.0-beta"
 	userAgent = "cmdg " + version
 	// Scope for email, contacts, and appdata.
-	scope = "https://www.googleapis.com/auth/gmail.modify https://www.google.com/m8/feeds https://www.googleapis.com/auth/drive.appdata"
+	scope = "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts https://www.googleapis.com/auth/drive.appdata"
 
 	pageSize = 100
 
@@ -50,9 +51,10 @@ type CmdG struct {
 	authedClient *http.Client
 	gmail        *gmail.Service
 	drive        *drive.Service
+	people       *people.Service
 	messageCache map[string]*Message
 	labelCache   map[string]*Label
-	contacts     contacts
+	contacts     []string
 }
 
 func (c *CmdG) MessageCache(msg *Message) *Message {
@@ -133,6 +135,15 @@ func New(fn string) (*CmdG, error) {
 		conn.drive, err = drive.New(conn.authedClient)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating Drive client")
+		}
+		conn.drive.UserAgent = userAgent
+	}
+	// Set up people client.
+	{
+		var err error
+		conn.people, err = people.New(conn.authedClient)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating People client")
 		}
 		conn.drive.UserAgent = userAgent
 	}
