@@ -253,11 +253,14 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					for _, hist := range hists {
 						log.Infof("History entry: %d add, %d delete, %d labeladd, %d labeldelete", len(hist.MessagesAdded), len(hist.MessagesDeleted), len(hist.LabelsAdded), len(hist.LabelsRemoved))
 						for _, m := range hist.MessagesDeleted {
-							ind := messagePos[m.Message.Id]
-							log.Infof("Deleting message from in accordance with history")
-							mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
-							if ind < mv.pos {
-								mv.pos--
+							ind, found := messagePos[m.Message.Id]
+							if found {
+								log.Infof("Deleting message from in accordance with history")
+								mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
+								delete(messagePos, m.Message.Id)
+								if ind < mv.pos {
+									mv.pos--
+								}
 							}
 						}
 
@@ -268,7 +271,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						for range hist.MessagesAdded {
 							// New messages… also in this view.
 							status = display.Green + "New info. Refresh to see updates" + display.Reset
-							//madd = madd
 						}
 						for _, lrm := range hist.LabelsRemoved {
 							ind, found := messagePos[lrm.Message.Id]
@@ -284,6 +286,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 								if this {
 									log.Infof("… message %s gone from this view", lrm.Message.Id)
 									mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
+									delete(messagePos, lrm.Message.Id)
 									if ind < mv.pos {
 										mv.pos--
 									}
