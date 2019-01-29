@@ -171,12 +171,18 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		return err
 	}
 
+	mkMessagePos := func() {
+		messagePos = map[string]int{}
+		for n, m := range mv.messages {
+			messagePos[m.ID] = n
+		}
+	}
 	empty := func() {
 		screen.Printf(0, 0, "Loading…")
 		screen.Draw()
 		pages = nil
 		mv.messages = nil
-		messagePos = map[string]int{}
+		mkMessagePos()
 		mv.pos = 0
 		scroll = 0
 	}
@@ -257,7 +263,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 							if found {
 								log.Infof("Deleting message from in accordance with history")
 								mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
-								delete(messagePos, m.Message.Id)
 								if ind < mv.pos {
 									mv.pos--
 								}
@@ -286,7 +291,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 								if this {
 									log.Infof("… message %s gone from this view", lrm.Message.Id)
 									mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
-									delete(messagePos, lrm.Message.Id)
 									if ind < mv.pos {
 										mv.pos--
 									}
@@ -294,6 +298,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 							}
 						}
 					}
+					mkMessagePos()
 				}
 			} else {
 				log.Infof("Not checking history because not in a label")
@@ -329,9 +334,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		case p := <-mv.pageCh:
 			log.Printf("MessageListView: Got page!")
 			pages = append(pages, p)
-			for n, m := range p.Messages {
-				messagePos[m.ID] = len(mv.messages) + n
-			}
 			mv.messages = append(mv.messages, p.Messages...)
 			want := contentHeight
 			if p.Response.NextPageToken == "" {
@@ -348,6 +350,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					theresMore = false
 				}
 			}
+			mkMessagePos()
 
 		case key := <-mv.keys.Chan():
 			log.Debugf("MessageListView got key %d", key)
@@ -382,6 +385,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					mv.messages = nm
 					marked = map[string]bool{}
 				}
+				mkMessagePos()
 			case '*':
 				curmsg := mv.messages[mv.pos]
 				if curmsg.HasLabel(cmdg.Starred) {
