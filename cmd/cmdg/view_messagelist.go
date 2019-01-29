@@ -53,12 +53,12 @@ type MessageView struct {
 	errors    chan error
 	pageCh    chan *cmdg.Page
 	messageCh chan *cmdg.Message
-	historyCh chan uint64
+	historyCh chan cmdg.HistoryID
 
 	// Only for use by main thread.
 	messages  []*cmdg.Message
 	pos       int
-	historyID uint64
+	historyID cmdg.HistoryID
 }
 
 func NewMessageView(ctx context.Context, label, q string, in *input.Input) *MessageView {
@@ -66,7 +66,7 @@ func NewMessageView(ctx context.Context, label, q string, in *input.Input) *Mess
 		label:     label,
 		errors:    make(chan error, 20),
 		pageCh:    make(chan *cmdg.Page),
-		historyCh: make(chan uint64, 20),
+		historyCh: make(chan cmdg.HistoryID, 20),
 		messageCh: make(chan *cmdg.Message),
 		keys:      in,
 		query:     q,
@@ -243,13 +243,52 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		select {
 		case <-timer.C:
 			if mv.label != "" {
-				h, err := conn.MoreHistory(ctx, mv.historyID, mv.label)
+				hists, hid, err := conn.History(ctx, mv.historyID, mv.label)
 				if err != nil {
 					mv.errors <- errors.Wrapf(err, "Getting history")
-				} else if h {
-					status = display.Green + "New info. Refresh to see updates" + display.Reset
-				} else {
+				} else if len(hists) == 0 {
 					log.Infof("No history since last check")
+				} else {
+					mv.historyID = hid
+					for _, hist := range hists {
+						log.Infof("History entry: %d add, %d delete, %d labeladd, %d labeldelete", len(hist.MessagesAdded), len(hist.MessagesDeleted), len(hist.LabelsAdded), len(hist.LabelsRemoved))
+						for _, m := range hist.MessagesDeleted {
+							ind := messagePos[m.Message.Id]
+							log.Infof("Deleting message from in accordance with history")
+							mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
+							if ind < mv.pos {
+								mv.pos--
+							}
+						}
+
+						for range hist.LabelsAdded {
+							// Messages moved into this label (and other labels).
+						}
+						for range hist.MessagesAdded {
+							// New messages… also in this view.
+							//madd = madd
+						}
+						for _, lrm := range hist.LabelsRemoved {
+							ind, found := messagePos[lrm.Message.Id]
+							if found {
+								go mv.messages[ind].ReloadLabels(ctx)
+								this := false
+								for _, l := range lrm.LabelIds {
+									if l == mv.label {
+										this = true
+										break
+									}
+								}
+								if this {
+									log.Infof("… message %s gone from this view", lrm.Message.Id)
+									mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
+									if ind < mv.pos {
+										mv.pos--
+									}
+								}
+							}
+						}
+					}
 				}
 			} else {
 				log.Infof("Not checking history because not in a label")

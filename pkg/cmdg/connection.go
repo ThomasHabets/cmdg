@@ -44,6 +44,7 @@ const (
 
 type (
 	DataLevel string
+	HistoryID uint64
 )
 
 type CmdG struct {
@@ -309,21 +310,37 @@ func (c *CmdG) BatchUnlabel(ctx context.Context, ids []string, labelID string) e
 	}).Context(ctx).Do()
 }
 
-func (c *CmdG) HistoryID(ctx context.Context) (uint64, error) {
+func (c *CmdG) HistoryID(ctx context.Context) (HistoryID, error) {
 	p, err := c.gmail.Users.GetProfile(email).Context(ctx).Do()
 	if err != nil {
 		return 0, err
 	}
-	return p.HistoryId, nil
+	return HistoryID(p.HistoryId), nil
 }
 
-func (c *CmdG) MoreHistory(ctx context.Context, start uint64, labelID string) (bool, error) {
+// MoreHistory returns if stuff happened since start ID.
+func (c *CmdG) MoreHistory(ctx context.Context, start HistoryID, labelID string) (bool, error) {
 	log.Infof("History for %d %s", start, labelID)
-	r, err := c.gmail.Users.History.List(email).Context(ctx).StartHistoryId(start).LabelId(labelID).Do()
+	r, err := c.gmail.Users.History.List(email).Context(ctx).StartHistoryId(uint64(start)).LabelId(labelID).Do()
 	if err != nil {
 		return false, err
 	}
 	return len(r.History) > 0, nil
+}
+
+// History returns history since startID.
+func (c *CmdG) History(ctx context.Context, startID HistoryID, labelID string) ([]*gmail.History, HistoryID, error) {
+	log.Infof("History for %d %s", startID, labelID)
+	var ret []*gmail.History
+	var h HistoryID
+	if err := c.gmail.Users.History.List(email).Context(ctx).StartHistoryId(uint64(startID)).LabelId(labelID).Pages(ctx, func(r *gmail.ListHistoryResponse) error {
+		ret = append(ret, r.History...)
+		h = HistoryID(r.HistoryId)
+		return nil
+	}); err != nil {
+		return nil, 0, err
+	}
+	return ret, h, nil
 }
 
 func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*Page, error) {
