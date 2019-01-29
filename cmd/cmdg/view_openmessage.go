@@ -267,6 +267,10 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			} else {
 				lines = []string{}
 				for _, l := range strings.Split(b, "\n") {
+					if len(l) == 0 {
+						lines = append(lines, "")
+						continue
+					}
 					for len(l) > 0 {
 						if len(l) > ov.screen.Width {
 							lines = append(lines, l[:ov.screen.Width])
