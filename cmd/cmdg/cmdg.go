@@ -66,6 +66,7 @@ var (
 	logFile         = flag.String("log", "/dev/null", "Log debug data to this file.")
 	configure       = flag.Bool("configure", false, "Configure OAuth.")
 	updateSignature = flag.Bool("update_signature", false, "Upload ~/.signature to app settings.")
+	verbose         = flag.Bool("verbose", false, "Turn on verbose logging.")
 
 	conn *cmdg.CmdG
 
@@ -122,6 +123,10 @@ func run(ctx context.Context) error {
 func main() {
 	syscall.Umask(0077)
 	flag.Parse()
+
+	if *verbose {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	if *license {
 		fmt.Printf("%s\n", licenseText)
