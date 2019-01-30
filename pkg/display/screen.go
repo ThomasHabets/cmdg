@@ -17,6 +17,7 @@ const (
 
 	Red8   = "\033[31m"
 	BgRed8 = "\033[41m"
+	White8 = "\033[37m"
 
 	//
 	// Bright colors (16 color mode).
@@ -37,6 +38,7 @@ const (
 	Magenta = "\033[38;5;5m"
 	Cyan    = "\033[38;5;6m"
 	Grey    = "\033[38;5;7m"
+	White   = "\033[38;5;15m"
 
 	BgBlack = "\033[48;5;232m"
 
@@ -55,6 +57,9 @@ const (
 	Underline = "\033[4m"
 	Reverse   = "\033[7m"
 	Reset     = "\033[0m"
+
+	// Normal is not the same as Reset, because Reset resets Bold/Underline/Reverse.
+	Normal = White + BgBlack
 )
 
 func Color(n int) string {

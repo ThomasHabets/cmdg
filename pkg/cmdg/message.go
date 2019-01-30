@@ -302,9 +302,9 @@ type Label struct {
 
 func (l *Label) LabelString() string {
 	if l.Response.Color == nil {
-		return fmt.Sprintf("%s%s%s", display.Grey, display.BgBlack, l.Label)
+		return fmt.Sprintf("%s%s", display.Normal, l.Label)
 	}
-	return fmt.Sprintf("%s%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label)
+	return fmt.Sprintf("%s%s%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label, display.Normal)
 }
 
 func (l *Label) LabelColor() string {
