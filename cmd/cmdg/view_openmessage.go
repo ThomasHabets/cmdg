@@ -201,6 +201,8 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 }
 
 func showError(oscreen *display.Screen, keys *input.Input, msg string) {
+	log.Warningf("Displaying error to user: %q", msg)
+
 	screen := oscreen.Copy()
 	lines := []string{
 		strings.Repeat("—", screen.Width),
