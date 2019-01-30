@@ -21,7 +21,7 @@ const (
 
 	messageListViewHelp = `?             — Help
 enter         — Open message
-x             — Mark message
+space, x      — Mark message
 e             — Archive marked messages
 l             — Label marked messages
 L             — Unlabel marked messages
@@ -417,7 +417,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					}
 					op.Do(mv)
 				}
-			case 'x':
+			case 'x', ' ':
 				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
 			case 'e':
 				ids, nm, ofs := filterMarked(mv.messages, marked, mv.pos)
