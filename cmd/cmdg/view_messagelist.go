@@ -34,6 +34,7 @@ g             — Go to label
 1             — Go to inbox
 s             — Search
 q             — Quit
+^L            — Refresh screen
 
 Press [enter] to exit
 `
@@ -416,6 +417,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						mv.errors <- errors.Wrapf(err, "Running OpenMessageView")
 					}
 					op.Do(mv)
+				}
+			case input.CtrlL:
+				if err := initScreen(); err != nil {
+					// Screen failed to init. Yeah it's time to bail.
+					return err
 				}
 			case 'x', ' ':
 				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
