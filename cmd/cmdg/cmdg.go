@@ -1,6 +1,6 @@
 // cmdg is a command-line GMail client.
 /*
- *  Copyright (C) 2015-2018 Thomas Habets <thomas@habets.se>
+ *  Copyright (C) 2015-2019 Thomas Habets <thomas@habets.se>
  *
  *  This software is dual-licensed GPL and "Thomas is allowed to release a
  *  binary version that adds shared API keys and nothing else".
