@@ -332,7 +332,8 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// TODO: do all this async.
 					hists, hid, err := conn.History(ctx, mv.historyID, mv.label)
 					if err != nil {
-						mv.errors <- errors.Wrapf(err, "Getting history")
+						// mv.errors <- errors.Wrapf(err, "Getting history")
+						log.Errorf("Getting history: %v", err)
 					} else if len(hists) == 0 {
 						log.Infof("No history since last check")
 					} else {
