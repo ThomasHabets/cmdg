@@ -302,9 +302,9 @@ type Label struct {
 
 func (l *Label) LabelString() string {
 	if l.Response.Color == nil {
-		return l.Label
+		return fmt.Sprintf("%s%s%s", display.Grey, display.BgBlack, l.Label)
 	}
-	return fmt.Sprintf("%s%s%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label, display.Reset)
+	return fmt.Sprintf("%s%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label)
 }
 
 func (l *Label) LabelColor() string {
@@ -315,19 +315,23 @@ func (l *Label) LabelColor() string {
 		return ""
 	}
 	// TODO: use first *character*, not just first byte.
-	return fmt.Sprintf("%s%c%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label[0], display.Reset)
+	return fmt.Sprintf("%s%c", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label[0])
 }
 
-func (msg *Message) GetLabelColors(ctx context.Context) (string, error) {
+func (msg *Message) GetLabelColors(ctx context.Context) (string, string, error) {
 	ls, err := msg.GetLabels(ctx, false)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	var ret []string
+	var ret1, ret2 []string
 	for _, l := range ls {
-		ret = append(ret, l.LabelColor())
+		lc := l.LabelColor()
+		if lc != "" {
+			ret1 = append(ret1, lc)
+			ret2 = append(ret2, l.LabelString())
+		}
 	}
-	return strings.Join(ret, ""), nil
+	return strings.Join(ret1, ""), strings.Join(ret2, " "), nil
 }
 
 func (msg *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, error) {

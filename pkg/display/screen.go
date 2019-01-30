@@ -38,6 +38,8 @@ const (
 	Cyan    = "\033[38;5;6m"
 	Grey    = "\033[38;5;7m"
 
+	BgBlack = "\033[48;5;232m"
+
 	//
 	// 256 color backgrounds.
 	//

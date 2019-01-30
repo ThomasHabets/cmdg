@@ -217,17 +217,24 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			colors, err := curmsg.GetLabelColors(ctx)
+			colors, fullColors, err := curmsg.GetLabelColors(ctx)
 			if err != nil {
 				return err
 			}
 			if len(colors) > 0 {
 				colors = " | " + colors
+				fullColors = " | " + fullColors
 			}
 			from = display.FixedWidth(from, 20)
-			s = fmt.Sprintf("%[1]*.[1]*[2]s | %[3]s | %[4]s%[5]s%[6]s",
+			s = fmt.Sprintf("%[1]*.[1]*[2]s | %[3]s | %[4]s",
 				6, tm,
-				from, subj, colors, reset)
+				from, subj)
+			if display.StringWidth(s)+display.StringWidth(fullColors) < screen.Width {
+				s += fullColors
+			} else {
+				s += colors
+			}
+			s += reset
 		} else {
 			go func(cur int) {
 				curmsg.Preload(ctx, cmdg.LevelMetadata)
