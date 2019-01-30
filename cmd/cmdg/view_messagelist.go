@@ -150,6 +150,7 @@ func filterMarked(msgs []*cmdg.Message, marked map[string]bool, pos int) ([]stri
 }
 
 func (mv *MessageView) Run(ctx context.Context) error {
+	// TODO: defer a sync.WaitGroup.Wait() waiting on all goroutines spawned.
 	theresMore := true
 	var contentHeight int
 	var pages []*cmdg.Page
