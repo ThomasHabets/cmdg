@@ -21,20 +21,8 @@
  *
  * Some more interesting stuff can be found in doc for:
  *  golang.org/x/text/encoding
- * golang.org/x/text/encoding/charmap
+ *  golang.org/x/text/encoding/charmap
  */
-//
-// TODO before it can replace old code:
-// * Reconnecting (not needed?)
-//
-// Missing features that can wait:
-// * colors on labels
-// * attach stuff on send
-// * sign on send
-// * encrypt on send
-// * proproduce license with -license
-// * continue draft
-// * up/down/left/right keys
 package main
 
 import (
