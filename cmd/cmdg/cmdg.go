@@ -44,6 +44,7 @@ import (
 )
 
 const (
+	version           = "1.0-beta"
 	signatureFilename = "signature.txt"
 )
 
@@ -55,6 +56,7 @@ var (
 	configure       = flag.Bool("configure", false, "Configure OAuth.")
 	updateSignature = flag.Bool("update_signature", false, "Upload ~/.signature to app settings.")
 	verbose         = flag.Bool("verbose", false, "Turn on verbose logging.")
+	versionFlag     = flag.Bool("version", false, "Show version and exit.")
 
 	conn *cmdg.CmdG
 
@@ -111,6 +113,11 @@ func run(ctx context.Context) error {
 func main() {
 	syscall.Umask(0077)
 	flag.Parse()
+	cmdg.Version = version
+
+	if flag.NArg() != 0 {
+		log.Fatalf("Trailing args on cmdline: %q", flag.Args())
+	}
 
 	if *verbose {
 		log.SetLevel(log.DebugLevel)
@@ -118,6 +125,11 @@ func main() {
 
 	if *license {
 		fmt.Printf("%s\n", licenseText)
+		return
+	}
+
+	if *versionFlag {
+		fmt.Printf("cmdg %s\nhttps://github.com/ThomasHabets/cmdg", version)
 		return
 	}
 

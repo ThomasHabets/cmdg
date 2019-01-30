@@ -21,8 +21,6 @@ import (
 )
 
 const (
-	version   = "1.0-beta"
-	userAgent = "cmdg " + version
 	// Scope for email, contacts, and appdata.
 	scope = "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts https://www.googleapis.com/auth/drive.appdata"
 
@@ -42,6 +40,10 @@ const (
 	appDataFolder = "appDataFolder"
 )
 
+var (
+	Version = "unspecified"
+)
+
 type (
 	DataLevel string
 	HistoryID uint64
@@ -56,6 +58,10 @@ type CmdG struct {
 	messageCache map[string]*Message
 	labelCache   map[string]*Label
 	contacts     []string
+}
+
+func userAgent() string {
+	return "cmdg " + Version
 }
 
 func (c *CmdG) MessageCache(msg *Message) *Message {
@@ -127,7 +133,7 @@ func New(fn string) (*CmdG, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "creating GMail client")
 		}
-		conn.gmail.UserAgent = userAgent
+		conn.gmail.UserAgent = userAgent()
 	}
 
 	// Set up drive client.
@@ -137,7 +143,7 @@ func New(fn string) (*CmdG, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "creating Drive client")
 		}
-		conn.drive.UserAgent = userAgent
+		conn.drive.UserAgent = userAgent()
 	}
 	// Set up people client.
 	{
@@ -146,7 +152,7 @@ func New(fn string) (*CmdG, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "creating People client")
 		}
-		conn.drive.UserAgent = userAgent
+		conn.drive.UserAgent = userAgent()
 	}
 	return conn, nil
 }

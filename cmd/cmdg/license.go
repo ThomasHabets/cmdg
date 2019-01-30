@@ -1,7 +1,9 @@
 package main
 
 const (
-	licenseText = `--- License of cmdg itself ---
+	licenseText = `Copyright Thomas Habets <thomas@habets.se> 2015-2019
+
+--- License of cmdg itself ---
 		    GNU GENERAL PUBLIC LICENSE
 		       Version 2, June 1991
 
