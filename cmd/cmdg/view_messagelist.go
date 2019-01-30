@@ -413,11 +413,15 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
 			case 'e':
 				ids, nm, ofs := filterMarked(mv.messages, marked, mv.pos)
-				st := time.Now()
-				if err := conn.BatchArchive(ctx, ids); err != nil {
-					mv.errors <- errors.Wrapf(err, "Batch archiving")
-				} else {
+				go func() {
+					st := time.Now()
+					if err := conn.BatchArchive(ctx, ids); err != nil {
+						mv.errors <- errors.Wrapf(err, "Batch archiving")
+					}
 					log.Infof("Batch archived %d: %v", len(ids), time.Since(st))
+				}()
+				log.Infof("Batch archiving %d (in background)", len(ids))
+				if mv.label == cmdg.Inbox {
 					mv.pos -= ofs
 					scroll -= ofs
 					if scroll < 0 {
@@ -425,23 +429,28 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					}
 					mv.messages = nm
 					marked = map[string]bool{}
+					mkMessagePos()
 				}
-				mkMessagePos()
 			case '*':
+				// TODO: Because it's a toggle this is not suitable for batch operation.
 				curmsg := mv.messages[mv.pos]
+				f := curmsg.AddLabelID
+				f2 := curmsg.AddLabelIDLocal
+
+				verb := "Adding"
 				if curmsg.HasLabel(cmdg.Starred) {
-					if err := curmsg.RemoveLabelID(ctx, cmdg.Starred); err != nil {
-						mv.errors <- errors.Wrap(err, "Removing STARRED label")
-					}
-				} else {
-					if err := curmsg.AddLabelID(ctx, cmdg.Starred); err != nil {
-						mv.errors <- errors.Wrap(err, "Adding STARRED label")
-					}
+					f = curmsg.RemoveLabelID
+					f2 = curmsg.RemoveLabelIDLocal
+					verb = "Removing"
 				}
-				if err := curmsg.ReloadLabels(ctx); err != nil {
-					mv.errors <- errors.Wrapf(err, "Failed to reload labels")
-				}
+				f2(cmdg.Starred)
+				go func() {
+					if err := f(ctx, cmdg.Starred); err != nil {
+						mv.errors <- errors.Wrapf(err, "%s STARRED label", verb)
+					}
+				}()
 			case 'l':
+				// TODO: can this be partially merged with 'L' code?
 				ids, _, _ := filterMarked(mv.messages, marked, mv.pos)
 				if len(ids) != 0 {
 					var opts []*dialog.Option
@@ -457,15 +466,18 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					} else if err != nil {
 						mv.errors <- errors.Wrapf(err, "Selecting label")
 					} else {
-						st := time.Now()
-						if err := conn.BatchLabel(ctx, ids, label.Key); err != nil {
-							mv.errors <- errors.Wrapf(err, "Batch labelling")
-						} else {
-							log.Infof("Batch labelled %d: %v", len(ids), time.Since(st))
-						}
 						for _, id := range ids {
-							go mv.messages[messagePos[id]].ReloadLabels(ctx)
+							mv.messages[messagePos[id]].AddLabelIDLocal(label.Key)
 						}
+						log.Infof("Batch labelling %q/%q %d messages in the background…", label.Key, label.Label, len(ids))
+						go func() {
+							st := time.Now()
+							if err := conn.BatchLabel(ctx, ids, label.Key); err != nil {
+								mv.errors <- errors.Wrapf(err, "Batch labelling")
+							} else {
+								log.Infof("Batch labelled %d: %v", len(ids), time.Since(st))
+							}
+						}()
 					}
 				}
 			case 'L':
@@ -494,15 +506,18 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						} else if err != nil {
 							mv.errors <- errors.Wrapf(err, "Selecting label")
 						} else {
-							st := time.Now()
-							if err := conn.BatchUnlabel(ctx, ids, label.Key); err != nil {
-								mv.errors <- errors.Wrapf(err, "Batch labelling")
-							} else {
-								log.Infof("Batch unlabelled %d: %v", len(ids), time.Since(st))
+							for _, id := range ids {
+								mv.messages[messagePos[id]].RemoveLabelIDLocal(label.Key)
 							}
-						}
-						for _, id := range ids {
-							go mv.messages[messagePos[id]].ReloadLabels(ctx)
+							log.Infof("Batch unlabelling %q/%q from %d messages in the background…", label.Key, label.Label, len(ids))
+							go func() {
+								st := time.Now()
+								if err := conn.BatchUnlabel(ctx, ids, label.Key); err != nil {
+									mv.errors <- errors.Wrapf(err, "Batch labelling")
+								} else {
+									log.Infof("Batch unlabelled %d: %v", len(ids), time.Since(st))
+								}
+							}()
 						}
 					}
 				}

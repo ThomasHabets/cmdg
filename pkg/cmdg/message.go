@@ -152,13 +152,14 @@ func (msg *Message) IsUnread() bool {
 	return msg.HasLabel(Unread)
 }
 
-func (msg *Message) HasLabel(label string) bool {
-	// TODO: this only works for label IDs.
+func (msg *Message) HasLabel(labelID string) bool {
+	msg.m.Lock()
+	defer msg.m.Unlock()
 	if msg.Response == nil {
 		return false
 	}
 	for _, l := range msg.Response.LabelIds {
-		if label == l {
+		if labelID == l {
 			return true
 		}
 	}
@@ -179,6 +180,39 @@ func (msg *Message) RemoveLabelID(ctx context.Context, labelID string) error {
 		return errors.Wrapf(err, "reloading labels from %q", msg.ID)
 	}
 	return nil
+}
+
+// AddLabelIDLocal adds a local label to the local cache *only*. It'll be overwritten at next sync.
+// It's used for faster UI response time on label adding.
+func (msg *Message) AddLabelIDLocal(labelID string) {
+	msg.m.Lock()
+	defer msg.m.Unlock()
+	if msg.Response == nil {
+		return
+	}
+	for _, l := range msg.Response.LabelIds {
+		if l == labelID {
+			return
+		}
+	}
+	msg.Response.LabelIds = append(msg.Response.LabelIds, labelID)
+}
+
+// RemoveLabelIDLocal removes a local label from the local cache *only*. It'll be overwritten at next sync.
+// It's used for faster UI response time on label removing.
+func (msg *Message) RemoveLabelIDLocal(labelID string) {
+	if msg.Response == nil {
+		return
+	}
+	nl := make([]string, len(msg.Response.LabelIds))
+	msg.m.Lock()
+	defer msg.m.Unlock()
+	for _, l := range msg.Response.LabelIds {
+		if l != labelID {
+			nl = append(nl, l)
+		}
+	}
+	msg.Response.LabelIds = nl
 }
 
 func (msg *Message) AddLabelID(ctx context.Context, labelID string) error {
@@ -274,6 +308,9 @@ func (l *Label) LabelString() string {
 }
 
 func (l *Label) LabelColor() string {
+	if l.Response == nil {
+		return ""
+	}
 	if l.Response.Color == nil {
 		return ""
 	}
