@@ -13,6 +13,14 @@ import (
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
 
+const (
+	draftKeyAbort  = "a"
+	draftKeySend   = "s"
+	draftKeyDraft  = "d"
+	draftKeyDelete = "D"
+	draftKeyEditor = "r"
+)
+
 func continueDraft(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
 	drafts, err := conn.ListDrafts(ctx)
 	if err != nil {
@@ -66,7 +74,7 @@ func continueDraft(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) erro
 
 	prefill := strings.Join(headers, "\n") + "\n\n" + contents
 	var msg string
-outfor:
+
 	for {
 		msg, err = getInput(ctx, prefill, keys)
 		if err != nil {
@@ -75,10 +83,11 @@ outfor:
 
 		// Ask to send it.
 		sendQ := []dialog.Option{
-			{Key: "s", Label: "s — Send"},
-			{Key: "d", Label: "d — Save as draft"},
-			{Key: "a", Label: "a — Abort, discarding changes to draft"},
-			{Key: "r", Label: "r — Return to editor"},
+			{Key: draftKeySend, Label: "s — Send"},
+			{Key: draftKeyDraft, Label: "d — Save as draft"},
+			{Key: draftKeyAbort, Label: "a — Abort, discarding changes to draft"},
+			{Key: draftKeyDelete, Label: "D — Delete draft"},
+			{Key: draftKeyEditor, Label: "r — Return to editor"},
 		}
 
 		a, err := dialog.Question("Send message?", sendQ, keys)
@@ -87,21 +96,28 @@ outfor:
 		}
 
 		switch a {
-		case "r": // Return to editor.
+		case draftKeyEditor: // Return to editor.
 			prefill = msg
 			continue
-		case "^C", "a": // Abandon.
+		case "^C", draftKeyAbort: // Abandon.
 			return nil
-		case "s":
-			break outfor
-		case "d":
+		case draftKeyDelete:
+			if err := draft.Delete(ctx); err != nil {
+				return errors.Wrap(err, "deleting draft")
+			}
+			return nil
+		case draftKeyDraft:
 			if err := draft.Update(ctx, fixSubject(msg)); err != nil {
 				// TODO: allow option to save to local file.
-				return errors.Wrap(err, "updating draft failed")
+				return errors.Wrap(err, "updating draft")
+			}
+			return nil
+		case draftKeySend:
+			if err := draft.Send(ctx); err != nil {
+				// TODO: allow option to save to local file.
+				return errors.Wrap(err, "sending draft")
 			}
 			return nil
 		}
 	}
-
-	return nil
 }

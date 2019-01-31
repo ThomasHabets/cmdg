@@ -956,3 +956,17 @@ func (d *Draft) Update(ctx context.Context, content string) error {
 	d.m.Unlock()
 	return nil
 }
+
+// Send sends the draft. Sending a draft makes it no longer a draft.
+func (d *Draft) Send(ctx context.Context) error {
+	if err := d.load(ctx, LevelFull); err != nil {
+		return errors.Wrap(err, "downloading draft for send")
+	}
+	_, err := d.conn.gmail.Users.Drafts.Send(email, d.Response).Context(ctx).Do()
+	return err
+}
+
+// Delete deletes the draft.
+func (d *Draft) Delete(ctx context.Context) error {
+	return d.conn.gmail.Users.Drafts.Delete(email, d.ID).Context(ctx).Do()
+}
