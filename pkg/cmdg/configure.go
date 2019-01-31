@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 
+	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
 
@@ -111,6 +113,9 @@ func Configure(fn string) error {
 	b, err := makeConfig()
 	if err != nil {
 		return err
+	}
+	if err := os.MkdirAll(path.Dir(fn), 0700); err != nil {
+		return errors.Wrapf(err, "creating config directory %q", path.Dir(fn))
 	}
 	return ioutil.WriteFile(fn, b, 0600)
 }
