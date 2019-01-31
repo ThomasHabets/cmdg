@@ -378,3 +378,21 @@ func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*P
 	}
 	return p, nil
 }
+
+func (c *CmdG) ListDrafts(ctx context.Context) ([]*Draft, error) {
+	var ret []*Draft
+	if err := c.gmail.Users.Drafts.List(email).Pages(ctx, func(r *gmail.ListDraftsResponse) error {
+		for _, d := range r.Drafts {
+			nd := NewDraft(c, d.Id)
+			ret = append(ret, nd)
+			// TODO: make concurrent.
+			if err := nd.load(ctx, LevelMetadata); err != nil {
+				return errors.Wrap(err, "loading a draft")
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return ret, nil
+}

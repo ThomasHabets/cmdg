@@ -27,6 +27,7 @@ l             — Label marked messages
 L             — Unlabel marked messages
 *             — Toggle starred on hilighted message
 c             — Compose new message
+C             — Continue message from draft
 N, n, ^N, j   — Next message
 P, p, ^P, k   — Previous message
 r, ^R         — Reload current view
@@ -538,6 +539,10 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			case 'c':
 				if err := composeNew(ctx, conn, mv.keys); err != nil {
 					mv.errors <- errors.Wrapf(err, "Composing new message")
+				}
+			case 'C':
+				if err := continueDraft(ctx, conn, mv.keys); err != nil {
+					mv.errors <- errors.Wrapf(err, "Continuing draft")
 				}
 			case 'N', 'n', 'j', input.CtrlN:
 				if (mv.messages != nil) && (mv.pos < len(mv.messages)-1) {

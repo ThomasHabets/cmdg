@@ -130,22 +130,25 @@ func NewMessage(c *CmdG, msgID string) *Message {
 	})
 }
 
+func hasData(has, want DataLevel) bool {
+	switch has {
+	case LevelFull:
+		return true
+	case LevelMetadata:
+		return want != LevelFull
+	case LevelMinimal:
+		return (want != LevelFull) && (want != LevelMetadata)
+	case LevelEmpty:
+		return want == LevelEmpty
+	}
+	panic(fmt.Sprintf("can't happen: current level is %q, want %q", has, want))
+}
+
 // HasData returns if the message has at least the given level.
 func (msg *Message) HasData(level DataLevel) bool {
 	msg.m.RLock()
 	defer msg.m.RUnlock()
-
-	switch msg.level {
-	case LevelFull:
-		return true
-	case LevelMetadata:
-		return level != LevelFull
-	case LevelMinimal:
-		return LevelMinimal != ""
-	case LevelEmpty:
-		return false
-	}
-	panic(fmt.Sprintf("can't happen: current level is %q", msg.level))
+	return hasData(msg.level, level)
 }
 
 func (msg *Message) IsUnread() bool {
@@ -867,6 +870,58 @@ func (msg *Message) load(ctx context.Context, level DataLevel) error {
 		if err := msg.annotateAttachments(); err != nil {
 			log.Errorf("Failed to annotate attachments: %v", err)
 		}
+	}
+	return nil
+}
+
+type Draft struct {
+	ID       string
+	Response *gmail.Draft
+
+	level   DataLevel
+	headers map[string]string
+	conn    *CmdG
+	m       sync.RWMutex
+}
+
+func NewDraft(c *CmdG, id string) *Draft {
+	return &Draft{
+		ID:   id,
+		conn: c,
+	}
+}
+
+func (d *Draft) GetHeader(ctx context.Context, h string) (string, error) {
+	if err := d.load(ctx, LevelMetadata); err != nil {
+		return "", err
+	}
+	d.m.RLock()
+	defer d.m.RUnlock()
+	return d.headers[strings.ToLower(h)], nil
+}
+
+func (d *Draft) HasData(level DataLevel) bool {
+	d.m.RLock()
+	defer d.m.RUnlock()
+	return hasData(d.level, level)
+}
+
+func (d *Draft) load(ctx context.Context, level DataLevel) error {
+	if d.HasData(level) {
+		return nil
+	}
+
+	r, err := d.conn.gmail.Users.Drafts.Get(email, d.ID).Context(ctx).Format(string(level)).Do()
+	if err != nil {
+		return err
+	}
+	d.m.Lock()
+	defer d.m.Unlock()
+	d.Response = r
+	d.level = level
+	d.headers = make(map[string]string)
+	for _, h := range d.Response.Message.Payload.Headers {
+		d.headers[strings.ToLower(h.Name)] = h.Value
 	}
 	return nil
 }
