@@ -46,17 +46,22 @@ var (
 	messageListHistoryCheckTime = 10 * time.Second
 )
 
+type historyUpdate struct {
+	historyID cmdg.HistoryID
+	history   []*gmail.History
+}
+
 type MessageView struct {
 	// Static state.
 	label string
 	query string
 
 	// Communicate with main thread.
-	keys      *input.Input
-	errors    chan error
-	pageCh    chan *cmdg.Page
-	messageCh chan *cmdg.Message
-	historyCh chan cmdg.HistoryID
+	keys            *input.Input
+	errors          chan error
+	pageCh          chan *cmdg.Page
+	messageCh       chan *cmdg.Message
+	historyUpdateCh chan historyUpdate
 
 	// Only for use by main thread.
 	messages  []*cmdg.Message
@@ -66,13 +71,13 @@ type MessageView struct {
 
 func NewMessageView(ctx context.Context, label, q string, in *input.Input) *MessageView {
 	v := &MessageView{
-		label:     label,
-		errors:    make(chan error, 20),
-		pageCh:    make(chan *cmdg.Page),
-		historyCh: make(chan cmdg.HistoryID, 20),
-		messageCh: make(chan *cmdg.Message),
-		keys:      in,
-		query:     q,
+		label:           label,
+		errors:          make(chan error, 20),
+		pageCh:          make(chan *cmdg.Page),
+		historyUpdateCh: make(chan historyUpdate, 20),
+		messageCh:       make(chan *cmdg.Message),
+		keys:            in,
+		query:           q,
 	}
 	go v.fetchPage(ctx, "")
 	return v
@@ -85,7 +90,10 @@ func (mv *MessageView) fetchPage(ctx context.Context, token string) {
 		if err != nil {
 			log.Errorf("Failed to get history ID: %v", err)
 		} else {
-			mv.historyCh <- hid
+			log.Infof("Initing history ID to %d", hid)
+			mv.historyUpdateCh <- historyUpdate{
+				historyID: hid,
+			}
 		}
 	}
 
@@ -268,87 +276,96 @@ func (mv *MessageView) Run(ctx context.Context) error {
 	timer := time.NewTicker(messageListHistoryCheckTime)
 	defer timer.Stop()
 
-	historyUpdateCh := make(chan []*gmail.History)
 	for {
 		status := ""
 		select {
-		case hists := <-historyUpdateCh:
-			for _, hist := range hists {
-				log.Infof("History entry: %d add, %d delete, %d labeladd, %d labeldelete", len(hist.MessagesAdded), len(hist.MessagesDeleted), len(hist.LabelsAdded), len(hist.LabelsRemoved))
-				for _, m := range hist.MessagesDeleted {
-					ind, found := messagePos[m.Message.Id]
-					if found {
-						log.Infof("Deleting message from in accordance with history")
-						mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
-						if ind < mv.pos {
-							mv.pos--
-						}
-					}
-				}
-
-				for _, ladd := range hist.LabelsAdded {
-					// Messages moved into this label (and other labels).
-					if _, found := messagePos[ladd.Message.Id]; !found {
-						this := false
-						for _, l := range ladd.LabelIds {
-							if l == mv.label {
-								this = true
-								break
-							}
-						}
-						if this {
-							log.Infof("History says %q was moved to current label %q", ladd.Message.Id, mv.label)
-							nm := cmdg.NewMessage(conn, ladd.Message.Id)
-							// TODO: add it in the right place, not the top.
-							mv.messages = append([]*cmdg.Message{nm}, mv.messages...)
-						}
-					}
-				}
-
-				for _, ma := range hist.MessagesAdded {
-					// New messages… also in this view.
-					if _, found := messagePos[ma.Message.Id]; !found {
-						nm := cmdg.NewMessage(conn, ma.Message.Id)
-						// TODO: add it in the right place, not the top.
-						mv.messages = append([]*cmdg.Message{nm}, mv.messages...)
-					}
-				}
-				for _, lrm := range hist.LabelsRemoved {
-					ind, found := messagePos[lrm.Message.Id]
-					if found {
-						go mv.messages[ind].ReloadLabels(ctx)
-						this := false
-						for _, l := range lrm.LabelIds {
-							if l == mv.label {
-								this = true
-								break
-							}
-						}
-						if this {
-							log.Infof("… message %s gone from this view", lrm.Message.Id)
+		case histUpdate := <-mv.historyUpdateCh:
+			log.Infof("Got history update: %+v", histUpdate)
+			if histUpdate.historyID < mv.historyID {
+				log.Warningf("Got out of order history entry %d < %d", histUpdate.historyID, mv.historyID)
+			} else if histUpdate.historyID == mv.historyID {
+				log.Infof("Got duplicate history update %d", mv.historyID)
+			} else {
+				mv.historyID = histUpdate.historyID
+				for _, hist := range histUpdate.history {
+					log.Infof("History entry: %d add, %d delete, %d labeladd, %d labeldelete", len(hist.MessagesAdded), len(hist.MessagesDeleted), len(hist.LabelsAdded), len(hist.LabelsRemoved))
+					for _, m := range hist.MessagesDeleted {
+						ind, found := messagePos[m.Message.Id]
+						if found {
+							log.Infof("Deleting message from in accordance with history")
 							mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
 							if ind < mv.pos {
 								mv.pos--
 							}
 						}
 					}
+
+					for _, ladd := range hist.LabelsAdded {
+						// Messages moved into this label (and other labels).
+						if _, found := messagePos[ladd.Message.Id]; !found {
+							this := false
+							for _, l := range ladd.LabelIds {
+								if l == mv.label {
+									this = true
+									break
+								}
+							}
+							if this {
+								log.Infof("History says %q was moved to current label %q", ladd.Message.Id, mv.label)
+								nm := cmdg.NewMessage(conn, ladd.Message.Id)
+								// TODO: add it in the right place, not the top.
+								mv.messages = append([]*cmdg.Message{nm}, mv.messages...)
+								mkMessagePos()
+							}
+						}
+					}
+
+					for _, ma := range hist.MessagesAdded {
+						// New messages… also in this view.
+						if _, found := messagePos[ma.Message.Id]; !found {
+							nm := cmdg.NewMessage(conn, ma.Message.Id)
+							// TODO: add it in the right place, not the top.
+							mv.messages = append([]*cmdg.Message{nm}, mv.messages...)
+							mkMessagePos()
+						}
+					}
+					for _, lrm := range hist.LabelsRemoved {
+						ind, found := messagePos[lrm.Message.Id]
+						if found {
+							go mv.messages[ind].ReloadLabels(ctx)
+							this := false
+							for _, l := range lrm.LabelIds {
+								if l == mv.label {
+									this = true
+									break
+								}
+							}
+							if this {
+								log.Infof("… message %s gone from this view", lrm.Message.Id)
+								mv.messages = append(mv.messages[:ind], mv.messages[ind+1:]...)
+								if ind < mv.pos {
+									mv.pos--
+								}
+								mkMessagePos()
+							}
+						}
+					}
 				}
 			}
-			mkMessagePos()
 
 		case <-timer.C:
 			if mv.label != "" {
 				go func() {
-					// TODO: do all this async.
 					hists, hid, err := conn.History(ctx, mv.historyID, mv.label)
 					if err != nil {
-						// mv.errors <- errors.Wrapf(err, "Getting history")
-						log.Errorf("Getting history: %v", err)
+						log.Errorf("Getting history since %d: %v", mv.historyID, err)
 					} else if len(hists) == 0 {
 						log.Infof("No history since last check")
 					} else {
-						mv.historyCh <- hid
-						historyUpdateCh <- hists
+						mv.historyUpdateCh <- historyUpdate{
+							historyID: hid,
+							history:   hists,
+						}
 					}
 				}()
 			} else {
@@ -368,9 +385,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				// Screen failed to init. Yeah it's time to bail.
 				return err
 			}
-		case hid := <-mv.historyCh:
-			log.Infof("History ID: %d", hid)
-			mv.historyID = hid
 		case err := <-mv.errors:
 			showError(screen, mv.keys, err.Error())
 			screen.Draw()
