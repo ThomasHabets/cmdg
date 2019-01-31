@@ -385,10 +385,11 @@ func (c *CmdG) ListDrafts(ctx context.Context) ([]*Draft, error) {
 		for _, d := range r.Drafts {
 			nd := NewDraft(c, d.Id)
 			ret = append(ret, nd)
-			// TODO: make concurrent.
-			if err := nd.load(ctx, LevelMetadata); err != nil {
-				return errors.Wrap(err, "loading a draft")
-			}
+			go func() {
+				if err := nd.load(ctx, LevelMetadata); err != nil {
+					log.Errorf("Loading a draft: %v", err)
+				}
+			}()
 		}
 		return nil
 	}); err != nil {

@@ -43,5 +43,6 @@ func continueDraft(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) erro
 		return errors.Wrap(err, "dialog failed")
 	}
 	log.Infof("Draft selected: %s %q", dOpt.Key, dOpt)
+
 	return nil
 }
