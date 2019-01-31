@@ -115,6 +115,8 @@ func main() {
 	flag.Parse()
 	cmdg.Version = version
 
+	log.Infof("cmdg %s", version)
+
 	if flag.NArg() != 0 {
 		log.Fatalf("Trailing args on cmdline: %q", flag.Args())
 	}

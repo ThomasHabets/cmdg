@@ -546,7 +546,7 @@ func htmlRender(ctx context.Context, s string) (string, error) {
 
 var errNoUsablePart = fmt.Errorf("could not find message part usable as message body")
 
-func (msg *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (string, error) {
+func makeBody(ctx context.Context, part *gmail.MessagePart) (string, error) {
 	if len(part.Parts) == 0 {
 		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
 		data, err := mimeDecode(string(part.Body.Data))
@@ -575,12 +575,12 @@ func (msg *Message) makeBody(ctx context.Context, part *gmail.MessagePart) (stri
 		switch p.MimeType {
 		case "text/plain":
 			log.Infof("text/plain")
-			return msg.makeBody(ctx, p)
+			return makeBody(ctx, p)
 		case "text/html":
 			html = p
 		case "multipart/alternative":
 			log.Infof("multipart/alternative")
-			return msg.makeBody(ctx, p)
+			return makeBody(ctx, p)
 		default:
 			log.Infof("Ignoring part of type %q", p.MimeType)
 		}
@@ -781,7 +781,7 @@ func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 						Data: mimeEncode(string(t)),
 					},
 				}
-				msg.body, err = msg.makeBody(ctx, np)
+				msg.body, err = makeBody(ctx, np)
 				if err != nil {
 					return errors.Wrap(err, "failed to decrypt")
 				}
@@ -853,7 +853,7 @@ func (msg *Message) load(ctx context.Context, level DataLevel) error {
 		msg.headers[strings.ToLower(h.Name)] = h.Value
 	}
 	if level == LevelFull {
-		msg.body, err = msg.makeBody(ctx, msg.Response.Payload)
+		msg.body, err = makeBody(ctx, msg.Response.Payload)
 		if err != nil && err != errNoUsablePart {
 			return err
 		}
@@ -882,6 +882,7 @@ type Draft struct {
 	headers map[string]string
 	conn    *CmdG
 	m       sync.RWMutex
+	body    string
 }
 
 func NewDraft(c *CmdG, id string) *Draft {
@@ -923,5 +924,35 @@ func (d *Draft) load(ctx context.Context, level DataLevel) error {
 	for _, h := range d.Response.Message.Payload.Headers {
 		d.headers[strings.ToLower(h.Name)] = h.Value
 	}
+	if level == LevelFull {
+		d.body, err = makeBody(ctx, d.Response.Message.Payload)
+		if err != nil {
+			return errors.Wrap(err, "rendering draft body")
+		}
+	}
+	return nil
+}
+
+func (d *Draft) GetBody(ctx context.Context) (string, error) {
+	if err := d.load(ctx, LevelFull); err != nil {
+		return "", err
+	}
+	return d.body, nil
+}
+
+func (d *Draft) Update(ctx context.Context, content string) error {
+	_, err := d.conn.gmail.Users.Drafts.Update(email, d.ID, &gmail.Draft{
+		Message: &gmail.Message{
+			Raw: mimeEncode(content),
+		},
+	}).Context(ctx).Do()
+	if err != nil {
+		return err
+	}
+
+	// Pretend we don't know anything about this draft anymore.
+	d.m.Lock()
+	d.level = LevelEmpty
+	d.m.Unlock()
 	return nil
 }

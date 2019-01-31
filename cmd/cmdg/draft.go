@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -19,7 +20,7 @@ func continueDraft(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) erro
 	}
 
 	var opts []*dialog.Option
-	for _, d := range drafts {
+	for n, d := range drafts {
 		to, err := d.GetHeader(ctx, "To")
 		if err != nil {
 			to = "<no recipient>"
@@ -31,8 +32,9 @@ func continueDraft(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) erro
 		}
 
 		opts = append(opts, &dialog.Option{
-			Key:   d.ID,
-			Label: fmt.Sprintf("To:%s Subj:%s", to, subj),
+			Key:    d.ID,
+			KeyInt: n,
+			Label:  fmt.Sprintf("To:%s Subj:%s", to, subj),
 		})
 	}
 
@@ -43,6 +45,63 @@ func continueDraft(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) erro
 		return errors.Wrap(err, "dialog failed")
 	}
 	log.Infof("Draft selected: %s %q", dOpt.Key, dOpt)
+	draft := drafts[dOpt.KeyInt]
+
+	contents, err := draft.GetBody(ctx)
+	if err != nil {
+		return errors.Wrap(err, "getting draft body")
+	}
+
+	var headers []string
+	keep := map[string]bool{
+		"To":      true,
+		"Cc":      true,
+		"Subject": true,
+	}
+	for _, h := range draft.Response.Message.Payload.Headers {
+		if keep[h.Name] {
+			headers = append(headers, fmt.Sprintf("%s: %s", h.Name, h.Value))
+		}
+	}
+
+	prefill := strings.Join(headers, "\n") + "\n\n" + contents
+	var msg string
+outfor:
+	for {
+		msg, err = getInput(ctx, prefill, keys)
+		if err != nil {
+			return err
+		}
+
+		// Ask to send it.
+		sendQ := []dialog.Option{
+			{Key: "s", Label: "s — Send"},
+			{Key: "d", Label: "d — Save as draft"},
+			{Key: "a", Label: "a — Abort, discarding changes to draft"},
+			{Key: "r", Label: "r — Return to editor"},
+		}
+
+		a, err := dialog.Question("Send message?", sendQ, keys)
+		if err != nil {
+			return err
+		}
+
+		switch a {
+		case "r": // Return to editor.
+			prefill = msg
+			continue
+		case "^C", "a": // Abandon.
+			return nil
+		case "s":
+			break outfor
+		case "d":
+			if err := draft.Update(ctx, fixSubject(msg)); err != nil {
+				// TODO: allow option to save to local file.
+				return errors.Wrap(err, "updating draft failed")
+			}
+			return nil
+		}
+	}
 
 	return nil
 }

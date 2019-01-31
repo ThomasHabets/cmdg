@@ -98,11 +98,13 @@ func (mv *MessageView) fetchPage(ctx context.Context, token string) {
 	}
 
 	log.Infof("Listing messages on label %q query %q with token %q…", mv.label, mv.query, token)
+	st := time.Now()
 	page, err := conn.ListMessages(ctx, mv.label, mv.query, token)
 	if err != nil {
 		mv.errors <- err
 		return
 	}
+	log.Infof("Listing messages took %v", time.Since(st))
 	go func() {
 		if err := page.PreloadSubjects(ctx); err != nil {
 			mv.errors <- err
