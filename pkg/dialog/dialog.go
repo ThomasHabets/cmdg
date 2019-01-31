@@ -88,6 +88,7 @@ func Strings2Options(ss []string) []*Option {
 	return ret
 }
 
+// Entry asks for a free-form input (e.g. Search).
 func Entry(prompt string, keys *input.Input) (string, error) {
 	screen, err := display.NewScreen()
 	if err != nil {
@@ -104,10 +105,14 @@ func Entry(prompt string, keys *input.Input) (string, error) {
 			switch key {
 			case input.Enter:
 				return cur, nil
-			case input.Backspace:
+			case input.Backspace, input.CtrlH:
 				if len(cur) > 0 {
 					cur = cur[:len(cur)-1]
 				}
+			case input.CtrlU:
+				cur = ""
+			case input.CtrlC:
+				return "", ErrAborted
 			default:
 				cur += string(key)
 			}
@@ -121,6 +126,7 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 		return nil, err
 	}
 	cur := ""
+	last := ""
 	selected := -1
 	scroll := 0 // TODO, implement scrolling.
 	visible := opts
@@ -168,19 +174,22 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 			}
 		case input.CtrlC:
 			return nil, ErrAborted
-		default:
-			if key == input.Backspace {
-				if len(cur) > 0 {
-					cur = cur[:len(cur)-1]
-				}
-			} else {
-				cur += string(key)
+		case input.Backspace, input.CtrlH:
+			if len(cur) > 0 {
+				cur = cur[:len(cur)-1]
 			}
+		case input.CtrlU:
+			cur = ""
+		default:
+			cur += string(key)
+		}
+		if last != cur {
 			selected = -1
 			visible = filterSubmatch(opts, cur)
 			if !free && len(visible) > 0 {
 				selected = 0
 			}
 		}
+		last = cur
 	}
 }

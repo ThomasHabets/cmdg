@@ -592,7 +592,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				return NewMessageView(ctx, cmdg.Inbox, "", mv.keys).Run(ctx)
 			case 's':
 				q, err := dialog.Entry("Query> ", mv.keys)
-				if err != nil {
+				if err == dialog.ErrAborted {
+					// That's fine.
+				} else if err != nil {
 					mv.errors <- errors.Wrapf(err, "Getting query")
 				} else if q != "" {
 					nv := NewMessageView(ctx, "", q, mv.keys)

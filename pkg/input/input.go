@@ -16,6 +16,7 @@ const (
 	Backspace = 127
 	Enter     = 13
 	CtrlL     = 12
+	CtrlU     = 21
 	CtrlC     = 3
 	CtrlR     = 18
 	CtrlN     = 14
