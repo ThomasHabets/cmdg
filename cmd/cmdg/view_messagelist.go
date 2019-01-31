@@ -194,7 +194,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 
 	drawMessage := func(cur int) error {
 		s := "Loading…"
-		if cur > len(mv.messages) {
+		if cur >= len(mv.messages) {
 			return fmt.Errorf("trying to draw message %d with len %d", cur, len(mv.messages))
 		}
 		curmsg := mv.messages[cur]
