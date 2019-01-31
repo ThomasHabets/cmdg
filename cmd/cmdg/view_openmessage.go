@@ -36,6 +36,7 @@ r         — Reply
 a         — Reply all
 e         — Archive
 t         — Browse attachments (if any)
+H         — Force HTML view
 \         — Show raw message source
 
 Press [enter] to exit
@@ -75,6 +76,9 @@ type OpenMessageView struct {
 
 	update chan struct{}
 	errors chan error
+
+	// Local view state. Main goroutine only.
+	preferHTML bool
 }
 
 func NewOpenMessageView(ctx context.Context, msg *cmdg.Message, in *input.Input) (*OpenMessageView, error) {
@@ -263,7 +267,11 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			continue
 		case <-ov.update:
 			log.Infof("Message arrived")
-			b, err := ov.msg.GetBody(ctx)
+			gb := ov.msg.GetBody
+			if ov.preferHTML {
+				gb = ov.msg.GetBodyHTML
+			}
+			b, err := gb(ctx)
 			if err != nil {
 				ov.errors <- errors.Wrapf(err, "Getting message body")
 			} else {
@@ -404,6 +412,11 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				if err := replyAll(ctx, conn, ov.keys, ov.msg); err != nil {
 					ov.errors <- fmt.Errorf("Failed to replyAll: %v", err)
 				}
+			case 'H':
+				ov.preferHTML = !ov.preferHTML
+				go func() {
+					ov.update <- struct{}{}
+				}()
 			case 'e':
 				if err := ov.msg.RemoveLabelID(ctx, cmdg.Inbox); err != nil {
 					ov.errors <- fmt.Errorf("Failed to archive : %v", err)
