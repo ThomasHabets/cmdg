@@ -260,15 +260,16 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			prefix += " "
 		}
 
-		star := " "
-		if curmsg.HasLabel(cmdg.Starred) {
-			star = "*"
-		}
-
 		if curmsg.IsUnread() {
 			prefix = display.Bold + prefix + ">"
 		} else {
 			prefix += " "
+		}
+
+		star := " "
+		if curmsg.HasLabel(cmdg.Starred) {
+			star = "*"
+			prefix = display.Yellow + prefix
 		}
 
 		screen.Printlnf(cur-scroll, "%s%s%s%s", reset, prefix, star, s)
@@ -434,6 +435,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						mv.errors <- errors.Wrapf(err, "Running OpenMessageView")
 					}
 					op.Do(mv)
+					mkMessagePos() // op.Do() could have changed the message positions around.
 				}
 			case input.CtrlL:
 				if err := initScreen(); err != nil {
