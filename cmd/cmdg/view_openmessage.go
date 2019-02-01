@@ -310,6 +310,10 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				// messageview; label list gets
 				// updated by RemoveLabelID.
 			}()
+			// Redraw could include fewer lines, because 'H' toggled HTML.
+			ov.screen.Clear()
+
+			// TODO: double check that scroll is not too high after `lines` was recreated.
 			ov.Draw(lines, scroll)
 		case key := <-ov.keys.Chan():
 			switch key {
