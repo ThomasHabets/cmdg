@@ -599,7 +599,7 @@ func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (st
 			plain = p
 		case "text/html":
 			html = p
-		case "multipart/alternative":
+		case "multipart/alternative", "multipart/related":
 			sub = p
 		default:
 			log.Infof("Ignoring part of type %q", p.MimeType)
