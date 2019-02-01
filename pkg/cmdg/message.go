@@ -172,16 +172,21 @@ func (msg *Message) HasLabel(labelID string) bool {
 
 func (msg *Message) RemoveLabelID(ctx context.Context, labelID string) error {
 	st := time.Now()
-	if _, err := msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
+	nm, err := msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
 		RemoveLabelIds: []string{labelID},
-	}).Context(ctx).Do(); err != nil {
+	}).Context(ctx).Do()
+	if err != nil {
 		return errors.Wrapf(err, "removing label ID %q from %q", labelID, msg.ID)
 	}
 
-	log.Infof("Removed label ID %q from %q: %v", labelID, msg.ID, time.Since(st))
+	log.Infof("Removed label ID %q from %q. Now %q: %v", labelID, msg.ID, nm.LabelIds, time.Since(st))
 
-	if err := msg.ReloadLabels(ctx); err != nil {
-		return errors.Wrapf(err, "reloading labels from %q", msg.ID)
+	msg.m.Lock()
+	defer msg.m.Unlock()
+	if msg.Response == nil {
+		msg.Response = nm
+	} else {
+		msg.Response.LabelIds = nm.LabelIds
 	}
 	return nil
 }
@@ -227,16 +232,22 @@ func (msg *Message) LocalLabels() []string {
 	return msg.Response.LabelIds
 }
 
+// AddLabelID adds a label to a message.
 func (msg *Message) AddLabelID(ctx context.Context, labelID string) error {
 	st := time.Now()
-	if _, err := msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
+	nm, err := msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
 		AddLabelIds: []string{labelID},
-	}).Context(ctx).Do(); err != nil {
+	}).Context(ctx).Do()
+	if err != nil {
 		return errors.Wrapf(err, "removing label ID %q from %q", labelID, msg.ID)
 	}
-	log.Infof("Added label ID %q to %q: %v", labelID, msg.ID, time.Since(st))
-	if err := msg.ReloadLabels(ctx); err != nil {
-		return errors.Wrapf(err, "reloading labels from %q", msg.ID)
+	log.Infof("Added label ID %q to %q. Is now %q: %v", labelID, msg.ID, nm.LabelIds, time.Since(st))
+	msg.m.Lock()
+	defer msg.m.Unlock()
+	if msg.Response == nil {
+		msg.Response = nm
+	} else {
+		msg.Response.LabelIds = nm.LabelIds
 	}
 	return nil
 }

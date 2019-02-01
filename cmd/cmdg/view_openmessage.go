@@ -307,7 +307,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				}
 				// Does not need to be signaled to
 				// messageview; label list gets
-				// reloaded by RemoveLabelID.
+				// updated by RemoveLabelID.
 			}()
 			ov.Draw(lines, scroll)
 		case key := <-ov.keys.Chan():
