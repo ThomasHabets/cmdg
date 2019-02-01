@@ -236,6 +236,7 @@ func showError(oscreen *display.Screen, keys *input.Input, msg string) {
 }
 
 func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
+	log.Infof("Running OpenMessageView")
 	scroll := 0
 	initScreen := func() error {
 		var err error

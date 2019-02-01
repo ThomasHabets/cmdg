@@ -162,6 +162,7 @@ func filterMarked(msgs []*cmdg.Message, marked map[string]bool, pos int) ([]stri
 }
 
 func (mv *MessageView) Run(ctx context.Context) error {
+	log.Infof("Running MessageView")
 	// TODO: defer a sync.WaitGroup.Wait() waiting on all goroutines spawned.
 	theresMore := true
 	var contentHeight int
@@ -661,7 +662,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					screen.Draw()
 				}
 			}
-			log.Infof("Print took %v", time.Since(st))
+			log.Debugf("Print took %v", time.Since(st))
 		}
 		// Print status.
 		if theresMore {
@@ -673,6 +674,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		// Draw.
 		st := time.Now()
 		screen.Draw()
-		log.Infof("Draw took %v", time.Since(st))
+		log.Debugf("Draw took %v", time.Since(st))
 	}
 }
