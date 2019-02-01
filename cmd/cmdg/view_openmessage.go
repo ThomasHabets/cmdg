@@ -94,9 +94,11 @@ func NewOpenMessageView(ctx context.Context, msg *cmdg.Message, in *input.Input)
 		errors: make(chan error, 20),
 	}
 	go func() {
+		st := time.Now()
 		if err := msg.Preload(ctx, cmdg.LevelFull); err != nil {
 			ov.errors <- err
 		}
+		log.Infof("Got full message in %v", time.Since(st))
 		ov.update <- struct{}{}
 	}()
 	return ov, err
@@ -282,6 +284,8 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 						continue
 					}
 					for len(l) > 0 {
+						// TODO: break on runewidth
+						// TODO: break on word boundary
 						if len(l) > ov.screen.Width {
 							lines = append(lines, l[:ov.screen.Width])
 							l = l[ov.screen.Width:]
@@ -294,8 +298,11 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			}
 			go func() {
 				if ov.msg.IsUnread() {
+					st := time.Now()
 					if err := ov.msg.RemoveLabelID(ctx, cmdg.Unread); err != nil {
 						ov.errors <- errors.Wrapf(err, "Failed to remove unread label")
+					} else {
+						log.Infof("Marked unread in %v", time.Since(st))
 					}
 				}
 				// Does not need to be signaled to
