@@ -219,6 +219,14 @@ func (msg *Message) RemoveLabelIDLocal(labelID string) {
 	msg.Response.LabelIds = nl
 }
 
+// LocalLabels returns the label IDs, whatever they are. If we have not downloaded anything then empty list is returned.
+func (msg *Message) LocalLabels() []string {
+	if msg.Response == nil {
+		return nil
+	}
+	return msg.Response.LabelIds
+}
+
 func (msg *Message) AddLabelID(ctx context.Context, labelID string) error {
 	st := time.Now()
 	if _, err := msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{

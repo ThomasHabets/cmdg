@@ -12,7 +12,7 @@ binary version that adds shared API keys and nothing else".
 ## Introduction
 
 cmdg is a commandline client to GMail that provides a UI more similar
-to Pine.
+to Pine/Alpine.
 
 It uses the GMail API to interact with your mailbox. This has several
 benefits.

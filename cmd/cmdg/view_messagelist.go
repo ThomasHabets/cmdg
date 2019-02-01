@@ -305,7 +305,14 @@ func (mv *MessageView) Run(ctx context.Context) error {
 
 					for _, ladd := range hist.LabelsAdded {
 						// Messages moved into this label (and other labels).
-						if _, found := messagePos[ladd.Message.Id]; !found {
+						if msgn, found := messagePos[ladd.Message.Id]; found {
+							msg := mv.messages[msgn]
+							for _, l := range ladd.LabelIds {
+								log.Infof("Adding label %q", l)
+								msg.AddLabelIDLocal(l)
+							}
+						} else {
+							// New message for this view.
 							this := false
 							for _, l := range ladd.LabelIds {
 								if l == mv.label {
@@ -314,6 +321,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 								}
 							}
 							if this {
+								// Confirmed. This is a new message.
 								log.Infof("History says %q was moved to current label %q", ladd.Message.Id, mv.label)
 								nm := cmdg.NewMessage(conn, ladd.Message.Id)
 								// TODO: add it in the right place, not the top.
@@ -335,12 +343,16 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					for _, lrm := range hist.LabelsRemoved {
 						ind, found := messagePos[lrm.Message.Id]
 						if found {
-							go mv.messages[ind].ReloadLabels(ctx)
+							msg := mv.messages[ind]
 							this := false
 							for _, l := range lrm.LabelIds {
+								for _, el := range msg.LocalLabels() {
+									if l == el {
+										msg.RemoveLabelIDLocal(l)
+									}
+								}
 								if l == mv.label {
 									this = true
-									break
 								}
 							}
 							if this {
