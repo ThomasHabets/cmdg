@@ -38,11 +38,22 @@ func Question(title string, opts []Option, keys *input.Input) (string, error) {
 			widest = t
 		}
 	}
-	prefix := strings.Repeat(" ", (screen.Width-widest)/2-4)
+
+	// TODO: break line if too long.
+	pad := (screen.Width-widest)/2 - 4
+	if pad < 0 {
+		pad = 0
+	}
+	prefix := strings.Repeat(" ", pad)
+
+	titlePad := (screen.Width - len(title)) / 2
+	if titlePad < 0 {
+		titlePad = 0
+	}
 
 	start := (screen.Height-len(opts))/2 - 2
 	screen.Printlnf(start, "%s", strings.Repeat("—", screen.Width))
-	screen.Printlnf(start+1, "%s%s", strings.Repeat(" ", (screen.Width-len(title))/2), title)
+	screen.Printlnf(start+1, "%s%s", strings.Repeat(" ", titlePad), title)
 	for n, l := range opts {
 		screen.Printlnf(start+n+2, "%s%s", prefix, l.String())
 	}
