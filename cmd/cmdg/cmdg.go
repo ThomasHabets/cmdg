@@ -57,6 +57,7 @@ var (
 	updateSignature = flag.Bool("update_signature", false, "Upload ~/.signature to app settings.")
 	verbose         = flag.Bool("verbose", false, "Turn on verbose logging.")
 	versionFlag     = flag.Bool("version", false, "Show version and exit.")
+	lynx            = flag.String("lynx", "lynx", "HTML render binary.")
 
 	conn *cmdg.CmdG
 
@@ -114,6 +115,8 @@ func main() {
 	syscall.Umask(0077)
 	flag.Parse()
 	cmdg.Version = version
+
+	cmdg.Lynx = *lynx
 
 	log.Infof("cmdg %s", version)
 

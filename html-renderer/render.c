@@ -22,6 +22,7 @@
 #include<grp.h>
 #include<pwd.h>
 #include<sched.h>
+#include<stdio.h>
 #include<sys/types.h>
 #include<unistd.h>
 
