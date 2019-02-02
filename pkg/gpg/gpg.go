@@ -75,6 +75,7 @@ func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
 	defer os.RemoveAll(dir)
 
 	log.Infof("Checking signature with %q…", dir)
+	log.Debugf("Contents: %q", data)
 	dataFN := path.Join(dir, "data")
 	sigFN := path.Join(dir, "data.gpg")
 	if err := ioutil.WriteFile(dataFN, []byte(data), 0600); err != nil {
