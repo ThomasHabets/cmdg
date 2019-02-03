@@ -4,6 +4,7 @@ package input
 import (
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -15,6 +16,7 @@ const (
 	fd        = 0
 	Backspace = 127
 	Enter     = 13
+	Return    = 10
 	CtrlL     = 12
 	CtrlU     = 21
 	CtrlC     = 3
@@ -23,6 +25,11 @@ const (
 	CtrlH     = 8
 	CtrlP     = 16
 	CtrlV     = 22
+
+	Up    = "\x1B\x6B\x41"
+	Down  = "\x1B\x6B\x42"
+	Right = "\x1B\x6B\x43"
+	Left  = "\x1B\x6B\x44"
 )
 
 var (
@@ -34,6 +41,30 @@ type Input struct {
 	stop    chan struct{} // Close to stop.
 	winch   chan os.Signal
 	keys    chan byte // Open if running.
+
+	m           sync.RWMutex
+	pasteStatus []bool
+}
+
+func (i *Input) PastePush(b bool) {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.pasteStatus = append(i.pasteStatus, b)
+}
+
+func (i *Input) PastePop() {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.pasteStatus = i.pasteStatus[:len(i.pasteStatus)-1]
+}
+
+func (i *Input) pasteProtection() bool {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	if len(i.pasteStatus) == 0 {
+		return true
+	}
+	return i.pasteStatus[len(i.pasteStatus)-1]
 }
 
 func (i *Input) Chan() <-chan byte {
@@ -75,6 +106,7 @@ func (i *Input) Start() error {
 		defer close(i.keys)
 		defer terminal.Restore(fd, oldState)
 		last := time.Now()
+		lastEnter := time.Now()
 		for {
 			// TODO: cleaner way to do this?
 			// Drawbacks:
@@ -99,8 +131,10 @@ func (i *Input) Start() error {
 				n, err := os.Stdin.Read(b)
 				// log.Infof("read done")
 				keyTime := time.Now()
-				if keyTime.Sub(last) < repeatProtection {
+				if i.pasteProtection() && keyTime.Sub(last) < repeatProtection {
 					log.Warningf("Paste protection blocked a keypress registering. %v < %v", keyTime.Sub(last), repeatProtection)
+				} else if keyTime.Sub(lastEnter) < repeatProtection {
+					log.Warningf("Post-enter paste protection blocked a keypress registering. %v < %v", keyTime.Sub(lastEnter), repeatProtection)
 				} else {
 					if err != nil {
 						log.Errorf("Read returned error: %v", err)
@@ -110,6 +144,9 @@ func (i *Input) Start() error {
 						return
 					}
 					i.keys <- b[0]
+					if b[0] == Enter || b[0] == Return {
+						lastEnter = keyTime
+					}
 				}
 				last = keyTime
 			}

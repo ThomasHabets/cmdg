@@ -1,3 +1,4 @@
+// Package dialog provides a set of interactive dialogs for user.
 package dialog
 
 import (
@@ -9,15 +10,18 @@ import (
 )
 
 var (
+	// ErrAborted is returned when user pressed ^C.
 	ErrAborted = fmt.Errorf("dialog aborted")
 )
 
+// Option is one option in a multiple-choice dialog.
 type Option struct {
 	Key    string
 	KeyInt int
 	Label  string
 }
 
+// String gives string representation usable for showing to the user.
 func (o *Option) String() string {
 	if o.Label == "" {
 		return fmt.Sprintf("%s", o.Key)
@@ -26,7 +30,8 @@ func (o *Option) String() string {
 }
 
 // Question asks the user a multiple-choice question.
-// ^C is always a valid option.
+// ^C is always a valid option, and returns ErrAborted.
+// Example: `Should I send that email now?`
 func Question(title string, opts []Option, keys *input.Input) (string, error) {
 	screen, err := display.NewScreen()
 	if err != nil {
@@ -83,6 +88,7 @@ func filterSubmatch(opts []*Option, filter string) []*Option {
 	return ret
 }
 
+// Strings2Options takes a slice of strings and turns them into Options.
 func Strings2Options(ss []string) []*Option {
 	var ret []*Option
 	for n, o := range ss {
@@ -99,7 +105,8 @@ func Strings2Options(ss []string) []*Option {
 	return ret
 }
 
-// Entry asks for a free-form input (e.g. Search).
+// Entry asks for a free-form input.
+// Example: Search.
 func Entry(prompt string, keys *input.Input) (string, error) {
 	screen, err := display.NewScreen()
 	if err != nil {
@@ -107,6 +114,8 @@ func Entry(prompt string, keys *input.Input) (string, error) {
 	}
 	cur := ""
 	prefix := "    "
+	keys.PastePush(false)
+	defer keys.PastePop()
 	for {
 		start := 3
 		screen.Printlnf(start+2, "%s%s%s%s%s", prefix, display.Bold, prompt, display.Reset, cur)
@@ -131,6 +140,9 @@ func Entry(prompt string, keys *input.Input) (string, error) {
 	}
 }
 
+// Selection asks the user for a choice, with populated suggestions that can be searched in.
+// If `free` is `true` then the user can input anything. If `false` then the options listed are the only valid ones.
+// Example: Email recipient choice.
 func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Option, error) {
 	screen, err := display.NewScreen()
 	if err != nil {
@@ -141,6 +153,8 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 	selected := -1
 	scroll := 0 // TODO, implement scrolling.
 	visible := opts
+	keys.PastePush(false)
+	defer keys.PastePop()
 	for {
 		start := 3
 		prefix := "    "
