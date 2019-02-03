@@ -46,7 +46,7 @@ func continueDraft(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) erro
 		})
 	}
 
-	dOpt, err := dialog.Selection(opts, "Draft (NOT IMPLEMENTED YET)> ", false, keys)
+	dOpt, err := dialog.Selection(opts, "Draft> ", false, keys)
 	if err == dialog.ErrAborted {
 		return nil
 	} else if err != nil {
