@@ -58,6 +58,7 @@ var (
 	verbose         = flag.Bool("verbose", false, "Turn on verbose logging.")
 	versionFlag     = flag.Bool("version", false, "Show version and exit.")
 	lynx            = flag.String("lynx", "lynx", "HTML render binary.")
+	enableSign      = flag.Bool("sign", false, "Send signed emails by default.")
 
 	conn *cmdg.CmdG
 

@@ -1,13 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
-	"mime"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
@@ -17,6 +16,10 @@ import (
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
 	"github.com/ThomasHabets/cmdg/pkg/dialog"
 	"github.com/ThomasHabets/cmdg/pkg/input"
+)
+
+const (
+	signedMultipartType = `signed; micalg=pgp-sha256; protocol="application/pgp-signature"`
 )
 
 func getInput(ctx context.Context, prefill string, keys *input.Input) (string, error) {
@@ -92,23 +95,19 @@ Subject:
 	return compose(ctx, conn, keys, prefill)
 }
 
-var fixSubjectRE = regexp.MustCompile("(?smi)^Subject:\\s?([^\n]+)$")
-
-func fixSubject(msg string) string {
-	parts := strings.SplitN(msg, "\n\n", 2)
-	if len(parts) != 2 {
-		log.Warningf("Message is not two parts: %d", len(parts))
-		return msg
+func createSig(ctx context.Context, msg string) (string, error) {
+	var out bytes.Buffer
+	cmd := exec.CommandContext(ctx, *gpgFlag, "--no-tty", "--batch", "-s", "-a", "-b")
+	cmd.Stdin = strings.NewReader(msg)
+	cmd.Stdout = &out
+	log.Debugf("Signing %q", msg)
+	if err := cmd.Start(); err != nil {
+		return "", errors.Wrapf(err, "failed to start gpg (%q)", *gpgFlag)
 	}
-	m := fixSubjectRE.FindStringSubmatch(parts[0])
-	if len(m) != 2 {
-		log.Infof("Not there in %q", parts[0])
-		return msg
+	if err := cmd.Wait(); err != nil {
+		return "", errors.Wrapf(err, "gpg (%q) failed", *gpgFlag)
 	}
-	return strings.Join([]string{
-		fixSubjectRE.ReplaceAllString(parts[0], fmt.Sprintf("Subject: %s", mime.QEncoding.Encode("utf-8", m[1]))),
-		parts[1],
-	}, "\n\n")
+	return out.String(), nil
 }
 
 func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill string) error {
@@ -118,8 +117,6 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 		if err != nil {
 			return err
 		}
-
-		msg = fixSubject(msg)
 
 		// Ask to send it.
 		sendQ := []dialog.Option{
@@ -145,7 +142,35 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 		case "s", "S":
 			for {
 				st := time.Now()
-				if err := conn.Send(ctx, msg); err != nil {
+				mp := "mixed"
+
+				head, part, err := cmdg.ParseUserMessage(msg)
+				if err != nil {
+					// TODO: ask to retry
+					return errors.Wrapf(err, "failed to parse that message")
+				}
+
+				parts := []*cmdg.Part{part}
+
+				// Add signature.
+				if *enableSign {
+					sig, err := createSig(ctx, part.FullString())
+					if err != nil {
+						// TODO: ask to retry or something
+						return errors.Wrapf(err, "failed to sign")
+					}
+					if sig != "" {
+						parts = append(parts, &cmdg.Part{
+							Header: map[string][]string{
+								"Content-Type": {`application/pgp-signature; name="signature.asc"`},
+							},
+							Contents: sig,
+						})
+						mp = signedMultipartType
+					}
+				}
+
+				if err := conn.SendParts(ctx, mp, head, parts); err != nil {
 					a, err := dialog.Question(fmt.Sprintf("Failed to send (%q). Save to local file?", err.Error()), []dialog.Option{
 						{Key: "y", Label: "Y — Yes, save to local file"},
 						{Key: "n", Label: "N — No, discard completely"},

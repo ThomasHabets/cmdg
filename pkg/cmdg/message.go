@@ -974,7 +974,12 @@ func (d *Draft) GetBody(ctx context.Context) (string, error) {
 	return d.body, nil
 }
 
-func (d *Draft) Update(ctx context.Context, content string) error {
+func (d *Draft) UpdateParts(ctx context.Context, head mail.Header, parts []*Part) error {
+	//d.update(ctx,
+	return fmt.Errorf("NOT IMPLEMENTED")
+}
+
+func (d *Draft) update(ctx context.Context, content string) error {
 	_, err := d.conn.gmail.Users.Drafts.Update(email, d.ID, &gmail.Draft{
 		Message: &gmail.Message{
 			Raw: mimeEncode(content),

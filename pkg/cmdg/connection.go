@@ -4,10 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"net/mail"
+	"net/textproto"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -200,7 +206,83 @@ func (c *CmdG) GetProfile(ctx context.Context) (*gmail.Profile, error) {
 	return c.gmail.Users.GetProfile(email).Context(ctx).Do()
 }
 
-func (c *CmdG) Send(ctx context.Context, msg string) error {
+type Part struct {
+	Contents string
+	Header   textproto.MIMEHeader
+}
+
+func (p *Part) FullString() string {
+	var hs []string
+	for k, vs := range p.Header {
+		for _, v := range vs {
+			hs = append(hs, fmt.Sprintf("%s: %s", k, v))
+		}
+	}
+	// TODO: this can't be right. Go libraries use maps for headers but we depend on order. ;-(
+	sort.Slice(hs, func(i, j int) bool {
+		if strings.HasPrefix(strings.ToLower(hs[i]), "content-type: ") {
+			return true
+		}
+		return hs[i] < hs[j]
+	})
+	return strings.Join(hs, "\r\n") + "\r\n\r\n" + p.Contents
+}
+
+// ParseUserMessage parses what's in the user's editor and turns into into a Part and message headers.
+func ParseUserMessage(in string) (mail.Header, *Part, error) {
+	m, err := mail.ReadMessage(strings.NewReader(in))
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "message to send is malformed")
+	}
+	b, err := ioutil.ReadAll(m.Body)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to read user message")
+	}
+	m.Header["MIME-Version"] = []string{"1.0"}
+	return m.Header, &Part{
+		Header: map[string][]string{
+			"Content-Type":        []string{`text/plain; charset="UTF-8"`},
+			"Content-Disposition": []string{"inline"},
+		},
+		Contents: string(b),
+	}, nil
+}
+
+// SendParts sends a multipart message.
+func (c *CmdG) SendParts(ctx context.Context, mp string, head mail.Header, parts []*Part) error {
+	var mbuf bytes.Buffer
+	w := multipart.NewWriter(&mbuf)
+
+	// Create mail contents.
+	for _, p := range parts {
+		p2, err := w.CreatePart(p.Header)
+		if err != nil {
+			return errors.Wrapf(err, "failed to create part")
+		}
+		if _, err := p2.Write([]byte(p.Contents)); err != nil {
+			return errors.Wrapf(err, "assembling part")
+		}
+	}
+	if err := w.Close(); err != nil {
+		return errors.Wrapf(err, "closing multipart")
+	}
+
+	// Add message headers for gmail.
+	var hlines []string
+	for k, vs := range head {
+		for _, v := range vs {
+			hlines = append(hlines, fmt.Sprintf("%s: %s", k, mime.QEncoding.Encode("utf-8", v)))
+		}
+	}
+	hlines = append(hlines, fmt.Sprintf(`Content-Type: multipart/%s; boundary="%s"`, mp, w.Boundary()))
+	hlines = append(hlines, `Content-Disposition: inline`)
+	msgs := strings.Join(hlines, "\r\n") + "\r\n\r\n" + mbuf.String()
+
+	log.Infof("Final message: %q", msgs)
+	return c.send(ctx, msgs)
+}
+
+func (c *CmdG) send(ctx context.Context, msg string) error {
 	_, err := c.gmail.Users.Messages.Send(email, &gmail.Message{
 		Raw: mimeEncode(msg),
 	}).Context(ctx).Do()
