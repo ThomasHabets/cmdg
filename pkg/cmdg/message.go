@@ -566,6 +566,18 @@ func htmlRender(ctx context.Context, s string) (string, error) {
 
 var errNoUsablePart = fmt.Errorf("could not find message part usable as message body")
 
+func makeBodyMulti(ctx context.Context, parts []*gmail.MessagePart, preferHTML bool) (string, error) {
+	var ret []string
+	for _, p := range parts {
+		b, err := makeBody(ctx, p, preferHTML)
+		if err != nil {
+			return "", err
+		}
+		ret = append(ret, b)
+	}
+	return strings.Join(ret, ""), nil
+}
+
 func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (string, error) {
 	if len(part.Parts) == 0 {
 		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
@@ -586,9 +598,9 @@ func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (st
 		return data, nil
 	}
 
-	var html *gmail.MessagePart
-	var plain *gmail.MessagePart
-	var sub *gmail.MessagePart
+	var html []*gmail.MessagePart
+	var plain []*gmail.MessagePart
+	var sub []*gmail.MessagePart
 	log.Infof("Multi part body (%q) with input len %d", part.MimeType, len(part.Body.Data))
 	for _, p := range part.Parts {
 		if partIsAttachment(p) {
@@ -596,26 +608,26 @@ func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (st
 		}
 		switch p.MimeType {
 		case "text/plain":
-			plain = p
+			plain = append(plain, p)
 		case "text/html":
-			html = p
+			html = append(html, p)
 		case "multipart/alternative", "multipart/related":
-			sub = p
+			sub = append(sub, p)
 		default:
 			log.Infof("Ignoring part of type %q", p.MimeType)
 		}
 	}
 
 	if preferHTML {
-		for _, p := range []*gmail.MessagePart{html, sub, plain} {
+		for _, p := range [][]*gmail.MessagePart{html, sub, plain} {
 			if p != nil {
-				return makeBody(ctx, p, preferHTML)
+				return makeBodyMulti(ctx, p, preferHTML)
 			}
 		}
 	} else {
-		for _, p := range []*gmail.MessagePart{plain, html, sub} {
+		for _, p := range [][]*gmail.MessagePart{plain, html, sub} {
 			if p != nil {
-				return makeBody(ctx, p, preferHTML)
+				return makeBodyMulti(ctx, p, preferHTML)
 			}
 		}
 	}
