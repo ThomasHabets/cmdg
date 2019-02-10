@@ -430,6 +430,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				}
 			case 'H':
 				ov.preferHTML = !ov.preferHTML
+				scroll = 0
 				go func() {
 					ov.update <- struct{}{}
 				}()
