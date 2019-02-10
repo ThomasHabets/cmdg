@@ -194,13 +194,17 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	line++
 
 	// Draw body.
-	for _, l := range lines[scroll:] {
-		l = strings.TrimRight(l, "\r ")
-		ov.screen.Printlnf(line, "%s", l)
-		line++
-		if line >= ov.screen.Height-2 {
-			break
+	if len(lines) > scroll {
+		for _, l := range lines[scroll:] {
+			l = strings.TrimRight(l, "\r ")
+			ov.screen.Printlnf(line, "%s", l)
+			line++
+			if line >= ov.screen.Height-2 {
+				break
+			}
 		}
+	} else {
+		log.Errorf("Scroll too high! %d >= %d", scroll, len(lines))
 	}
 	ov.screen.Printlnf(ov.screen.Height-2, strings.Repeat("—", ov.screen.Width))
 	return nil
