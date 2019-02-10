@@ -566,16 +566,56 @@ func htmlRender(ctx context.Context, s string) (string, error) {
 
 var errNoUsablePart = fmt.Errorf("could not find message part usable as message body")
 
-func makeBodyMulti(ctx context.Context, parts []*gmail.MessagePart, preferHTML bool) (string, error) {
+// makeBodyAlt takes a multipart and tries to render the best thing it can from it.
+func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (string, error) {
+	wantT := "text/plain"
+	acceptT := "text/html"
+	if preferHTML {
+		wantT, acceptT = acceptT, wantT
+	}
+
 	var ret []string
-	for _, p := range parts {
-		b, err := makeBody(ctx, p, preferHTML)
+	var alt []string
+	for _, p := range part.Parts {
+		if partIsAttachment(p) {
+			continue
+		}
+		dec, err := mimeDecode(string(p.Body.Data))
 		if err != nil {
 			return "", err
 		}
-		ret = append(ret, b)
+
+		if p.MimeType == "text/html" {
+			dec, err = htmlRender(ctx, dec)
+			if err != nil {
+				return "", errors.Wrapf(err, "rendering HTML")
+			}
+		}
+
+		log.Debugf("Alt mimetype: %q", p.MimeType)
+		switch p.MimeType {
+		case wantT:
+			ret = append(ret, dec)
+		case acceptT:
+			alt = append(alt, dec)
+		case "multipart/alternative", "multipart/related", "multipart/signed", "multipart/mixed":
+			t, err := makeBodyAlt(ctx, p, preferHTML)
+			if err != nil {
+				return "", err
+			}
+			// However it was rendered it should be rendered.
+			ret = append(ret, t)
+			alt = append(alt, t)
+		case "application/pkcs7-signature":
+			// Ignored for now.
+		default:
+			log.Warningf("Unknown mimetype in alt: %q", p.MimeType)
+		}
 	}
-	return strings.Join(ret, ""), nil
+	if len(ret) > 0 {
+		return strings.Join(ret, "\n"), nil
+	}
+	return strings.Join(alt, "\n"), nil
 }
 
 func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (string, error) {
@@ -594,45 +634,11 @@ func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (st
 				return "", errors.Wrapf(err, "rendering HTML")
 			}
 		}
-
 		return data, nil
 	}
 
-	var html []*gmail.MessagePart
-	var plain []*gmail.MessagePart
-	var sub []*gmail.MessagePart
-	log.Infof("Multi part body (%q) with input len %d", part.MimeType, len(part.Body.Data))
-	for _, p := range part.Parts {
-		if partIsAttachment(p) {
-			continue
-		}
-		switch p.MimeType {
-		case "text/plain":
-			plain = append(plain, p)
-		case "text/html":
-			html = append(html, p)
-		case "multipart/alternative", "multipart/related":
-			sub = append(sub, p)
-		default:
-			log.Infof("Ignoring part of type %q", p.MimeType)
-		}
-	}
-
-	if preferHTML {
-		for _, p := range [][]*gmail.MessagePart{html, sub, plain} {
-			if p != nil {
-				return makeBodyMulti(ctx, p, preferHTML)
-			}
-		}
-	} else {
-		for _, p := range [][]*gmail.MessagePart{plain, html, sub} {
-			if p != nil {
-				return makeBodyMulti(ctx, p, preferHTML)
-			}
-		}
-	}
-	// Could not find any part of message to use as body.
-	return "", errNoUsablePart
+	log.Infof("Message is type %q", part.MimeType)
+	return makeBodyAlt(ctx, part, preferHTML)
 }
 
 func (msg *Message) GetBody(ctx context.Context) (string, error) {
