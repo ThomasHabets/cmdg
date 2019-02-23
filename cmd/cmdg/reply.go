@@ -21,10 +21,11 @@ const (
 var (
 	replyPrefixes   = regexp.MustCompile(`(?i)^(Re|Sv|Aw): `)
 	forwardPrefixes = regexp.MustCompile(`(?i)^(Fwd): `)
+	removeCharsRE   = regexp.MustCompile(`\r`)
 )
 
 func replyQuoted(s string) string {
-	lines := strings.Split(s, "\n")
+	lines := strings.Split(removeCharsRE.ReplaceAllString(s, ""), "\n")
 	var ret []string
 	for _, l := range lines {
 		ret = append(ret, "> "+l)
