@@ -28,7 +28,11 @@ func replyQuoted(s string) string {
 	lines := strings.Split(removeCharsRE.ReplaceAllString(s, ""), "\n")
 	var ret []string
 	for _, l := range lines {
-		ret = append(ret, "> "+l)
+		if len(l) > 0 {
+			ret = append(ret, "> "+l)
+		} else {
+			ret = append(ret, ">")
+		}
 	}
 	return strings.Join(ret, "\n")
 }
