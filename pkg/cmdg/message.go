@@ -80,6 +80,15 @@ type Message struct {
 	attachments []*Attachment
 }
 
+func (msg *Message) ThreadID(ctx context.Context) (ThreadID, error) {
+	if err := msg.Preload(ctx, LevelMinimal); err != nil {
+		return NewThread, err
+	}
+	msg.m.RLock()
+	defer msg.m.RUnlock()
+	return ThreadID(msg.Response.ThreadId), nil
+}
+
 func (msg *Message) Attachments(ctx context.Context) ([]*Attachment, error) {
 	if err := msg.Preload(ctx, LevelFull); err != nil {
 		return nil, err

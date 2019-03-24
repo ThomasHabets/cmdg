@@ -37,6 +37,8 @@ func replyQuoted(s string) string {
 	return strings.Join(ret, "\n")
 }
 
+// Args:
+//   msg: Message to reply or forward.
 func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to, cc, subjPrefix string, rmPrefix *regexp.Regexp, msg *cmdg.Message) error {
 	b, err := msg.GetUnpatchedBody(ctx)
 	if err != nil {
@@ -70,8 +72,13 @@ func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to,
 		body = append(body, "\n--\n"+signature+"\n")
 	}
 
+	threadID, err := msg.ThreadID(ctx)
+	if err != nil {
+		return err
+	}
+
 	prefill := strings.Join(headers, "\n") + "\n\n" + strings.Join(body, "\n")
-	return compose(ctx, conn, keys, prefill)
+	return compose(ctx, conn, keys, threadID, prefill)
 }
 
 func reply(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {

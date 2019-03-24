@@ -92,7 +92,7 @@ Subject:
 
 %s`, to, sig)
 
-	return compose(ctx, conn, keys, prefill)
+	return compose(ctx, conn, keys, cmdg.NewThread, prefill)
 }
 
 func createSig(ctx context.Context, msg string) (string, error) {
@@ -110,7 +110,7 @@ func createSig(ctx context.Context, msg string) (string, error) {
 	return out.String(), nil
 }
 
-func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill string) error {
+func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID cmdg.ThreadID, prefill string) error {
 	for {
 		// Get message content.
 		msg, err := getInput(ctx, prefill, keys)
@@ -170,7 +170,7 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, prefill st
 					}
 				}
 
-				if err := conn.SendParts(ctx, mp, head, parts); err != nil {
+				if err := conn.SendParts(ctx, threadID, mp, head, parts); err != nil {
 					a, err := dialog.Question(fmt.Sprintf("Failed to send (%q). Save to local file?", err.Error()), []dialog.Option{
 						{Key: "y", Label: "Y — Yes, save to local file"},
 						{Key: "n", Label: "N — No, discard completely"},

@@ -47,12 +47,14 @@ const (
 )
 
 var (
-	Version = "unspecified"
+	Version            = "unspecified"
+	NewThread ThreadID = ""
 )
 
 type (
 	DataLevel string
 	HistoryID uint64
+	ThreadID  string
 )
 
 type CmdG struct {
@@ -249,7 +251,11 @@ func ParseUserMessage(in string) (mail.Header, *Part, error) {
 }
 
 // SendParts sends a multipart message.
-func (c *CmdG) SendParts(ctx context.Context, mp string, head mail.Header, parts []*Part) error {
+// Args:
+//   mp:    multipart type. "mixed" is a typical type.
+//   head:  Email header.
+//   parts: Email parts.
+func (c *CmdG) SendParts(ctx context.Context, threadID ThreadID, mp string, head mail.Header, parts []*Part) error {
 	var mbuf bytes.Buffer
 	w := multipart.NewWriter(&mbuf)
 
@@ -279,12 +285,13 @@ func (c *CmdG) SendParts(ctx context.Context, mp string, head mail.Header, parts
 	msgs := strings.Join(hlines, "\r\n") + "\r\n\r\n" + mbuf.String()
 
 	log.Infof("Final message: %q", msgs)
-	return c.send(ctx, msgs)
+	return c.send(ctx, threadID, msgs)
 }
 
-func (c *CmdG) send(ctx context.Context, msg string) error {
+func (c *CmdG) send(ctx context.Context, threadID ThreadID, msg string) error {
 	_, err := c.gmail.Users.Messages.Send(email, &gmail.Message{
-		Raw: mimeEncode(msg),
+		Raw:      mimeEncode(msg),
+		ThreadId: string(threadID),
 	}).Context(ctx).Do()
 	return err
 }
