@@ -75,14 +75,18 @@ func (c *CmdG) GetContacts(ctx context.Context) ([]string, error) {
 					// Use name first listed.
 					name := ""
 					if len(r.Person.Names) > 0 {
-						name = r.Person.Names[0].DisplayName + " "
+						name = r.Person.Names[0].DisplayName
 					}
 					for _, e := range r.Person.EmailAddresses {
 						if strings.Contains(e.Value, " ") {
 							// Name already there.
 							pchan <- e.Value
 						} else {
-							pchan <- fmt.Sprintf("%s%s", name, e.Value)
+							if len(name) > 0 {
+								pchan <- fmt.Sprintf("%s <%s>", name, e.Value)
+							} else {
+								pchan <- e.Value
+							}
 						}
 					}
 				}
