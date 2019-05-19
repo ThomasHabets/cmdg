@@ -459,6 +459,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
 			case 'e':
 				ids, nm, ofs := filterMarked(mv.messages, marked, mv.pos)
+				if len(ids) == 0 {
+					break
+				}
 				go func() {
 					st := time.Now()
 					if err := conn.BatchArchive(ctx, ids); err != nil {
