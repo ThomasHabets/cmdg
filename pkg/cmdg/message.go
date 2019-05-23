@@ -13,6 +13,7 @@ import (
 	"net/mail"
 	"os/exec"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -335,6 +336,12 @@ type Label struct {
 }
 
 func (l *Label) LabelString() string {
+	if l.Response == nil {
+		// This should not be possible.
+		log.Errorf("Label response is nil:")
+		debug.PrintStack()
+		return "<Internal error: label response nil>"
+	}
 	if l.Response.Color == nil {
 		return fmt.Sprintf("%s%s", display.Normal, l.Label)
 	}
