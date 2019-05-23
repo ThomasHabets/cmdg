@@ -39,6 +39,8 @@ var (
 	GPG *gpg.GPG
 
 	Lynx = "lynx" // Binary
+
+	ErrMissing = fmt.Errorf("resource missing")
 )
 
 type Attachment struct {
@@ -528,7 +530,7 @@ func (msg *Message) GetHeader(ctx context.Context, k string) (string, error) {
 	if ok {
 		return stripUnprintable(h), nil
 	}
-	return "", fmt.Errorf("header not found in msg %q: %q", msg.ID, k)
+	return "", errors.Wrapf(ErrMissing, "header not found in msg %q: %q", msg.ID, k)
 }
 
 // mime decode for gmail. Seems to be special version of base64.

@@ -219,7 +219,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 
 		if curmsg.HasData(cmdg.LevelMetadata) {
 			subj, err := curmsg.GetHeader(ctx, "subject")
-			if err != nil {
+			if errors.Cause(err) == cmdg.ErrMissing || subj == "" {
+				subj = "(No subject)"
+			} else if err != nil {
 				return err
 			}
 			tm, err := curmsg.GetTimeFmt(ctx)
