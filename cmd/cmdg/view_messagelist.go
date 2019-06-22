@@ -441,6 +441,10 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			case '?':
 				help(messageListViewHelp, mv.keys)
 			case input.Enter:
+				if len(mv.messages) == 0 {
+					// Let's assume we've never gotten to the state where mv.pos >= len(mv.messages)
+					break
+				}
 				vo, err := NewOpenMessageView(ctx, mv.messages[mv.pos], mv.keys)
 				if err != nil {
 					mv.errors <- errors.Wrapf(err, "Opening message")
