@@ -461,7 +461,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				}
 			case '|':
 				cmds, err := dialog.Entry("Command> ", ov.keys)
-				if err == dialog.ErrAborted {
+				if err == dialog.ErrAborted || cmds == "" {
 					// User aborted; do nothing.
 					break
 				} else if err != nil {
