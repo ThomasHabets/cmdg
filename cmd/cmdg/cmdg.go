@@ -56,6 +56,7 @@ var (
 	configure       = flag.Bool("configure", false, "Configure OAuth.")
 	updateSignature = flag.Bool("update_signature", false, "Upload ~/.signature to app settings.")
 	verbose         = flag.Bool("verbose", false, "Turn on verbose logging.")
+	shell           = flag.String("shell", "/bin/sh", "Shell to shell out to.")
 	versionFlag     = flag.Bool("version", false, "Show version and exit.")
 	lynx            = flag.String("lynx", "lynx", "HTML render binary.")
 	enableSign      = flag.Bool("sign", false, "Send signed emails by default.")

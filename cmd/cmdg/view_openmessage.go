@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -38,6 +39,7 @@ e         — Archive
 t         — Browse attachments (if any)
 H         — Force HTML view
 \         — Show raw message source
+|         — Pipe to command
 
 Press [enter] to exit
 `
@@ -269,8 +271,10 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				ov.update <- struct{}{}
 			}()
 		case err := <-ov.errors:
-			showError(ov.screen, ov.keys, err.Error())
-			ov.screen.Draw()
+			if err != nil {
+				showError(ov.screen, ov.keys, err.Error())
+				ov.screen.Draw()
+			}
 			continue
 		case <-ov.update:
 			log.Infof("Message arrived")
@@ -455,6 +459,30 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				if err := ov.showRaw(ctx); err != nil {
 					ov.errors <- err
 				}
+			case '|':
+				cmds, err := dialog.Entry("Command> ", ov.keys)
+				if err == dialog.ErrAborted {
+					// User aborted; do nothing.
+					break
+				} else if err != nil {
+					ov.errors <- errors.Wrap(err, "failed to get pipe command")
+					break
+				}
+				cmd := exec.CommandContext(ctx, *shell, "-c", cmds)
+				m, err := ov.msg.Raw(ctx)
+				if err != nil {
+					ov.errors <- errors.Wrap(err, "failed to get raw message")
+					break
+				}
+				cmd.Stdin = strings.NewReader(m)
+				var buf bytes.Buffer
+				cmd.Stdout = &buf
+				cmd.Stderr = &buf
+				if err := cmd.Run(); err != nil {
+					ov.errors <- errors.Wrap(err, "failed run pipe command")
+					break
+				}
+				ov.errors <- ov.showPager(ctx, buf.String())
 			case input.Backspace, input.CtrlH:
 				scroll = ov.scroll(ctx, len(lines), scroll, -(ov.screen.Height - 10))
 				ov.Draw(lines, scroll)
@@ -471,11 +499,15 @@ func (ov *OpenMessageView) showRaw(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "Fetching raw msg")
 	}
+	return ov.showPager(ctx, m)
+}
+
+func (ov *OpenMessageView) showPager(ctx context.Context, content string) error {
 	ov.keys.Stop()
 	defer ov.keys.Start()
 
 	cmd := exec.CommandContext(ctx, pagerBinary)
-	cmd.Stdin = strings.NewReader(m)
+	cmd.Stdin = strings.NewReader(content)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
