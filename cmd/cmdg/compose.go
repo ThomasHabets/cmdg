@@ -110,6 +110,7 @@ func createSig(ctx context.Context, msg string) (string, error) {
 	return out.String(), nil
 }
 
+// compose() is used for compose, replies, and forwards.
 func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID cmdg.ThreadID, prefill string) error {
 	for {
 		// Get message content.

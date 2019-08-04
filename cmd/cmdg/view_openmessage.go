@@ -479,7 +479,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				cmd.Stdout = &buf
 				cmd.Stderr = &buf
 				if err := cmd.Run(); err != nil {
-					ov.errors <- errors.Wrap(err, "failed run pipe command")
+					ov.errors <- errors.Wrapf(err, "failed run pipe command: %q", buf.String())
 					break
 				}
 				ov.errors <- ov.showPager(ctx, buf.String())
