@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -40,6 +41,10 @@ const (
 
 var (
 	repeatProtection = 5 * time.Millisecond
+
+	errTimeout = fmt.Errorf("timeout")
+
+	readKeyTimeout = 50 * time.Millisecond
 )
 
 type Input struct {
@@ -97,6 +102,38 @@ func (i *Input) Stop() {
 	log.Infof("Keyboard input stopped")
 }
 
+func readByte(fd int, timeout time.Duration) (byte, error) {
+	// TODO: cleaner way to do this?
+	// Drawbacks:
+	// * Takes 50ms to shut down
+	// * Spins the CPU a bit
+	// * Wake up CPU at least every 50ms
+	fds := syscall.FdSet{
+		Bits: [16]int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	}
+	n, err := syscall.Select(fd+1, &fds, &syscall.FdSet{}, &syscall.FdSet{}, &syscall.Timeval{
+		Sec:  0,
+		Usec: 50000,
+	})
+	if err != nil {
+		return 0, errors.Wrapf(err, "syscall.Select()")
+	}
+	if n != 1 {
+		return 0, errTimeout
+	}
+	//idle := keyTime.Sub(last)
+	b := make([]byte, 1, 1)
+	//log.Infof("Non-iowait input time: %v", idle)
+	// log.Infof("About to read")
+
+	if n, err := os.Stdin.Read(b); err != nil {
+		return 0, errors.Wrapf(err, "reading byte")
+	} else if n != 1 {
+		return 0, fmt.Errorf("read 0 bytes")
+	}
+	return b[0], nil
+}
+
 // Start turns on raw mode and the key-receive loop.
 func (i *Input) Start() error {
 	log.Infof("Starting keyboard input")
@@ -114,48 +151,6 @@ func (i *Input) Start() error {
 		last := time.Now()
 		lastEnter := time.Now()
 		for {
-			// TODO: cleaner way to do this?
-			// Drawbacks:
-			// * Takes 50ms to shut down
-			// * Spins the CPU a bit
-			// * Wake up CPU at least every 50ms
-			fds := syscall.FdSet{
-				Bits: [16]int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-			}
-			n, err := syscall.Select(fd+1, &fds, &syscall.FdSet{}, &syscall.FdSet{}, &syscall.Timeval{
-				Sec:  0,
-				Usec: 50000,
-			})
-			if err != nil {
-				log.Errorf("syscall.Select(): %v", err)
-			}
-			if n == 1 {
-				//idle := keyTime.Sub(last)
-				b := make([]byte, 1, 1)
-				//log.Infof("Non-iowait input time: %v", idle)
-				// log.Infof("About to read")
-				n, err := os.Stdin.Read(b)
-				// log.Infof("read done")
-				keyTime := time.Now()
-				if i.pasteProtection() && keyTime.Sub(last) < repeatProtection {
-					log.Warningf("Paste protection blocked keypress %v registering. %v < %v", b[0], keyTime.Sub(last), repeatProtection)
-				} else if keyTime.Sub(lastEnter) < repeatProtection {
-					log.Warningf("Post-enter paste protection blocked keypress %v registering. %v < %v", b[0], keyTime.Sub(lastEnter), repeatProtection)
-				} else {
-					if err != nil {
-						log.Errorf("Read returned error: %v", err)
-						return
-					} else if n != 1 {
-						log.Errorf("Read returned other than 1: %d", n)
-						return
-					}
-					i.keys <- fmt.Sprintf("%c", b[0])
-					if b[0] == EnterChar || b[0] == ReturnChar {
-						lastEnter = keyTime
-					}
-				}
-				last = keyTime
-			}
 			select {
 			case <-i.stop:
 				log.Infof("Input loop told to stop")
@@ -163,6 +158,36 @@ func (i *Input) Start() error {
 			default:
 				// go on
 			}
+
+			// Read a byte.
+			b, err := readByte(fd, readKeyTimeout)
+			if err == errTimeout {
+				continue
+			}
+			if err != nil {
+				log.Errorf("Reading byte: %v", err)
+				return
+			}
+
+			// log.Infof("read done")
+			keyTime := time.Now()
+			if i.pasteProtection() && keyTime.Sub(last) < repeatProtection {
+				log.Warningf("Paste protection blocked keypress %v registering. %v < %v", b, keyTime.Sub(last), repeatProtection)
+				last = keyTime
+				continue
+			}
+			if keyTime.Sub(lastEnter) < repeatProtection {
+				log.Warningf("Post-enter paste protection blocked keypress %v registering. %v < %v", b, keyTime.Sub(lastEnter), repeatProtection)
+				last = keyTime
+				continue
+			}
+
+			i.keys <- fmt.Sprintf("%c", b)
+			if b == EnterChar || b == ReturnChar {
+				lastEnter = keyTime
+			}
+
+			last = keyTime
 			//log.Infof("Got key %d!!!", int(b[0]))
 			// TODO: handle multibyte keys.
 		}
