@@ -42,13 +42,35 @@ Press [enter] to exit
 )
 
 var (
-	messageListReloadTime       = time.Minute
-	messageListHistoryCheckTime = 10 * time.Second
+	messageListReloadTime          = time.Minute
+	messageListHistoryCheckTime    = 10 * time.Second
+	messageListHistoryCheckTimeout = time.Minute
 )
 
 type historyUpdate struct {
 	historyID cmdg.HistoryID
 	history   []*gmail.History
+}
+
+type concurrency struct {
+	lock chan struct{}
+}
+
+func newConcurrency(i int) *concurrency {
+	return &concurrency{
+		lock: make(chan struct{}, 1),
+	}
+}
+func (c *concurrency) Take() bool {
+	select {
+	case c.lock <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+func (c *concurrency) Done() {
+	<-c.lock
 }
 
 type MessageView struct {
@@ -159,6 +181,21 @@ func filterMarked(msgs []*cmdg.Message, marked map[string]bool, pos int) ([]stri
 		}
 	}
 	return ids, ms, ofs
+}
+
+func (mv *MessageView) historyCheck(ctx context.Context) error {
+	hists, hid, err := conn.History(ctx, mv.historyID, mv.label)
+	if err != nil {
+		return errors.Wrapf(err, "getting history since %d", mv.historyID)
+	} else if len(hists) == 0 {
+		log.Infof("No history since last check")
+	} else {
+		mv.historyUpdateCh <- historyUpdate{
+			historyID: hid,
+			history:   hists,
+		}
+	}
+	return nil
 }
 
 func (mv *MessageView) Run(ctx context.Context) error {
@@ -281,6 +318,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 
 	timer := time.NewTicker(messageListHistoryCheckTime)
 	defer timer.Stop()
+	historyConcurrency := newConcurrency(1)
 
 	for {
 		status := ""
@@ -371,21 +409,24 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				}
 			}
 
-		case <-timer.C:
+		case <-timer.C: // Check history every now and then.
 			if mv.label != "" {
-				go func() {
-					hists, hid, err := conn.History(ctx, mv.historyID, mv.label)
-					if err != nil {
-						log.Errorf("Getting history since %d: %v", mv.historyID, err)
-					} else if len(hists) == 0 {
-						log.Infof("No history since last check")
-					} else {
-						mv.historyUpdateCh <- historyUpdate{
-							historyID: hid,
-							history:   hists,
+				if historyConcurrency.Take() {
+					st := time.Now()
+					go func() {
+						defer historyConcurrency.Done()
+						defer func() {
+							log.Infof("History check took %v", time.Since(st))
+						}()
+						ctx, cancel := context.WithTimeout(ctx, messageListHistoryCheckTimeout)
+						defer cancel()
+						if err := mv.historyCheck(ctx); err != nil {
+							log.Errorf("Error getting history: %s", err)
 						}
-					}
-				}()
+					}()
+				} else {
+					log.Infof("Not history checking because one is already running")
+				}
 			} else {
 				log.Infof("Not checking history because not in a label")
 			}
