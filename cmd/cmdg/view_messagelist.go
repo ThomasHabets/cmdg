@@ -187,8 +187,17 @@ func OpQuit() *MessageViewOp {
 	}
 }
 
-// Gives messages, a marked map, and current pos, return marked ids,
-// messages-if-marked-removed, and how much pos should go back by.
+// filterMarked takes:
+// * slice of messages
+// * a set of marked message IDs
+// * current position
+// And returns the state if marked messages are removed
+// * ids of the messages removed
+// * slice of messages remaining after removal
+// * an offset of how much pos should go back by after removal
+//
+// The offset is returned as an offset because it's used both for
+// setting the new position and for adjusting current scroll position.
 func filterMarked(msgs []*cmdg.Message, marked map[string]bool, pos int) ([]string, []*cmdg.Message, int) {
 	var ids []string
 	var ms []*cmdg.Message
