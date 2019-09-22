@@ -332,9 +332,9 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					}
 					ov.update <- struct{}{}
 				}()
-			case '?':
+			case "?":
 				help(openMessageViewHelp, ov.keys)
-			case '*':
+			case "*":
 				if ov.msg.HasLabel(cmdg.Starred) {
 					if err := ov.msg.RemoveLabelID(ctx, cmdg.Starred); err != nil {
 						ov.errors <- errors.Wrap(err, "Removing STARRED label")
@@ -348,7 +348,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					ov.errors <- errors.Wrapf(err, "Failed to reload labels")
 				}
 				ov.Draw(lines, scroll)
-			case 'l':
+			case "l":
 				var opts []*dialog.Option
 				for _, l := range conn.Labels() {
 					opts = append(opts, &dialog.Option{
@@ -373,7 +373,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					}
 				}
 				ov.Draw(lines, scroll)
-			case 'L':
+			case "L":
 				var opts []*dialog.Option
 				labels, err := ov.msg.GetLabels(ctx, true)
 				if err != nil {
@@ -403,48 +403,48 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					}
 					ov.Draw(lines, scroll)
 				}
-			case 'u', 'q':
+			case "u", "q":
 				return nil, nil
-			case 'U':
+			case "U":
 				if err := ov.msg.AddLabelID(ctx, cmdg.Unread); err != nil {
 					ov.errors <- fmt.Errorf("Failed to mark unread : %v", err)
 				} else {
 					return nil, nil
 				}
-			case 'n':
+			case "n":
 				scroll = ov.scroll(ctx, len(lines), scroll, 1)
 				ov.Draw(lines, scroll)
-			case ' ', input.CtrlV:
+			case " ", input.CtrlV:
 				scroll = ov.scroll(ctx, len(lines), scroll, ov.screen.Height-10)
 				ov.Draw(lines, scroll)
-			case 'p':
+			case "p":
 				scroll = ov.scroll(ctx, len(lines), scroll, -1)
 				ov.Draw(lines, scroll)
-			case 'f':
+			case "f":
 				if err := forward(ctx, conn, ov.keys, ov.msg); err != nil {
 					ov.errors <- fmt.Errorf("Failed to forward: %v", err)
 				}
-			case 'r':
+			case "r":
 				if err := reply(ctx, conn, ov.keys, ov.msg); err != nil {
 					ov.errors <- fmt.Errorf("Failed to reply: %v", err)
 				}
-			case 'a':
+			case "a":
 				if err := replyAll(ctx, conn, ov.keys, ov.msg); err != nil {
 					ov.errors <- fmt.Errorf("Failed to replyAll: %v", err)
 				}
-			case 'H':
+			case "H":
 				ov.preferHTML = !ov.preferHTML
 				scroll = 0
 				go func() {
 					ov.update <- struct{}{}
 				}()
-			case 'e':
+			case "e":
 				if err := ov.msg.RemoveLabelID(ctx, cmdg.Inbox); err != nil {
 					ov.errors <- fmt.Errorf("Failed to archive : %v", err)
 				} else {
 					return OpRemoveCurrent(nil), nil
 				}
-			case 't':
+			case "t":
 				as, err := ov.msg.Attachments(ctx)
 				if err != nil {
 					ov.errors <- fmt.Errorf("Listing attachments failed: %v", err)
@@ -455,11 +455,11 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 						ov.errors <- fmt.Errorf("Attachment browser action failed: %v", err)
 					}
 				}
-			case '\\':
+			case "\\":
 				if err := ov.showRaw(ctx); err != nil {
 					ov.errors <- err
 				}
-			case '|':
+			case "|":
 				cmds, err := dialog.Entry("Command> ", ov.keys)
 				if err == dialog.ErrAborted || cmds == "" {
 					// User aborted; do nothing.
@@ -487,7 +487,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				scroll = ov.scroll(ctx, len(lines), scroll, -(ov.screen.Height - 10))
 				ov.Draw(lines, scroll)
 			default:
-				log.Infof("Unknown key: %d", key)
+				log.Infof("Unknown key: %q", key)
 			}
 		}
 		ov.screen.Draw()

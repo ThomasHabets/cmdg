@@ -2,6 +2,7 @@
 package input
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -13,18 +14,23 @@ import (
 )
 
 const (
-	fd        = 0
-	Backspace = 127
-	Enter     = 13
-	Return    = 10
-	CtrlL     = 12
-	CtrlU     = 21
-	CtrlC     = 3
-	CtrlR     = 18
-	CtrlN     = 14
-	CtrlH     = 8
-	CtrlP     = 16
-	CtrlV     = 22
+	fd = 0
+
+	// Named keys.
+	EnterChar  = 0x0d
+	ReturnChar = 0x0a
+
+	CtrlC     = "\x03"
+	CtrlH     = "\x08"
+	Return    = "\x0a"
+	CtrlL     = "\x0c"
+	Enter     = "\x0d"
+	CtrlN     = "\x0e"
+	CtrlP     = "\x10"
+	CtrlR     = "\x12"
+	CtrlU     = "\x15"
+	CtrlV     = "\x16"
+	Backspace = "\x7F"
 
 	Up    = "\x1B\x6B\x41"
 	Down  = "\x1B\x6B\x42"
@@ -40,7 +46,7 @@ type Input struct {
 	running chan struct{} // Closed (non-blocking) if running.
 	stop    chan struct{} // Close to stop.
 	winch   chan os.Signal
-	keys    chan byte // Open if running.
+	keys    chan string // Open if running.
 
 	m           sync.RWMutex
 	pasteStatus []bool
@@ -67,7 +73,7 @@ func (i *Input) pasteProtection() bool {
 	return i.pasteStatus[len(i.pasteStatus)-1]
 }
 
-func (i *Input) Chan() <-chan byte {
+func (i *Input) Chan() <-chan string {
 	return i.keys
 }
 
@@ -100,7 +106,7 @@ func (i *Input) Start() error {
 	}
 	i.running = make(chan struct{})
 	i.stop = make(chan struct{})
-	i.keys = make(chan byte)
+	i.keys = make(chan string)
 	go func() {
 		defer close(i.running)
 		defer close(i.keys)
@@ -132,9 +138,9 @@ func (i *Input) Start() error {
 				// log.Infof("read done")
 				keyTime := time.Now()
 				if i.pasteProtection() && keyTime.Sub(last) < repeatProtection {
-					log.Warningf("Paste protection blocked a keypress registering. %v < %v", keyTime.Sub(last), repeatProtection)
+					log.Warningf("Paste protection blocked keypress %v registering. %v < %v", b[0], keyTime.Sub(last), repeatProtection)
 				} else if keyTime.Sub(lastEnter) < repeatProtection {
-					log.Warningf("Post-enter paste protection blocked a keypress registering. %v < %v", keyTime.Sub(lastEnter), repeatProtection)
+					log.Warningf("Post-enter paste protection blocked keypress %v registering. %v < %v", b[0], keyTime.Sub(lastEnter), repeatProtection)
 				} else {
 					if err != nil {
 						log.Errorf("Read returned error: %v", err)
@@ -143,8 +149,8 @@ func (i *Input) Start() error {
 						log.Errorf("Read returned other than 1: %d", n)
 						return
 					}
-					i.keys <- b[0]
-					if b[0] == Enter || b[0] == Return {
+					i.keys <- fmt.Sprintf("%c", b[0])
+					if b[0] == EnterChar || b[0] == ReturnChar {
 						lastEnter = keyTime
 					}
 				}

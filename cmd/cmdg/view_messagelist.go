@@ -542,9 +542,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			mkMessagePos()
 
 		case key := <-mv.keys.Chan():
-			log.Debugf("MessageListView got key %d", key)
+			log.Debugf("MessageListView got key %q", key)
 			switch key {
-			case '?':
+			case "?":
 				help(messageListViewHelp, mv.keys)
 			case input.Enter:
 				if len(mv.messages) == 0 {
@@ -567,9 +567,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// Screen failed to init. Yeah it's time to bail.
 					return err
 				}
-			case 'x', ' ':
+			case "x", " ":
 				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
-			case 'e':
+			case "e":
 				ids, nm, ofs := filterMarked(mv.messages, marked, mv.pos)
 				if len(ids) == 0 {
 					break
@@ -592,7 +592,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					marked = map[string]bool{}
 					mkMessagePos()
 				}
-			case '*':
+			case "*":
 				// TODO: Because it's a toggle this is not suitable for batch operation.
 				curmsg := mv.messages[mv.pos]
 				f := curmsg.AddLabelID
@@ -610,7 +610,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						mv.errors <- errors.Wrapf(err, "%s STARRED label", verb)
 					}
 				}()
-			case 'l':
+			case "l":
 				// TODO: can this be partially merged with 'L' code?
 				ids, _, _ := filterMarked(mv.messages, marked, mv.pos)
 				if len(ids) != 0 {
@@ -641,7 +641,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						}()
 					}
 				}
-			case 'L':
+			case "L":
 				ids, _, _ := filterMarked(mv.messages, marked, mv.pos)
 				if len(ids) != 0 {
 					var opts []*dialog.Option
@@ -682,15 +682,15 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						}
 					}
 				}
-			case 'c':
+			case "c":
 				if err := composeNew(ctx, conn, mv.keys); err != nil {
 					mv.errors <- errors.Wrapf(err, "Composing new message")
 				}
-			case 'C':
+			case "C":
 				if err := continueDraft(ctx, conn, mv.keys); err != nil {
 					mv.errors <- errors.Wrapf(err, "Continuing draft")
 				}
-			case 'N', 'n', 'j', input.CtrlN:
+			case "N", "n", "j", input.CtrlN:
 				if (mv.messages != nil) && (mv.pos < len(mv.messages)-1) {
 					if mv.pos-scroll > contentHeight-scrollLimit {
 						scroll++
@@ -699,7 +699,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				} else {
 					continue
 				}
-			case 'P', 'p', 'k', input.CtrlP:
+			case "P", "p", "k", input.CtrlP:
 				if mv.pos > 0 {
 					mv.pos--
 					if scroll > 0 && mv.pos < scroll+scrollLimit {
@@ -708,11 +708,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				} else {
 					continue
 				}
-			case 'r', input.CtrlR:
+			case "r", input.CtrlR:
 				empty()
 				screen.Clear()
 				go mv.fetchPage(ctx, "")
-			case 'g':
+			case "g":
 				var opts []*dialog.Option
 				for _, l := range conn.Labels() {
 					if strings.HasPrefix(l.ID, "CATEGORY_") {
@@ -737,11 +737,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// stack frame on every navigation.
 					return nv.Run(ctx)
 				}
-			case '1':
+			case "1":
 				// TODO: not optimal, since it adds a
 				// stack frame on every navigation.
 				return NewMessageView(ctx, cmdg.Inbox, "", mv.keys).Run(ctx)
-			case 's':
+			case "s":
 				q, err := dialog.Entry("Query> ", mv.keys)
 				if err == dialog.ErrAborted {
 					// That's fine.
@@ -753,7 +753,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// stack frame on every navigation.
 					return nv.Run(ctx)
 				}
-			case 'q':
+			case "q":
 				return nil
 			default:
 				log.Infof("MessageListView got unknown key %v", key)
