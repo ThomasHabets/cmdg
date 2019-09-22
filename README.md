@@ -87,6 +87,6 @@ This creates `~/.cmdg/cmdg.conf`.
 ```
 $ cmdg
 ```
-For keyboard shortcuts press '?' in most screens.
+For keyboard shortcuts press '?' or F1 in most screens.
 
 To quit, press 'q'.
