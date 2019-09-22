@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -18,8 +19,7 @@ const (
 	fd = 0
 
 	// Named keys.
-	EnterChar  = 0x0d
-	ReturnChar = 0x0a
+	EscChar = 27
 
 	CtrlC     = "\x03"
 	CtrlH     = "\x08"
@@ -31,12 +31,19 @@ const (
 	CtrlR     = "\x12"
 	CtrlU     = "\x15"
 	CtrlV     = "\x16"
+	Esc       = "\x1b"
 	Backspace = "\x7F"
 
-	Up    = "\x1B\x6B\x41"
-	Down  = "\x1B\x6B\x42"
-	Right = "\x1B\x6B\x43"
-	Left  = "\x1B\x6B\x44"
+	// Multibyte chars.
+	multibyteOneMore = "O["
+	Up               = "\x1B[A"
+	Down             = "\x1B[B"
+	Right            = "\x1B[C"
+	Left             = "\x1B[D"
+	F1               = "\x1BOP"
+	F2               = "\x1BOQ"
+	F3               = "\x1BOR"
+	F4               = "\x1BOS"
 )
 
 var (
@@ -44,7 +51,8 @@ var (
 
 	errTimeout = fmt.Errorf("timeout")
 
-	readKeyTimeout = 50 * time.Millisecond
+	readKeyTimeout       = 50 * time.Millisecond
+	readMultibyteTimeout = 10 * time.Millisecond
 )
 
 type Input struct {
@@ -102,6 +110,7 @@ func (i *Input) Stop() {
 	log.Infof("Keyboard input stopped")
 }
 
+// Return a key, or errTimeout if no key was pressed.
 func readByte(fd int, timeout time.Duration) (byte, error) {
 	// TODO: cleaner way to do this?
 	// Drawbacks:
@@ -129,9 +138,52 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 	if n, err := os.Stdin.Read(b); err != nil {
 		return 0, errors.Wrapf(err, "reading byte")
 	} else if n != 1 {
-		return 0, fmt.Errorf("read 0 bytes")
+		return 0, fmt.Errorf("read %d bytes, expected 1", n)
 	}
 	return b[0], nil
+}
+
+// readKey reads a whole key including multibyte keys.
+func readKey(fd int) (string, error) {
+	// Read a byte.
+	b, err := readByte(fd, readKeyTimeout)
+	if err == errTimeout {
+		return "", err
+	}
+	if err != nil {
+		return "", errors.Wrapf(err, "reading key byte")
+	}
+
+	// Construct full key.
+	key := fmt.Sprintf("%c", b)
+	if b != EscChar {
+		return key, nil
+	}
+
+	// More bytes to read. Carry on.
+	b, err = readByte(fd, readMultibyteTimeout)
+	if err == errTimeout {
+		// Plain esc.
+		return key, nil
+	}
+	if err != nil {
+		return "", errors.Wrapf(err, "reading second byte in multibyte")
+	}
+
+	if strings.Contains(multibyteOneMore, fmt.Sprintf("%c", b)) {
+		// This is how arrow keys show up.
+		b2, err := readByte(fd, readMultibyteTimeout)
+		if err == errTimeout {
+			log.Errorf("Got unknown multibyte sequence (Esc,<something>,<nothing>)")
+			return "", err
+		}
+		if err != nil {
+			return "", errors.Wrapf(err, "reading third byte in multibyte")
+		}
+		return fmt.Sprintf("%c%c%c", EscChar, b, b2), nil
+	}
+	log.Errorf("Discarding key %v because it came right after escape", b)
+	return key, nil
 }
 
 // Start turns on raw mode and the key-receive loop.
@@ -159,37 +211,38 @@ func (i *Input) Start() error {
 				// go on
 			}
 
-			// Read a byte.
-			b, err := readByte(fd, readKeyTimeout)
-			if err == errTimeout {
+			key, err := readKey(fd)
+			if errors.Cause(err) == errTimeout {
 				continue
 			}
 			if err != nil {
-				log.Errorf("Reading byte: %v", err)
+				log.Errorf("Reading key: %v", err)
 				return
+			}
+			if key == "" {
+				log.Errorf("Read key successfully, but it was empty string")
+				continue
 			}
 
 			// log.Infof("read done")
 			keyTime := time.Now()
 			if i.pasteProtection() && keyTime.Sub(last) < repeatProtection {
-				log.Warningf("Paste protection blocked keypress %v registering. %v < %v", b, keyTime.Sub(last), repeatProtection)
+				log.Warningf("Paste protection blocked keypress %q registering. %v < %v", key, keyTime.Sub(last), repeatProtection)
 				last = keyTime
 				continue
 			}
 			if keyTime.Sub(lastEnter) < repeatProtection {
-				log.Warningf("Post-enter paste protection blocked keypress %v registering. %v < %v", b, keyTime.Sub(lastEnter), repeatProtection)
+				log.Warningf("Post-enter paste protection blocked keypress %q registering. %v < %v", key, keyTime.Sub(lastEnter), repeatProtection)
 				last = keyTime
 				continue
 			}
 
-			i.keys <- fmt.Sprintf("%c", b)
-			if b == EnterChar || b == ReturnChar {
+			i.keys <- key
+			if key == Enter || key == Return {
 				lastEnter = keyTime
 			}
 
 			last = keyTime
-			//log.Infof("Got key %d!!!", int(b[0]))
-			// TODO: handle multibyte keys.
 		}
 	}()
 	return nil

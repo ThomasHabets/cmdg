@@ -21,25 +21,25 @@ import (
 const (
 	tsLayout = "2006-01-02 15:04:05"
 
-	openMessageViewHelp = `?         — Help
-^R        — Reload
-l         — Add label
-L         — Remove label
-*         — Toggle "starred"
-u         — Exit message
-U         — Mark unread
-n         — Scroll down
-space     — Page down
-backspace — Page up
-p         — Scroll up
-f         — Forward message
-r         — Reply
-a         — Reply all
-e         — Archive
-t         — Browse attachments (if any)
-H         — Force HTML view
-\         — Show raw message source
-|         — Pipe to command
+	openMessageViewHelp = `?, F1     — Help
+^R             — Reload
+l              — Add label
+L              — Remove label
+*              — Toggle "starred"
+u              — Exit message
+U              — Mark unread
+n, Down        — Scroll down
+space          — Page down
+backspace      — Page up
+p, Up          — Scroll up
+f              — Forward message
+r              — Reply
+a              — Reply all
+e              — Archive
+t              — Browse attachments (if any)
+H              — Force HTML view
+\              — Show raw message source
+|              — Pipe to command
 
 Press [enter] to exit
 `
@@ -332,7 +332,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					}
 					ov.update <- struct{}{}
 				}()
-			case "?":
+			case "?", input.F1:
 				help(openMessageViewHelp, ov.keys)
 			case "*":
 				if ov.msg.HasLabel(cmdg.Starred) {
@@ -411,13 +411,13 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				} else {
 					return nil, nil
 				}
-			case "n":
+			case "n", input.Down:
 				scroll = ov.scroll(ctx, len(lines), scroll, 1)
 				ov.Draw(lines, scroll)
 			case " ", input.CtrlV:
 				scroll = ov.scroll(ctx, len(lines), scroll, ov.screen.Height-10)
 				ov.Draw(lines, scroll)
-			case "p":
+			case "p", input.Up:
 				scroll = ov.scroll(ctx, len(lines), scroll, -1)
 				ov.Draw(lines, scroll)
 			case "f":

@@ -20,23 +20,23 @@ import (
 const (
 	scrollLimit = 5
 
-	messageListViewHelp = `?             — Help
-enter         — Open message
-space, x      — Mark message
-e             — Archive marked messages
-l             — Label marked messages
-L             — Unlabel marked messages
-*             — Toggle starred on hilighted message
-c             — Compose new message
-C             — Continue message from draft
-N, n, ^N, j   — Next message
-P, p, ^P, k   — Previous message
-r, ^R         — Reload current view
-g             — Go to label
-1             — Go to inbox
-s             — Search
-q             — Quit
-^L            — Refresh screen
+	messageListViewHelp = `?, F1              — Help
+enter              — Open message
+space, x           — Mark message
+e                  — Archive marked messages
+l                  — Label marked messages
+L                  — Unlabel marked messages
+*                  — Toggle starred on hilighted message
+c                  — Compose new message
+C                  — Continue message from draft
+N, n, ^N, j, Down  — Next message
+P, p, ^P, k, Up    — Previous message
+r, ^R              — Reload current view
+g                  — Go to label
+1                  — Go to inbox
+s                  — Search
+q                  — Quit
+^L                 — Refresh screen
 
 Press [enter] to exit
 `
@@ -544,7 +544,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		case key := <-mv.keys.Chan():
 			log.Debugf("MessageListView got key %q", key)
 			switch key {
-			case "?":
+			case "?", input.F1:
 				help(messageListViewHelp, mv.keys)
 			case input.Enter:
 				if len(mv.messages) == 0 {
@@ -690,7 +690,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				if err := continueDraft(ctx, conn, mv.keys); err != nil {
 					mv.errors <- errors.Wrapf(err, "Continuing draft")
 				}
-			case "N", "n", "j", input.CtrlN:
+			case "N", "n", "j", input.CtrlN, input.Down:
 				if (mv.messages != nil) && (mv.pos < len(mv.messages)-1) {
 					if mv.pos-scroll > contentHeight-scrollLimit {
 						scroll++
@@ -699,7 +699,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				} else {
 					continue
 				}
-			case "P", "p", "k", input.CtrlP:
+			case "P", "p", "k", input.CtrlP, input.Up:
 				if mv.pos > 0 {
 					mv.pos--
 					if scroll > 0 && mv.pos < scroll+scrollLimit {
@@ -756,7 +756,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			case "q":
 				return nil
 			default:
-				log.Infof("MessageListView got unknown key %v", key)
+				log.Infof("MessageListView got unknown key %q %v", key, []byte(key))
 			}
 		}
 		if mv.messages != nil {
