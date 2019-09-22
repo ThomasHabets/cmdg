@@ -423,7 +423,7 @@ func (c *CmdG) MoreHistory(ctx context.Context, start HistoryID, labelID string)
 	return len(r.History) > 0, nil
 }
 
-// History returns history since startID.
+// History returns history since startID (all pages).
 func (c *CmdG) History(ctx context.Context, startID HistoryID, labelID string) ([]*gmail.History, HistoryID, error) {
 	log.Infof("History for %d %s", startID, labelID)
 	var ret []*gmail.History

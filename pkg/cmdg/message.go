@@ -142,6 +142,12 @@ func NewMessage(c *CmdG, msgID string) *Message {
 		ID:   msgID,
 	})
 }
+func NewMessageWithResponse(c *CmdG, msgID string, resp *gmail.Message, level DataLevel) *Message {
+	m := NewMessage(c, msgID)
+	m.Response = resp
+	m.level = level
+	return m
+}
 
 func hasData(has, want DataLevel) bool {
 	switch has {

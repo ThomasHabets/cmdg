@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -187,13 +188,50 @@ func (mv *MessageView) historyCheck(ctx context.Context) error {
 	hists, hid, err := conn.History(ctx, mv.historyID, mv.label)
 	if err != nil {
 		return errors.Wrapf(err, "getting history since %d", mv.historyID)
-	} else if len(hists) == 0 {
+	}
+	if len(hists) == 0 {
 		log.Infof("No history since last check")
-	} else {
-		mv.historyUpdateCh <- historyUpdate{
-			historyID: hid,
-			history:   hists,
+		return nil
+	}
+
+	// The GMail API returns false positives if a new message
+	// affects *any thread* that is in the current label, even if
+	// the message itself doesn't have the label.
+	// This was closed by Google as working as intended. :-(
+	//
+	// https://issuetracker.google.com/issues/137671760
+	//
+	// So we'll need to get the messages' list of labels before
+	// sending them on to the list view.
+	var wg sync.WaitGroup
+	for hi := range hists {
+		hi := hi
+		for mi := range hists[hi].MessagesAdded {
+			mi := mi
+			if len(hists[hi].MessagesAdded[mi].Message.LabelIds) > 0 {
+				continue
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				m := cmdg.NewMessage(conn, hists[hi].MessagesAdded[mi].Message.Id)
+				// Load labels.
+				ls, err := m.GetLabels(ctx, true)
+				if err != nil {
+					log.Errorf("Failed to load labels for history entry: %v", err)
+					return
+				}
+				for _, l := range ls {
+					hists[hi].MessagesAdded[mi].Message.LabelIds = append(hists[hi].MessagesAdded[mi].Message.LabelIds, l.ID)
+				}
+			}()
 		}
+	}
+	wg.Wait()
+
+	mv.historyUpdateCh <- historyUpdate{
+		historyID: hid,
+		history:   hists,
 	}
 	return nil
 }
@@ -375,10 +413,37 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					for _, ma := range hist.MessagesAdded {
 						// New messages… also in this view.
 						if _, found := messagePos[ma.Message.Id]; !found {
-							nm := cmdg.NewMessage(conn, ma.Message.Id)
-							// TODO: add it in the right place, not the top.
-							mv.messages = append([]*cmdg.Message{nm}, mv.messages...)
-							mkMessagePos()
+							// Double-check that the message has the current label.
+							// If there are no labels then err on the side of showing the message.
+							//
+							// That probably the right behaviour since it should only happen for
+							// no-label searches getting new results.
+							addme := true
+							hasData := false
+							if len(ma.Message.LabelIds) > 0 {
+								addme = false
+								hasData = true
+								for _, l := range ma.Message.LabelIds {
+									if l == mv.label {
+										addme = true
+										break
+									}
+								}
+							}
+							if addme {
+								log.Infof("Adding message from history")
+								var nm *cmdg.Message
+								if hasData {
+									nm = cmdg.NewMessageWithResponse(conn, ma.Message.Id, ma.Message, cmdg.LevelMinimal)
+								} else {
+									nm = cmdg.NewMessage(conn, ma.Message.Id)
+								}
+								// TODO: add it in the right place, not the top.
+								mv.messages = append([]*cmdg.Message{nm}, mv.messages...)
+								mkMessagePos()
+							} else {
+								log.Infof("Skipped adding message because history returned false positive")
+							}
 						}
 					}
 					for _, lrm := range hist.LabelsRemoved {
