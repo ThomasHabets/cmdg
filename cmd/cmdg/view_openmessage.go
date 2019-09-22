@@ -403,8 +403,10 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					}
 					ov.Draw(lines, scroll)
 				}
-			case "u", "q":
+			case "u":
 				return nil, nil
+			case "q":
+				return OpQuit(), nil
 			case "U":
 				if err := ov.msg.AddLabelID(ctx, cmdg.Unread); err != nil {
 					ov.errors <- fmt.Errorf("Failed to mark unread : %v", err)

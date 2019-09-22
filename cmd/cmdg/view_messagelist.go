@@ -139,6 +139,7 @@ func (mv *MessageView) fetchPage(ctx context.Context, token string) {
 
 type MessageViewOp struct {
 	fun  func(*MessageView)
+	quit bool
 	next *MessageViewOp
 }
 
@@ -146,10 +147,25 @@ func (op *MessageViewOp) Do(view *MessageView) {
 	if op == nil {
 		return
 	}
-	op.fun(view)
+	if op.fun != nil {
+		op.fun(view)
+	}
 	if op.next != nil {
 		op.next.Do(view)
 	}
+}
+
+func (op *MessageViewOp) IsQuit(view *MessageView) bool {
+	if op == nil {
+		return false
+	}
+	if op.quit {
+		return true
+	}
+	if op.next == nil {
+		return false
+	}
+	return op.next.IsQuit(view)
 }
 
 func OpRemoveCurrent(next *MessageViewOp) *MessageViewOp {
@@ -162,6 +178,12 @@ func OpRemoveCurrent(next *MessageViewOp) *MessageViewOp {
 			}
 		},
 		next: next,
+	}
+}
+
+func OpQuit() *MessageViewOp {
+	return &MessageViewOp{
+		quit: true,
 	}
 }
 
@@ -560,6 +582,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						mv.errors <- errors.Wrapf(err, "Running OpenMessageView")
 					}
 					op.Do(mv)
+					if op.IsQuit(mv) {
+						return nil
+					}
 					mkMessagePos() // op.Do() could have changed the message positions around.
 				}
 			case input.CtrlL:
