@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -117,15 +118,14 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 	// * Takes 50ms to shut down
 	// * Spins the CPU a bit
 	// * Wake up CPU at least every 50ms
-	fds := syscall.FdSet{
-		Bits: [16]int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-	}
-	n, err := syscall.Select(fd+1, &fds, &syscall.FdSet{}, &syscall.FdSet{}, &syscall.Timeval{
+	fds := unix.FdSet{}
+	fds.Bits[uint(fd)/unix.NFDBITS] |= (1 << (uint(fd) % unix.NFDBITS))
+	n, err := unix.Select(fd+1, &fds, &unix.FdSet{}, &unix.FdSet{}, &unix.Timeval{
 		Sec:  0,
 		Usec: 50000,
 	})
 	if err != nil {
-		return 0, errors.Wrapf(err, "syscall.Select()")
+		return 0, errors.Wrapf(err, "unix.Select()")
 	}
 	if n != 1 {
 		return 0, errTimeout
