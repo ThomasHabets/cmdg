@@ -150,10 +150,16 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 
 // maxTimeout returns the timeout, unless it's after the deadline, in which case it returns as much of the timeout as it can.
 func maxTimeout(deadline time.Time, timeout time.Duration) time.Duration {
-	now := time.Now()
+	return maxTimeoutNow(time.Now(), deadline, timeout)
+}
+
+func maxTimeoutNow(now time.Time, deadline time.Time, timeout time.Duration) time.Duration {
 	t := now.Add(timeout)
 	if deadline.After(t) {
 		return timeout
+	}
+	if now.After(deadline) {
+		return time.Duration(0)
 	}
 	return deadline.Sub(now)
 }
