@@ -126,8 +126,8 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 	fds := unix.FdSet{}
 	fds.Bits[uint(fd)/unix.NFDBITS] |= (1 << (uint(fd) % unix.NFDBITS))
 	n, err := unix.Select(fd+1, &fds, &unix.FdSet{}, &unix.FdSet{}, &unix.Timeval{
-		Sec:  0,
-		Usec: 50000,
+		Sec:  timeout.Nanoseconds() / 1e9,
+		Usec: (timeout.Nanoseconds() / 1000) % 1e6,
 	})
 	if err != nil {
 		return 0, errors.Wrapf(err, "unix.Select()")
@@ -148,10 +148,22 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 	return b[0], nil
 }
 
+// maxTimeout returns the timeout, unless it's after the deadline, in which case it returns as much of the timeout as it can.
+func maxTimeout(deadline time.Time, timeout time.Duration) time.Duration {
+	now := time.Now()
+	t := now.Add(timeout)
+	if deadline.After(t) {
+		return timeout
+	}
+	return deadline.Sub(now)
+}
+
 // readKey reads a whole key including multibyte keys.
 func readKey(fd int) (string, error) {
+	deadline := time.Now().Add(readKeyTimeout)
+
 	// Read a byte.
-	b, err := readByte(fd, readKeyTimeout)
+	b, err := readByte(fd, maxTimeout(deadline, readKeyTimeout))
 	if err == errTimeout {
 		return "", err
 	}
@@ -166,7 +178,7 @@ func readKey(fd int) (string, error) {
 	}
 
 	// More bytes to read. Carry on.
-	b, err = readByte(fd, readMultibyteTimeout)
+	b, err = readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
 	if err == errTimeout {
 		// Plain esc.
 		return key, nil
@@ -177,7 +189,7 @@ func readKey(fd int) (string, error) {
 
 	if strings.Contains(multibyteOneMore, fmt.Sprintf("%c", b)) {
 		// This is how arrow keys show up.
-		b2, err := readByte(fd, readMultibyteTimeout)
+		b2, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
 		if err == errTimeout {
 			log.Errorf("Got unknown multibyte sequence (Esc,<something>,<nothing>)")
 			return "", err
@@ -188,7 +200,7 @@ func readKey(fd int) (string, error) {
 		if strings.Contains("0123456789", fmt.Sprintf("%c", b2)) {
 			s := fmt.Sprintf("%c%c%c", EscChar, b, b2)
 			for {
-				b, err := readByte(fd, readMultibyteTimeout)
+				b, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
 				if err == errTimeout {
 					log.Errorf("Got unknown multibyte sequence (%q)", s)
 					return "", err
