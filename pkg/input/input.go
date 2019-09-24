@@ -36,15 +36,20 @@ const (
 	Backspace = "\x7F"
 
 	// Multibyte chars.
-	multibyteOneMore = "O["
-	Up               = "\x1B[A"
-	Down             = "\x1B[B"
-	Right            = "\x1B[C"
-	Left             = "\x1B[D"
-	F1               = "\x1BOP"
-	F2               = "\x1BOQ"
-	F3               = "\x1BOR"
-	F4               = "\x1BOS"
+	multibyteOneMore  = "O["
+	multibyteStopChar = '~'
+	Up                = "\x1B[A"
+	Down              = "\x1B[B"
+	Right             = "\x1B[C"
+	Left              = "\x1B[D"
+	F1                = "\x1BOP"
+	F2                = "\x1BOQ"
+	F3                = "\x1BOR"
+	F4                = "\x1BOS"
+	Home              = "\x1B[1~"
+	End               = "\x1B[4~"
+	PgUp              = "\x1B[5~"
+	PgDown            = "\x1B[6~"
 )
 
 var (
@@ -179,6 +184,22 @@ func readKey(fd int) (string, error) {
 		}
 		if err != nil {
 			return "", errors.Wrapf(err, "reading third byte in multibyte")
+		}
+		if strings.Contains("0123456789", fmt.Sprintf("%c", b2)) {
+			s := fmt.Sprintf("%c%c%c", EscChar, b, b2)
+			for {
+				b, err := readByte(fd, readMultibyteTimeout)
+				if err == errTimeout {
+					log.Errorf("Got unknown multibyte sequence (%q)", s)
+					return "", err
+				}
+				s += fmt.Sprintf("%c", b)
+
+				if b == multibyteStopChar {
+					break
+				}
+			}
+			return s, nil
 		}
 		return fmt.Sprintf("%c%c%c", EscChar, b, b2), nil
 	}

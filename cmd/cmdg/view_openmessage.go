@@ -413,10 +413,13 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				} else {
 					return nil, nil
 				}
+			case input.Home:
+				scroll = 0
+				ov.Draw(lines, scroll)
 			case "n", input.Down:
 				scroll = ov.scroll(ctx, len(lines), scroll, 1)
 				ov.Draw(lines, scroll)
-			case " ", input.CtrlV:
+			case " ", input.CtrlV, input.PgDown:
 				scroll = ov.scroll(ctx, len(lines), scroll, ov.screen.Height-10)
 				ov.Draw(lines, scroll)
 			case "p", input.Up:
@@ -485,7 +488,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					break
 				}
 				ov.errors <- ov.showPager(ctx, buf.String())
-			case input.Backspace, input.CtrlH:
+			case input.Backspace, input.CtrlH, input.PgUp:
 				scroll = ov.scroll(ctx, len(lines), scroll, -(ov.screen.Height - 10))
 				ov.Draw(lines, scroll)
 			default:

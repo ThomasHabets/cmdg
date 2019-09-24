@@ -724,6 +724,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				if err := continueDraft(ctx, conn, mv.keys); err != nil {
 					mv.errors <- errors.Wrapf(err, "Continuing draft")
 				}
+			case input.Home:
+				mv.pos = 0
+				scroll = 0
 			case "N", "n", "j", input.CtrlN, input.Down:
 				if (mv.messages != nil) && (mv.pos < len(mv.messages)-1) {
 					if mv.pos-scroll > contentHeight-scrollLimit {
