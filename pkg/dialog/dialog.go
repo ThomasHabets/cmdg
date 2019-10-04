@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/ThomasHabets/cmdg/pkg/display"
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
@@ -27,6 +30,68 @@ func (o *Option) String() string {
 		return fmt.Sprintf("%s", o.Key)
 	}
 	return o.Label
+}
+
+// Message shows a message that's dismissed by pressing enter.
+// Should not fail, but if it's important checking error value is optional.
+// Any errors are logged.
+func Message(title, message string, keys *input.Input) error {
+	err := messageErr(title, message, keys)
+	log.Errorf("Showing message: %v", err)
+	return err
+}
+
+func printBox(screen *display.Screen, title, message string) (int, []string) {
+	lines := strings.Split(message, "\n")
+	widest := -1
+	for _, l := range lines {
+		if t := display.StringWidth(l); t > widest {
+			widest = t
+		}
+	}
+
+	// Decide on left padding.
+	lpad := (screen.Width-widest)/2 - 4
+	if lpad < 0 {
+		lpad = 0
+	}
+	prefix := strings.Repeat(" ", lpad)
+	titlePad := (screen.Width - len(title)) / 2
+	if titlePad < 0 {
+		titlePad = 0
+	}
+
+	startLine := (screen.Height-len(lines))/2 - 2
+	if startLine < 0 {
+		startLine = 0
+	}
+	for n := range lines {
+		lines[n] = prefix + lines[n]
+	}
+	lines = append([]string{strings.Repeat(" ", titlePad) + title}, lines...)
+	return startLine, lines
+}
+
+// messageErr shows message.
+func messageErr(title, message string, keys *input.Input) error {
+	log.Infof("Displaying title %q, message %q", title, message)
+	screen, err := display.NewScreen()
+	if err != nil {
+		return errors.Wrap(err, "failed to create screen")
+	}
+
+	startLine, lines := printBox(screen, title, message)
+	for n, l := range lines {
+		screen.Printlnf(startLine+n, "%s", l)
+	}
+	screen.Draw()
+	for {
+		key := <-keys.Chan()
+		switch key {
+		case input.Enter:
+			return nil
+		}
+	}
 }
 
 // Question asks the user a multiple-choice question.

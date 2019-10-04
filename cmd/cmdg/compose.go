@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -111,12 +113,17 @@ func createSig(ctx context.Context, msg string) (string, error) {
 }
 
 // compose() is used for compose, replies, and forwards.
-func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID cmdg.ThreadID, prefill string) error {
+func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID cmdg.ThreadID, msg string) error {
+	doEdit := true
+	var attachments []*file
 	for {
-		// Get message content.
-		msg, err := getInput(ctx, prefill, keys)
-		if err != nil {
-			return err
+		var err error
+		if doEdit {
+			// Get message content.
+			msg, err = getInput(ctx, msg, keys)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Ask to send it.
@@ -124,6 +131,7 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID c
 			{Key: "s", Label: "s — Send"},
 			{Key: "d", Label: "d — Save as draft"},
 			{Key: "a", Label: "a — Abort, discarding draft"},
+			{Key: "t", Label: "t — Attach file(s)"},
 			{Key: "r", Label: "r — Return to editor"},
 		}
 		// TODO: send signed.
@@ -134,7 +142,9 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID c
 			return err
 		}
 
-		prefill = msg
+		// Default to preparing to edit again.
+		doEdit = true
+
 		switch a {
 		case "r": // Return to editor.
 			continue
@@ -169,6 +179,14 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID c
 						})
 						mp = signedMultipartType
 					}
+				}
+				for _, att := range attachments {
+					parts = append(parts, &cmdg.Part{
+						Header: map[string][]string{
+							"Content-Type": {fmt.Sprintf(`application/octet-stream; name="%s"`, att.name)},
+						},
+						Contents: string(att.content),
+					})
 				}
 
 				if err := conn.SendParts(ctx, threadID, mp, head, parts); err != nil {
@@ -219,8 +237,92 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID c
 			}
 			log.Infof("Took %v to make draft", time.Since(st))
 			return nil
+		case "t":
+			f, err := chooseFile(ctx, keys)
+			if errors.Cause(err) == dialog.ErrAborted {
+				doEdit = false
+				break
+			}
+			if err != nil {
+				dialog.Message("Failed to attach", fmt.Sprintf("Failed to attach file: %v", err), keys)
+			}
+			doEdit = false
+			attachments = append(attachments, f)
 		default:
 			return fmt.Errorf("can't happen! Got %q from compose question", a)
 		}
+	}
+}
+
+type file struct {
+	name    string
+	content []byte
+}
+
+func chooseFile(ctx context.Context, keys *input.Input) (*file, error) {
+	startDir := "."
+	for {
+		log.Infof("Choosing file in %q", startDir)
+		fis, err := ioutil.ReadDir(startDir)
+		if err != nil {
+			return nil, errors.Wrapf(err, "listing directory %q", startDir)
+		}
+		opts := []*dialog.Option{
+			&dialog.Option{
+				Key:    "..",
+				KeyInt: -1,
+				Label:  "..",
+			},
+		}
+		for n, f := range fis {
+			label := f.Name()
+			if f.Mode().IsDir() {
+				label += "/"
+			}
+			opts = append(opts, &dialog.Option{
+				Key:    f.Name(),
+				KeyInt: n, // Index into `fis`.
+				Label:  label,
+			})
+		}
+		sort.Slice(opts, func(i, j int) bool {
+			if opts[i].KeyInt < 0 {
+				return true
+			}
+			if opts[j].KeyInt < 0 {
+				return false
+			}
+			di := fis[opts[i].KeyInt].Mode().IsDir()
+			dj := fis[opts[j].KeyInt].Mode().IsDir()
+			if di && !dj {
+				return true
+			}
+			if dj && !di {
+				return false
+			}
+			return opts[i].Label < opts[j].Label
+		})
+		o, err := dialog.Selection(opts, "Attach", false, keys)
+		if errors.Cause(err) == dialog.ErrAborted {
+			return nil, err
+		}
+		if err != nil {
+			return nil, errors.Wrapf(err, "selecting option")
+		}
+		if o.KeyInt < 0 {
+			startDir = path.Clean(path.Join(startDir, ".."))
+			continue
+		} else if fis[o.KeyInt].Mode().IsDir() {
+			startDir = path.Clean(path.Join(startDir, fis[o.KeyInt].Name()))
+			continue
+		}
+		// File chosen.
+		full := path.Join(startDir, fis[o.KeyInt].Name())
+		// TODO: attach a ReadCloser?
+		b, err := ioutil.ReadFile(full)
+		return &file{
+			name:    fis[o.KeyInt].Name(),
+			content: b,
+		}, nil
 	}
 }
