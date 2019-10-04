@@ -134,9 +134,9 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID c
 			return err
 		}
 
+		prefill = msg
 		switch a {
 		case "r": // Return to editor.
-			prefill = msg
 			continue
 		case "^C", "a": // Abandon.
 			return nil
