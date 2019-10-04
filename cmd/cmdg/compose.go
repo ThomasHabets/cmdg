@@ -182,8 +182,10 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID c
 				}
 				for _, att := range attachments {
 					parts = append(parts, &cmdg.Part{
+						// TODO: set better content-type.
 						Header: map[string][]string{
-							"Content-Type": {fmt.Sprintf(`application/octet-stream; name="%s"`, att.name)},
+							"Content-Type":        {fmt.Sprintf("application/octet-stream; name=%q", att.name)},
+							"Content-Disposition": {fmt.Sprintf("attachment; filename=%q", att.name)},
 						},
 						Contents: string(att.content),
 					})
@@ -302,7 +304,7 @@ func chooseFile(ctx context.Context, keys *input.Input) (*file, error) {
 			}
 			return opts[i].Label < opts[j].Label
 		})
-		o, err := dialog.Selection(opts, "Attach", false, keys)
+		o, err := dialog.Selection(opts, "Attach> ", false, keys)
 		if errors.Cause(err) == dialog.ErrAborted {
 			return nil, err
 		}
