@@ -637,7 +637,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 							continue
 						}
 						if op.IsNext(mv) {
-							if mv.pos < len(mv.messages) {
+							if mv.pos < len(mv.messages)-1 {
 								mv.pos++
 								if mv.pos-scroll > contentHeight-scrollLimit {
 									scroll++
