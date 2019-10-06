@@ -32,6 +32,8 @@ n, Down        — Scroll down
 space          — Page down
 backspace      — Page up
 p, Up          — Scroll up
+^P             — Previous message
+^N             — Next message
 f              — Forward message
 r              — Reply
 a              — Reply all
@@ -407,6 +409,10 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				return nil, nil
 			case "q":
 				return OpQuit(), nil
+			case input.CtrlP:
+				return OpPrev(), nil
+			case input.CtrlN:
+				return OpNext(), nil
 			case "U":
 				if err := ov.msg.AddLabelID(ctx, cmdg.Unread); err != nil {
 					ov.errors <- fmt.Errorf("Failed to mark unread : %v", err)

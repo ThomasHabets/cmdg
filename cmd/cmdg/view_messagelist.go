@@ -138,8 +138,11 @@ func (mv *MessageView) fetchPage(ctx context.Context, token string) {
 }
 
 type MessageViewOp struct {
-	fun  func(*MessageView)
-	quit bool
+	fun         func(*MessageView)
+	quit        bool
+	nextMessage bool
+	prevMessage bool
+
 	next *MessageViewOp
 }
 
@@ -162,10 +165,27 @@ func (op *MessageViewOp) IsQuit(view *MessageView) bool {
 	if op.quit {
 		return true
 	}
-	if op.next == nil {
+	return op.next.IsQuit(view)
+}
+
+func (op *MessageViewOp) IsNext(view *MessageView) bool {
+	if op == nil {
 		return false
 	}
-	return op.next.IsQuit(view)
+	if op.nextMessage {
+		return true
+	}
+	return op.next.IsNext(view)
+}
+
+func (op *MessageViewOp) IsPrev(view *MessageView) bool {
+	if op == nil {
+		return false
+	}
+	if op.prevMessage {
+		return true
+	}
+	return op.next.IsPrev(view)
 }
 
 func OpRemoveCurrent(next *MessageViewOp) *MessageViewOp {
@@ -184,6 +204,18 @@ func OpRemoveCurrent(next *MessageViewOp) *MessageViewOp {
 func OpQuit() *MessageViewOp {
 	return &MessageViewOp{
 		quit: true,
+	}
+}
+
+func OpPrev() *MessageViewOp {
+	return &MessageViewOp{
+		prevMessage: true,
+	}
+}
+
+func OpNext() *MessageViewOp {
+	return &MessageViewOp{
+		nextMessage: true,
 	}
 }
 
@@ -582,19 +614,40 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// Let's assume we've never gotten to the state where mv.pos >= len(mv.messages)
 					break
 				}
-				vo, err := NewOpenMessageView(ctx, mv.messages[mv.pos], mv.keys)
-				if err != nil {
-					mv.errors <- errors.Wrapf(err, "Opening message")
-				} else {
-					op, err := vo.Run(ctx)
+				for {
+					vo, err := NewOpenMessageView(ctx, mv.messages[mv.pos], mv.keys)
 					if err != nil {
-						mv.errors <- errors.Wrapf(err, "Running OpenMessageView")
+						mv.errors <- errors.Wrapf(err, "Opening message")
+					} else {
+						op, err := vo.Run(ctx)
+						if err != nil {
+							mv.errors <- errors.Wrapf(err, "Running OpenMessageView")
+						}
+						op.Do(mv)
+						if op.IsQuit(mv) {
+							return nil
+						}
+						if op.IsPrev(mv) {
+							if mv.pos > 0 {
+								mv.pos--
+								if scroll > 0 {
+									scroll--
+								}
+							}
+							continue
+						}
+						if op.IsNext(mv) {
+							if mv.pos < len(mv.messages) {
+								mv.pos++
+								if mv.pos-scroll > contentHeight-scrollLimit {
+									scroll++
+								}
+							}
+							continue
+						}
+						mkMessagePos() // op.Do() could have changed the message positions around.
 					}
-					op.Do(mv)
-					if op.IsQuit(mv) {
-						return nil
-					}
-					mkMessagePos() // op.Do() could have changed the message positions around.
+					break
 				}
 			case input.CtrlL:
 				if err := initScreen(); err != nil {
