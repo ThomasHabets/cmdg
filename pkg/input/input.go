@@ -118,6 +118,7 @@ func (i *Input) Stop() {
 
 // Return a key, or errTimeout if no key was pressed.
 func readByte(fd int, timeout time.Duration) (byte, error) {
+	deadline := time.Now().Add(timeout)
 	// TODO: cleaner way to do this?
 	// Drawbacks:
 	// * Takes 50ms to shut down
@@ -129,6 +130,15 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 		Sec:  timeout.Nanoseconds() / 1e9,
 		Usec: (timeout.Nanoseconds() / 1000) % 1e6,
 	})
+	if err == syscall.EINTR {
+		log.Warningf("unix.Select() returned EINTR")
+		t := time.Now().Sub(deadline)
+		if t < 0 {
+			return 0, errTimeout
+		}
+		return readByte(fd, t)
+	}
+
 	if err != nil {
 		return 0, errors.Wrapf(err, "unix.Select()")
 	}
@@ -256,7 +266,8 @@ func (i *Input) Start() error {
 			}
 			if err != nil {
 				log.Errorf("Reading key: %v", err)
-				return
+				// This could very well be benign, so don't kill the input loop.
+				continue
 			}
 			if key == "" {
 				log.Errorf("Read key successfully, but it was empty string")

@@ -604,7 +604,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			}
 			mkMessagePos()
 
-		case key := <-mv.keys.Chan():
+		case key, ok := <-mv.keys.Chan():
+			if !ok {
+				log.Errorf("MessageList: Input channel closed!")
+				continue
+			}
 			log.Debugf("MessageListView got key %q", key)
 			switch key {
 			case "?", input.F1:

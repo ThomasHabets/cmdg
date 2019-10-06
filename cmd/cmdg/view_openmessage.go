@@ -325,7 +325,12 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 
 			// TODO: double check that scroll is not too high after `lines` was recreated.
 			ov.Draw(lines, scroll)
-		case key := <-ov.keys.Chan():
+		case key, ok := <-ov.keys.Chan():
+			if !ok {
+				log.Errorf("OpenMessage: Input channel closed!")
+				continue
+			}
+
 			switch key {
 			case input.CtrlR:
 				go func() {
