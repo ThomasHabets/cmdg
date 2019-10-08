@@ -116,9 +116,33 @@ func (i *Input) Stop() {
 	log.Infof("Keyboard input stopped")
 }
 
+func duration2Timeval(timeout time.Duration) *unix.Timeval {
+	// Workaround to set unix.Timeval since unix.Timeval.Usec is
+	// different types on different systems. :-(
+	// By last check it can only be int32 and int64:
+	// grep -A 2 ^'type Timeval struct ' ~/go/src/golang.org/x/sys/unix/*.go | grep Usec | sed 's/.*go-//' | awk '{print $2}' | sort | uniq
+	tv := &unix.Timeval{
+		Sec: timeout.Nanoseconds() / 1e9,
+	}
+	var usec interface{}
+	usec = &tv.Usec
+	switch u := usec.(type) {
+	case *int64:
+		*u = (timeout.Nanoseconds() / 1000) % 1e6
+	case *int32:
+		*u = int32((timeout.Nanoseconds() / 1000) % 1e6)
+	default:
+		log.Errorf("Unknown type of unix.Timeval.Usec")
+		tv.Sec = 0
+		tv.Usec = 50000
+	}
+	return tv
+}
+
 // Return a key, or errTimeout if no key was pressed.
 func readByte(fd int, timeout time.Duration) (byte, error) {
 	deadline := time.Now().Add(timeout)
+
 	// TODO: cleaner way to do this?
 	// Drawbacks:
 	// * Takes 50ms to shut down
@@ -126,10 +150,7 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 	// * Wake up CPU at least every 50ms
 	fds := unix.FdSet{}
 	fds.Bits[uint(fd)/unix.NFDBITS] |= (1 << (uint(fd) % unix.NFDBITS))
-	n, err := unix.Select(fd+1, &fds, &unix.FdSet{}, &unix.FdSet{}, &unix.Timeval{
-		Sec:  timeout.Nanoseconds() / 1e9,
-		Usec: (timeout.Nanoseconds() / 1000) % 1e6,
-	})
+	n, err := unix.Select(fd+1, &fds, &unix.FdSet{}, &unix.FdSet{}, duration2Timeval(timeout))
 	if err == syscall.EINTR {
 		log.Warningf("unix.Select() returned EINTR")
 		t := time.Now().Sub(deadline)
