@@ -658,8 +658,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// Screen failed to init. Yeah it's time to bail.
 					return err
 				}
-			case "x", " ":
-				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
 			case "e":
 				ids, nm, ofs := filterMarked(mv.messages, marked, mv.pos)
 				if len(ids) == 0 {
@@ -784,6 +782,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			case input.Home:
 				mv.pos = 0
 				scroll = 0
+			case "x", " ":
+				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
+				fallthrough
 			case "N", "n", "j", input.CtrlN, input.Down:
 				if (mv.messages != nil) && (mv.pos < len(mv.messages)-1) {
 					if mv.pos-scroll > contentHeight-scrollLimit {
