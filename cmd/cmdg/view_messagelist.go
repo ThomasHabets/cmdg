@@ -421,6 +421,29 @@ func (mv *MessageView) Run(ctx context.Context) error {
 	defer timer.Stop()
 	historyConcurrency := newConcurrency(1)
 
+	prev := func() bool {
+		if mv.pos <= 0 {
+			return false
+		}
+		mv.pos--
+		if scroll > 0 && mv.pos < scroll+scrollLimit {
+			scroll--
+		}
+		return true
+	}
+	next := func() bool {
+		if mv.messages == nil {
+			return false
+		}
+		if mv.pos >= len(mv.messages)-1 {
+			return false
+		}
+		if mv.pos-scroll > contentHeight-scrollLimit {
+			scroll++
+		}
+		mv.pos++
+		return true
+	}
 	for {
 		status := ""
 		select {
@@ -784,23 +807,15 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				scroll = 0
 			case "x", " ":
 				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
-				fallthrough
+				next()
 			case "N", "n", "j", input.CtrlN, input.Down:
-				if (mv.messages != nil) && (mv.pos < len(mv.messages)-1) {
-					if mv.pos-scroll > contentHeight-scrollLimit {
-						scroll++
-					}
-					mv.pos++
-				} else {
+				if !next() {
+					// If already on last one, don't redraw.
 					continue
 				}
 			case "P", "p", "k", input.CtrlP, input.Up:
-				if mv.pos > 0 {
-					mv.pos--
-					if scroll > 0 && mv.pos < scroll+scrollLimit {
-						scroll--
-					}
-				} else {
+				if !prev() {
+					// If already on first one, don't redraw.
 					continue
 				}
 			case "r", input.CtrlR:
