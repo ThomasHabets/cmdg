@@ -22,7 +22,8 @@ const (
 
 	messageListViewHelp = `?, F1              — Help
 enter              — Open message
-space, x           — Mark message
+space, x           — Mark message and advance
+X                  — Mark message and step up
 e                  — Archive marked messages
 l                  — Label marked messages
 L                  — Unlabel marked messages
@@ -808,6 +809,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			case "x", " ":
 				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
 				next()
+			case "X":
+				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
+				prev()
 			case "N", "n", "j", input.CtrlN, input.Down:
 				if !next() {
 					// If already on last one, don't redraw.
