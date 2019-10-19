@@ -303,20 +303,24 @@ func (msg *Message) GetReplyTo(ctx context.Context) (string, error) {
 }
 
 func (msg *Message) GetReplyToAll(ctx context.Context) (string, string, error) {
-	to, err := msg.GetReplyTo(ctx)
+	from, err := msg.GetReplyTo(ctx)
 	if err != nil {
 		return "", "", err
 	}
 	cc := []string{}
 	if f, err := msg.GetHeader(ctx, "From"); err != nil {
 		return "", "", err
-	} else if f != to {
+	} else if f != from {
 		cc = append(cc, f)
 	}
-	if c, err := msg.GetHeader(ctx, "CC"); err != nil && len(c) != 0 {
+	if c, err := msg.GetHeader(ctx, "CC"); err == nil && len(c) != 0 {
 		cc = append(cc, c)
 	}
-	return to, strings.Join(cc, ", "), err
+	if c, err := msg.GetHeader(ctx, "To"); err == nil && len(c) != 0 {
+		// TODO: if this is not "me"
+		cc = append(cc, c)
+	}
+	return from, strings.Join(cc, ", "), err
 }
 
 func (msg *Message) GetFrom(ctx context.Context) (string, error) {
