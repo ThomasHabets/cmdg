@@ -16,6 +16,7 @@ import (
 const (
 	replyPrefix   = "Re: "
 	forwardPrefix = "Fwd: "
+	spaces        = " \t"
 )
 
 var (
@@ -28,11 +29,7 @@ func replyQuoted(s string) string {
 	lines := strings.Split(removeCharsRE.ReplaceAllString(s, ""), "\n")
 	var ret []string
 	for _, l := range lines {
-		if len(l) > 0 {
-			ret = append(ret, "> "+l)
-		} else {
-			ret = append(ret, ">")
-		}
+		ret = append(ret, strings.TrimRight("> "+l, spaces))
 	}
 	return strings.Join(ret, "\n")
 }
