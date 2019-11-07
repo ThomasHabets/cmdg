@@ -55,6 +55,9 @@ benefits.
   access does not expire on its own.
 
 ## Installing
+
+### Building manually
+
 ```
 $ mkdir go
 $ cd go
@@ -69,6 +72,13 @@ $ for dep in github.com/mattn/go-runewidth
 $ go get github.com/ThomasHabets/cmdg
 $ go build github.com/ThomasHabets/cmdg/cmd/cmdg
 $ sudo cp cmdg /usr/local/bin
+```
+
+### Homebrew (maintained by separate author)
+
+```
+brew tap cutzenfriend/homebrew-cmdg
+brew install cmdg
 ```
 
 ## Configuring
