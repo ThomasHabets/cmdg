@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -47,6 +48,10 @@ Press [enter] to exit
 `
 )
 
+var (
+	enableDottime = flag.Bool("dottime", false, "Enable dottime.")
+)
+
 func help(txt string, keys *input.Input) error {
 	screen, err := display.NewScreen()
 	if err != nil {
@@ -83,6 +88,11 @@ type OpenMessageView struct {
 
 	// Local view state. Main goroutine only.
 	preferHTML bool
+}
+
+func dottime(t time.Time) string {
+	_, s := t.Zone()
+	return t.UTC().Format("2006-01-02T15·04·05") + fmt.Sprintf("%+03d", s/3600)
 }
 
 func NewOpenMessageView(ctx context.Context, msg *cmdg.Message, in *input.Input) (*OpenMessageView, error) {
@@ -169,11 +179,16 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	line++
 
 	// Date.
-	date, err := ov.msg.GetTime(ctx)
+	date, err := ov.msg.GetOriginalTime(ctx)
 	if err != nil {
 		ov.errors <- err
 	}
-	ov.screen.Printlnf(line, "Date: %s", date.Format(tsLayout))
+	dateLocal := date.Local()
+	dt := ""
+	if *enableDottime {
+		dt = fmt.Sprintf(" (dottime: %s)", dottime(date))
+	}
+	ov.screen.Printlnf(line, "Date: %s%s", dateLocal.Format(tsLayout), dt)
 	line++
 
 	// Subject

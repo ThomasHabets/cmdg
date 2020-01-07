@@ -515,7 +515,7 @@ func (msg *Message) GetLabelsString(ctx context.Context) (string, error) {
 	return strings.Join(s, ", "), nil
 }
 
-func (msg *Message) GetTime(ctx context.Context) (time.Time, error) {
+func (msg *Message) GetOriginalTime(ctx context.Context) (time.Time, error) {
 	s, err := msg.GetHeader(ctx, "Date")
 	if err != nil {
 		return time.Time{}, err
@@ -524,9 +524,15 @@ func (msg *Message) GetTime(ctx context.Context) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	ts = ts.Local()
-	return ts, nil
+	return ts, err
 }
+
+func (msg *Message) GetTime(ctx context.Context) (time.Time, error) {
+	ts, err := msg.GetOriginalTime(ctx)
+	ts = ts.Local()
+	return ts, err
+}
+
 func (msg *Message) GetTimeFmt(ctx context.Context) (string, error) {
 	ts, err := msg.GetTime(ctx)
 	if err != nil {
