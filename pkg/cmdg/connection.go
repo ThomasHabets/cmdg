@@ -273,11 +273,37 @@ func (c *CmdG) SendParts(ctx context.Context, threadID ThreadID, mp string, head
 		return errors.Wrapf(err, "closing multipart")
 	}
 
+	addrHeader := map[string]bool{
+		"to":       true,
+		"cc":       true,
+		"bcc":      true,
+		"reply-to": true,
+	}
+
 	// Add message headers for gmail.
 	var hlines []string
 	for k, vs := range head {
-		for _, v := range vs {
-			hlines = append(hlines, fmt.Sprintf("%s: %s", k, mime.QEncoding.Encode("utf-8", v)))
+		if addrHeader[strings.ToLower(k)] {
+			for _, v := range vs {
+				as, err := mail.ParseAddressList(v)
+				if err != nil {
+					return err
+				}
+				var ass []string
+				for _, a := range as {
+					if a.Name == "" {
+						ass = append(ass, a.Address)
+					} else {
+						ass = append(ass, fmt.Sprintf(`"%s" <%s>`, mime.QEncoding.Encode("utf-8", a.Name), a.Address))
+					}
+				}
+				hlines = append(hlines, fmt.Sprintf("%s: %s", k, strings.Join(ass, ", ")))
+			}
+		} else {
+			for _, v := range vs {
+				hlines = append(hlines, fmt.Sprintf("%s: %s", k, mime.QEncoding.Encode("utf-8", v)))
+
+			}
 		}
 	}
 	hlines = append(hlines, fmt.Sprintf(`Content-Type: multipart/%s; boundary="%s"`, mp, w.Boundary()))
