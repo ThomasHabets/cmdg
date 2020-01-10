@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"net/mail"
 	"os"
 	"os/exec"
 	"path"
@@ -112,6 +113,66 @@ func createSig(ctx context.Context, msg string) (string, error) {
 	return out.String(), nil
 }
 
+type preparedMessage struct {
+	mp    string
+	parts []*cmdg.Part
+	head  mail.Header
+}
+
+// take message text and attachments, and turn it into mail headers and parts
+func prepareMessage(ctx context.Context, msg string, attachments []*file) (*preparedMessage, error) {
+	head, part, err := cmdg.ParseUserMessage(msg)
+	if err != nil {
+		// TODO: ask to retry
+		return nil, errors.Wrapf(err, "failed to parse that message")
+	}
+
+	parts := []*cmdg.Part{part}
+	mp := "mixed"
+
+	// Add signature.
+	if *enableSign {
+		sig, err := createSig(ctx, part.FullString())
+		if err != nil {
+			// TODO: ask to retry or something
+			return nil, errors.Wrapf(err, "failed to sign")
+		}
+		if sig != "" {
+			parts = append(parts, &cmdg.Part{
+				Header: map[string][]string{
+					"Content-Type": {`application/pgp-signature; name="signature.asc"`},
+				},
+				Contents: sig,
+			})
+			mp = signedMultipartType
+		}
+	}
+	for _, att := range attachments {
+		parts = append(parts, &cmdg.Part{
+			// TODO: set better content-type.
+			Header: map[string][]string{
+				"Content-Type":        {fmt.Sprintf("application/octet-stream; name=%q", att.name)},
+				"Content-Disposition": {fmt.Sprintf("attachment; filename=%q", att.name)},
+			},
+			Contents: string(att.content),
+		})
+	}
+	return &preparedMessage{
+		head:  head,
+		mp:    mp,
+		parts: parts,
+	}, nil
+}
+
+// take message text and attachments, and turn it into mail headers and parts
+func sendMessage(ctx context.Context, conn *cmdg.CmdG, msg string, threadID cmdg.ThreadID, attachments []*file) error {
+	prep, err := prepareMessage(ctx, msg, attachments)
+	if err != nil {
+		return errors.Wrap(err, "preparing message")
+	}
+	return errors.Wrap(conn.SendParts(ctx, threadID, prep.mp, prep.head, prep.parts), "sending parts")
+}
+
 // compose() is used for compose, replies, and forwards.
 func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID cmdg.ThreadID, msg string) error {
 	doEdit := true
@@ -153,45 +214,9 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID c
 		case "s", "S":
 			for {
 				st := time.Now()
-				mp := "mixed"
 
-				head, part, err := cmdg.ParseUserMessage(msg)
-				if err != nil {
-					// TODO: ask to retry
-					return errors.Wrapf(err, "failed to parse that message")
-				}
-
-				parts := []*cmdg.Part{part}
-
-				// Add signature.
-				if *enableSign {
-					sig, err := createSig(ctx, part.FullString())
-					if err != nil {
-						// TODO: ask to retry or something
-						return errors.Wrapf(err, "failed to sign")
-					}
-					if sig != "" {
-						parts = append(parts, &cmdg.Part{
-							Header: map[string][]string{
-								"Content-Type": {`application/pgp-signature; name="signature.asc"`},
-							},
-							Contents: sig,
-						})
-						mp = signedMultipartType
-					}
-				}
-				for _, att := range attachments {
-					parts = append(parts, &cmdg.Part{
-						// TODO: set better content-type.
-						Header: map[string][]string{
-							"Content-Type":        {fmt.Sprintf("application/octet-stream; name=%q", att.name)},
-							"Content-Disposition": {fmt.Sprintf("attachment; filename=%q", att.name)},
-						},
-						Contents: string(att.content),
-					})
-				}
-
-				if err := conn.SendParts(ctx, threadID, mp, head, parts); err != nil {
+				if err := sendMessage(ctx, conn, msg, threadID, attachments); err != nil {
+					log.Errorf("Failed to send: %v", err)
 					a, err := dialog.Question(fmt.Sprintf("Failed to send (%q). Save to local file?", err.Error()), []dialog.Option{
 						{Key: "y", Label: "Y — Yes, save to local file"},
 						{Key: "n", Label: "N — No, discard completely"},

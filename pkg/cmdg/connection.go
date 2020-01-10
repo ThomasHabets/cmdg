@@ -92,6 +92,13 @@ func (c *CmdG) LabelCache(label *Label) *Label {
 	return label
 }
 
+func NewFake(client *http.Client) (*CmdG, error) {
+	conn := &CmdG{
+		authedClient: client,
+	}
+	return conn, conn.setupClients()
+}
+
 func New(fn string) (*CmdG, error) {
 	conn := &CmdG{
 		messageCache: make(map[string]*Message),
@@ -133,36 +140,39 @@ func New(fn string) (*CmdG, error) {
 		}
 		conn.authedClient = cfg.Client(ctx, token)
 	}
+	return conn, conn.setupClients()
+}
 
+func (c *CmdG) setupClients() error {
 	// Set up gmail client.
 	{
 		var err error
-		conn.gmail, err = gmail.New(conn.authedClient)
+		c.gmail, err = gmail.New(c.authedClient)
 		if err != nil {
-			return nil, errors.Wrap(err, "creating GMail client")
+			return errors.Wrap(err, "creating GMail client")
 		}
-		conn.gmail.UserAgent = userAgent()
+		c.gmail.UserAgent = userAgent()
 	}
 
 	// Set up drive client.
 	{
 		var err error
-		conn.drive, err = drive.New(conn.authedClient)
+		c.drive, err = drive.New(c.authedClient)
 		if err != nil {
-			return nil, errors.Wrap(err, "creating Drive client")
+			return errors.Wrap(err, "creating Drive client")
 		}
-		conn.drive.UserAgent = userAgent()
+		c.drive.UserAgent = userAgent()
 	}
 	// Set up people client.
 	{
 		var err error
-		conn.people, err = people.New(conn.authedClient)
+		c.people, err = people.New(c.authedClient)
 		if err != nil {
-			return nil, errors.Wrap(err, "creating People client")
+			return errors.Wrap(err, "creating People client")
 		}
-		conn.drive.UserAgent = userAgent()
+		c.drive.UserAgent = userAgent()
 	}
-	return conn, nil
+	return nil
 }
 
 func (c *CmdG) LoadLabels(ctx context.Context) error {
@@ -309,6 +319,7 @@ func (c *CmdG) SendParts(ctx context.Context, threadID ThreadID, mp string, head
 			}
 		}
 	}
+	sort.Strings(hlines)
 	hlines = append(hlines, fmt.Sprintf(`Content-Type: multipart/%s; boundary="%s"`, mp, w.Boundary()))
 	hlines = append(hlines, `Content-Disposition: inline`)
 	msgs := strings.Join(hlines, "\r\n") + "\r\n\r\n" + mbuf.String()
@@ -319,7 +330,7 @@ func (c *CmdG) SendParts(ctx context.Context, threadID ThreadID, mp string, head
 
 func (c *CmdG) send(ctx context.Context, threadID ThreadID, msg string) error {
 	_, err := c.gmail.Users.Messages.Send(email, &gmail.Message{
-		Raw:      mimeEncode(msg),
+		Raw:      MIMEEncode(msg),
 		ThreadId: string(threadID),
 	}).Context(ctx).Do()
 	return err
@@ -407,7 +418,7 @@ func (c *CmdG) GetFile(ctx context.Context, fn string) ([]byte, error) {
 func (c *CmdG) MakeDraft(ctx context.Context, msg string) error {
 	_, err := c.gmail.Users.Drafts.Create(email, &gmail.Draft{
 		Message: &gmail.Message{
-			Raw: mimeEncode(msg),
+			Raw: MIMEEncode(msg),
 		},
 	}).Context(ctx).Do()
 	return err

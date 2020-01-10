@@ -60,7 +60,7 @@ func (a *Attachment) Download(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	d, err := mimeDecode(body.Data)
+	d, err := MIMEDecode(body.Data)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (msg *Message) Raw(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dec, err := mimeDecode(m.Raw)
+	dec, err := MIMEDecode(m.Raw)
 	if err != nil {
 		return "", err
 	}
@@ -559,13 +559,13 @@ func (msg *Message) GetHeader(ctx context.Context, k string) (string, error) {
 }
 
 // mime decode for gmail. Seems to be special version of base64.
-func mimeEncode(s string) string {
+func MIMEEncode(s string) string {
 	s = base64.StdEncoding.EncodeToString([]byte(s))
 	s = strings.Replace(s, "+", "-", -1)
 	s = strings.Replace(s, "/", "_", -1)
 	return s
 }
-func mimeDecode(s string) (string, error) {
+func MIMEDecode(s string) (string, error) {
 	s = strings.Replace(s, "-", "+", -1)
 	s = strings.Replace(s, "_", "/", -1)
 	data, err := base64.StdEncoding.DecodeString(s)
@@ -616,7 +616,7 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 		if partIsAttachment(p) {
 			continue
 		}
-		dec, err := mimeDecode(string(p.Body.Data))
+		dec, err := MIMEDecode(string(p.Body.Data))
 		if err != nil {
 			return "", err
 		}
@@ -657,7 +657,7 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (string, error) {
 	if len(part.Parts) == 0 {
 		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
-		data, err := mimeDecode(string(part.Body.Data))
+		data, err := MIMEDecode(string(part.Body.Data))
 		if err != nil {
 			return "", err
 		}
@@ -728,7 +728,7 @@ func (msg *Message) tryGPGSigned(ctx context.Context) error {
 		switch p.MimeType {
 		case "text/plain":
 			var err error
-			dec, err = mimeDecode(p.Body.Data)
+			dec, err = MIMEDecode(p.Body.Data)
 			if err != nil {
 				return err
 			}
@@ -751,7 +751,7 @@ func (msg *Message) tryGPGSigned(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to download signature attachment")
 	}
-	sigDec, err := mimeDecode(body.Data)
+	sigDec, err := MIMEDecode(body.Data)
 	if err != nil {
 		return errors.Wrap(err, "failed to MIME decode signature attachment")
 	}
@@ -815,7 +815,7 @@ func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to download encrypted data attachment")
 	}
-	dec, err := mimeDecode(body.Data)
+	dec, err := MIMEDecode(body.Data)
 	if err != nil {
 		return errors.Wrap(err, "failed to MIME decode encrypted data attachment")
 	}
@@ -860,7 +860,7 @@ func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 				np := &gmail.MessagePart{
 					MimeType: mt,
 					Body: &gmail.MessagePartBody{
-						Data: mimeEncode(string(t)),
+						Data: MIMEEncode(string(t)),
 					},
 				}
 				msg.body, err = makeBody(ctx, np, false)
@@ -1036,7 +1036,7 @@ func (d *Draft) UpdateParts(ctx context.Context, head mail.Header, parts []*Part
 func (d *Draft) update(ctx context.Context, content string) error {
 	_, err := d.conn.gmail.Users.Drafts.Update(email, d.ID, &gmail.Draft{
 		Message: &gmail.Message{
-			Raw: mimeEncode(content),
+			Raw: MIMEEncode(content),
 		},
 	}).Context(ctx).Do()
 	if err != nil {
