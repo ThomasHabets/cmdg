@@ -285,9 +285,12 @@ func (c *CmdG) SendParts(ctx context.Context, threadID ThreadID, mp string, head
 	for k, vs := range head {
 		if addrHeader[strings.ToLower(k)] {
 			for _, v := range vs {
+				if v == "" {
+					continue
+				}
 				as, err := mail.ParseAddressList(v)
 				if err != nil {
-					return err
+					return errors.Wrapf(err, "parsing address list %q, which is %q", k, v)
 				}
 				var ass []string
 				for _, a := range as {
