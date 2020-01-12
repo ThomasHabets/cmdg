@@ -129,8 +129,14 @@ func New(fn string) (*CmdG, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to connect to socks5 proxy %q", *socks5)
 		}
-		tp = &http.Transport{
-			Dial: dialer.Dial,
+		if cd, ok := dialer.(proxy.ContextDialer); ok {
+			tp = &http.Transport{
+				DialContext: cd.DialContext,
+			}
+		} else {
+			tp = &http.Transport{
+				Dial: dialer.Dial,
+			}
 		}
 	}
 
