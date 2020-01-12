@@ -16,6 +16,7 @@ import (
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
 )
 
+// http handler for gmail send message commands.
 type fakeSend struct {
 	msg string
 }
@@ -61,6 +62,7 @@ func (fs *fakeSend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `{ "id": "12345" }`)
 }
 
+// net.RoundTripper that rewrites requests to the local fake.
 type redirector struct {
 	base string
 }
@@ -128,6 +130,72 @@ World
 			matching: regexp.MustCompile(crnl(`MIME-Version: 1.0
 Subject: hello
 To: "=\?utf-8\?q\?Name1_=F0=9F=91=8D_Name2\?=" <foo3@bar.com>
+Content-Type: multipart/mixed; boundary="[a-z0-9]+"
+Content-Disposition: inline
+
+--[a-z0-9]+
+Content-Disposition: inline
+Content-Type: text/plain; charset="UTF-8"
+
+World
+--[a-z0-9]+--`)),
+		},
+		{
+			name: "Simple with CC",
+			msg:  "To: foo@bar.com\nCC: baz@baz.com\nSubject: hello\n\nWorld",
+			matching: regexp.MustCompile(crnl(`Cc: baz@baz.com
+MIME-Version: 1.0
+Subject: hello
+To: foo@bar.com
+Content-Type: multipart/mixed; boundary="[a-z0-9]+"
+Content-Disposition: inline
+
+--[a-z0-9]+
+Content-Disposition: inline
+Content-Type: text/plain; charset="UTF-8"
+
+World
+--[a-z0-9]+--`)),
+		},
+		{
+			name: "Simple with unicode CC",
+			msg:  "To: foo@bar.com\nCC: \"Name1 👍 Name2\" <baz@baz.com>\nSubject: hello\n\nWorld",
+			matching: regexp.MustCompile(crnl(`Cc: "=[?]utf-8[?]q[?]Name1_=F0=9F=91=8D_Name2[?]=" <baz@baz.com>
+MIME-Version: 1.0
+Subject: hello
+To: foo@bar.com
+Content-Type: multipart/mixed; boundary="[a-z0-9]+"
+Content-Disposition: inline
+
+--[a-z0-9]+
+Content-Disposition: inline
+Content-Type: text/plain; charset="UTF-8"
+
+World
+--[a-z0-9]+--`)),
+		},
+		{
+			name: "Two To's",
+			msg:  "To: foo@bar.com, \"Name1 Name2\" <baz@baz.com>\nSubject: hello\n\nWorld",
+			matching: regexp.MustCompile(crnl(`MIME-Version: 1.0
+Subject: hello
+To: foo@bar.com, "Name1 Name2" <baz@baz.com>
+Content-Type: multipart/mixed; boundary="[a-z0-9]+"
+Content-Disposition: inline
+
+--[a-z0-9]+
+Content-Disposition: inline
+Content-Type: text/plain; charset="UTF-8"
+
+World
+--[a-z0-9]+--`)),
+		},
+		{
+			name: "Two To's, one with unicode",
+			msg:  "To: foo@bar.com, \"Name1 👍 Name2\" <baz@baz.com>\nSubject: hello\n\nWorld",
+			matching: regexp.MustCompile(crnl(`MIME-Version: 1.0
+Subject: hello
+To: foo@bar.com, "=\?utf-8\?q\?Name1_=F0=9F=91=8D_Name2\?=" <baz@baz.com>
 Content-Type: multipart/mixed; boundary="[a-z0-9]+"
 Content-Disposition: inline
 
