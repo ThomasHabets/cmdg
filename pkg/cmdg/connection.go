@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"mime"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/proxy"
 	"golang.org/x/oauth2"
 	drive "google.golang.org/api/drive/v3"
 	gmail "google.golang.org/api/gmail/v1"
@@ -49,6 +51,8 @@ const (
 var (
 	Version            = "unspecified"
 	NewThread ThreadID = ""
+
+	socks5 = flag.String("socks5", "", "Use SOCKS5 proxy. host:port")
 )
 
 type (
@@ -117,9 +121,31 @@ func New(fn string) (*CmdG, error) {
 		}
 	}
 
+	var tp http.RoundTripper
+
+	// Set up SOCKS5 proxy.
+	if *socks5 != "" {
+		dialer, err := proxy.SOCKS5("tcp", *socks5, nil, proxy.Direct)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to connect to socks5 proxy %q", *socks5)
+		}
+		tp = &http.Transport{
+			Dial: dialer.Dial,
+		}
+	}
+
 	// Attach APIkey, if any.
+	if conf.OAuth.APIKey != "" {
+		newtp := &transport.APIKey{
+			Key:       conf.OAuth.APIKey,
+			Transport: tp,
+		}
+		tp = newtp
+	}
+
+	// Set up google http.Client.
 	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{
-		Transport: &transport.APIKey{Key: conf.OAuth.APIKey},
+		Transport: tp,
 	})
 
 	// Connect.
