@@ -129,8 +129,10 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	ctx := cancelledContext()
 
 	line := 0
+	contentSpace := ov.screen.Height - 10
 
-	ov.screen.Printlnf(line, "Email %d of %d", -1, -1)
+	// TODO: msg index.
+	ov.screen.Printlnf(line, "Email %d of %d (%d%%)", -1, -1, int(100*float64(scroll)/float64(len(lines)-contentSpace)))
 	line++
 
 	// From.
