@@ -64,6 +64,23 @@ func isGraphicString(s string) bool {
 	return true
 }
 
+func hilightIncremental(s string, m [][]int) string {
+	pos := 0
+	var ret []string
+	for _, h := range m {
+		a, b := h[0], h[1]
+		if a > pos {
+			ret = append(ret, s[pos:a])
+		}
+		ret = append(ret, fmt.Sprintf("%s%s%s", display.Reverse, s[a:b], display.Reset))
+		pos = b
+	}
+	if pos < len(s) {
+		ret = append(ret, s[pos:])
+	}
+	return strings.Join(ret, "")
+}
+
 func help(txt string, keys *input.Input) error {
 	screen, err := display.NewScreen()
 	if err != nil {
@@ -282,7 +299,10 @@ func showError(oscreen *display.Screen, keys *input.Input, msg string) {
 	}
 }
 
-func (ov *OpenMessageView) incrementalSearch(ctx context.Context, lines []string) (int, error) {
+func (ov *OpenMessageView) incrementalSearch(ctx context.Context, inlines []string) (int, error) {
+	lines := make([]string, len(inlines))
+	copy(lines, inlines)
+
 	ov.inIncrementalSearch = true
 	defer func() { ov.inIncrementalSearch = false }()
 	ov.incrementalQuery = ""
@@ -305,11 +325,11 @@ func (ov *OpenMessageView) incrementalSearch(ctx context.Context, lines []string
 			return -1, fmt.Errorf("incremental search key read channel closed")
 		}
 		switch key {
-		case input.CtrlC, input.Enter, input.Return:
+		case input.CtrlC:
 			return found, nil
 		case input.CtrlU:
 			ov.incrementalQuery = ""
-		case input.CtrlS, input.CtrlN:
+		case input.CtrlS, input.CtrlN, input.Enter, input.Return:
 			start = found + 1
 		case input.CtrlH, input.Backspace:
 			if len(ov.incrementalQuery) > 0 {
@@ -336,8 +356,9 @@ func (ov *OpenMessageView) incrementalSearch(ctx context.Context, lines []string
 			ov.incrementalCurrent = 0
 			// Find from here
 			for n, l := range lines {
-				if re.MatchString(l) {
+				if m := re.FindAllStringSubmatchIndex(l, -1); len(m) > 0 {
 					ov.incrementalCount++
+					lines[n] = hilightIncremental(lines[n], m)
 					if n >= start && found == -1 {
 						ov.incrementalCurrent = ov.incrementalCount
 						found = n
@@ -359,6 +380,7 @@ func (ov *OpenMessageView) incrementalSearch(ctx context.Context, lines []string
 			found = 0
 		}
 		ov.Draw(lines, found)
+		copy(lines, inlines)
 		ov.screen.Draw()
 	}
 }
