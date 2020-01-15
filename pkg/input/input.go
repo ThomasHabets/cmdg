@@ -252,6 +252,9 @@ func readKey(fd int) (string, error) {
 		}
 		return fmt.Sprintf("%c%c%c", EscChar, b, b2), nil
 	}
+	if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') {
+		return fmt.Sprintf("Meta-%c", b), nil
+	}
 	log.Errorf("Discarding key %v because it came right after escape", b)
 	return key, nil
 }

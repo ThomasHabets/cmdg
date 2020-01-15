@@ -516,7 +516,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					break
 				}
 				ov.errors <- ov.showPager(ctx, buf.String())
-			case input.Backspace, input.CtrlH, input.PgUp:
+			case input.Backspace, input.CtrlH, input.PgUp, "Meta-v":
 				scroll = ov.scroll(ctx, len(lines), scroll, -(ov.screen.Height - 10))
 				ov.Draw(lines, scroll)
 			default:
