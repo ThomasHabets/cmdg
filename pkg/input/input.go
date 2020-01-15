@@ -30,6 +30,7 @@ const (
 	CtrlN     = "\x0e"
 	CtrlP     = "\x10"
 	CtrlR     = "\x12"
+	CtrlS     = "\x13"
 	CtrlU     = "\x15"
 	CtrlV     = "\x16"
 	Esc       = "\x1b"

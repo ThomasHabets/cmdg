@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -37,6 +39,7 @@ p, Up          — Scroll up
 ^N             — Next message
 f              — Forward message
 r              — Reply
+s, ^s          — Search within message
 a              — Reply all
 e              — Archive
 t              — Browse attachments (if any)
@@ -51,6 +54,15 @@ Press [enter] to exit
 var (
 	enableDottime = flag.Bool("dottime", false, "Enable dottime.")
 )
+
+func isGraphicString(s string) bool {
+	for _, r := range s {
+		if !unicode.IsGraphic(r) {
+			return false
+		}
+	}
+	return true
+}
 
 func help(txt string, keys *input.Input) error {
 	screen, err := display.NewScreen()
@@ -85,6 +97,11 @@ type OpenMessageView struct {
 
 	update chan struct{}
 	errors chan error
+
+	inIncrementalSearch bool
+	incrementalCount    int
+	incrementalCurrent  int
+	incrementalQuery    string
 
 	// Local view state. Main goroutine only.
 	preferHTML bool
@@ -131,8 +148,13 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	line := 0
 	contentSpace := ov.screen.Height - 10
 
+	var searching string
+	if ov.inIncrementalSearch {
+		searching = fmt.Sprintf(" Incremental search: %s (at %d of %d)", ov.incrementalQuery, ov.incrementalCurrent, ov.incrementalCount)
+	}
+
 	// TODO: msg index.
-	ov.screen.Printlnf(line, "Email %d of %d (%d%%)", -1, -1, int(100*float64(scroll)/float64(len(lines)-contentSpace)))
+	ov.screen.Printlnf(line, "Email %d of %d (%d%%)%s", -1, -1, int(100*float64(scroll)/float64(len(lines)-contentSpace)), searching)
 	line++
 
 	// From.
@@ -257,6 +279,87 @@ func showError(oscreen *display.Screen, keys *input.Input, msg string) {
 		if input.Enter == <-keys.Chan() {
 			return
 		}
+	}
+}
+
+func (ov *OpenMessageView) incrementalSearch(ctx context.Context, lines []string) (int, error) {
+	ov.inIncrementalSearch = true
+	defer func() { ov.inIncrementalSearch = false }()
+	ov.incrementalQuery = ""
+
+	ov.Draw(lines, 0)
+	ov.screen.Draw()
+
+	found := 0
+	start := 0
+	for {
+		var ok bool
+		var key string
+		select {
+		case <-ctx.Done():
+			return -1, ctx.Err()
+		case key, ok = <-ov.keys.Chan():
+			break
+		}
+		if !ok {
+			return -1, fmt.Errorf("incremental search key read channel closed")
+		}
+		switch key {
+		case input.CtrlC, input.Enter, input.Return:
+			return found, nil
+		case input.CtrlU:
+			ov.incrementalQuery = ""
+		case input.CtrlS, input.CtrlN:
+			start = found + 1
+		case input.CtrlH, input.Backspace:
+			if len(ov.incrementalQuery) > 0 {
+				ov.incrementalQuery = ov.incrementalQuery[0 : len(ov.incrementalQuery)-1]
+			}
+		default:
+			if isGraphicString(key) {
+				ov.incrementalQuery += key
+			}
+		}
+		const queryPrefix = "(?i)"
+		re, err := regexp.Compile(queryPrefix + ov.incrementalQuery)
+		if err != nil {
+			var err2 error
+			re, err2 = regexp.Compile(queryPrefix + regexp.QuoteMeta(ov.incrementalQuery))
+			if err2 != nil {
+				return -1, fmt.Errorf("can't happen: couldn't regexp compile %q or quotemeta'd %q: %v; %v", ov.incrementalQuery, regexp.QuoteMeta(ov.incrementalQuery), err, err2)
+			}
+		}
+
+		found = -1
+		for found == -1 {
+			ov.incrementalCount = 0
+			ov.incrementalCurrent = 0
+			// Find from here
+			for n, l := range lines {
+				if re.MatchString(l) {
+					ov.incrementalCount++
+					if n >= start && found == -1 {
+						ov.incrementalCurrent = ov.incrementalCount
+						found = n
+					}
+				}
+			}
+			// Found.
+			if found > 0 {
+				break
+			}
+
+			// Not found; wrap.
+			if start != 0 {
+				start = 0
+				continue
+			}
+
+			// Not found even after wrapping.
+			found = 0
+		}
+		ov.Draw(lines, found)
+		ov.screen.Draw()
 	}
 }
 
@@ -471,13 +574,22 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				go func() {
 					ov.update <- struct{}{}
 				}()
-			case "e":
+			case "e": // Archive
 				if err := ov.msg.RemoveLabelID(ctx, cmdg.Inbox); err != nil {
 					ov.errors <- fmt.Errorf("Failed to archive : %v", err)
 				} else {
 					return OpRemoveCurrent(nil), nil
 				}
-			case "t":
+			case "s", input.CtrlS: // Search
+				ns, err := ov.incrementalSearch(ctx, lines)
+				if err != nil {
+					return nil, err
+				}
+				if ns > 0 {
+					scroll = ns
+				}
+				ov.Draw(lines, scroll)
+			case "t": // Attachmments
 				as, err := ov.msg.Attachments(ctx)
 				if err != nil {
 					ov.errors <- fmt.Errorf("Listing attachments failed: %v", err)
