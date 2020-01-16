@@ -64,7 +64,7 @@ func isGraphicString(s string) bool {
 	return true
 }
 
-func hilightIncremental(s string, m [][]int) string {
+func hilightIncremental(s string, m [][]int, format string) string {
 	pos := 0
 	var ret []string
 	for _, h := range m {
@@ -72,7 +72,7 @@ func hilightIncremental(s string, m [][]int) string {
 		if a > pos {
 			ret = append(ret, s[pos:a])
 		}
-		ret = append(ret, fmt.Sprintf("%s%s%s", display.Reverse, s[a:b], display.Reset))
+		ret = append(ret, fmt.Sprintf("%s%s%s", format, s[a:b], display.Reset))
 		pos = b
 	}
 	if pos < len(s) {
@@ -358,10 +358,14 @@ func (ov *OpenMessageView) incrementalSearch(ctx context.Context, inlines []stri
 			for n, l := range lines {
 				if m := re.FindAllStringSubmatchIndex(l, -1); len(m) > 0 {
 					ov.incrementalCount++
-					lines[n] = hilightIncremental(lines[n], m)
 					if n >= start && found == -1 {
+						// Current hit.
 						ov.incrementalCurrent = ov.incrementalCount
 						found = n
+						lines[n] = hilightIncremental(lines[n], m, display.Reverse+display.Yellow)
+					} else {
+						// Other hits that may be visible.
+						lines[n] = hilightIncremental(lines[n], m, display.Reverse)
 					}
 				}
 			}
