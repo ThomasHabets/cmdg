@@ -741,9 +741,15 @@ func (msg *Message) tryGPGSigned(ctx context.Context) error {
 			// TODO: what if it's signed HTML?
 		case "application/pgp-signature":
 			partSig = p
+		case "application/x-pkcs7-signature":
+			log.Warningf("Unsupported signature format: %q", p.MimeType)
 		default:
 			log.Warningf("Found unexpected part in signed packet: %q", p.MimeType)
 		}
+	}
+
+	if partSig == nil {
+		return fmt.Errorf("no supported attached signature")
 	}
 
 	// Fetch attachment.
