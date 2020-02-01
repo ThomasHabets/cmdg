@@ -61,7 +61,8 @@ func (msg *Message) trySMIMESigned(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to parse signer's cert")
 	}
-	log.Infof("Signed: %+v", cert.Subject)
+	// TODO: Verify that GetFrom() is in cert.EmailAddresses. Locking complicates this a bit.
+	log.Infof("Signed subject: %+v, emails: %v", cert.Subject, cert.EmailAddresses)
 	log.Infof("Issuer: %+v", cert.Issuer)
 	msg.gpgStatus = &gpg.Status{
 		GoodSignature: true,

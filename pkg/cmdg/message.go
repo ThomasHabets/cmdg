@@ -341,6 +341,7 @@ func (msg *Message) GetReplyToAll(ctx context.Context) (string, string, error) {
 	return from, strings.Join(cc, ", "), err
 }
 
+// Return email address (not name) of sender.
 func (msg *Message) GetFrom(ctx context.Context) (string, error) {
 	s, err := msg.GetHeader(ctx, "From")
 	if err != nil {
