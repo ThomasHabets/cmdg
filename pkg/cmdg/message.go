@@ -34,12 +34,15 @@ const (
 
 	Unread  = "UNREAD"
 	Starred = "STARRED"
+
+	tmpfilePattern = "cmdg-*"
 )
 
 var (
 	GPG *gpg.GPG
 
-	Lynx = "lynx" // Binary
+	Lynx    = "lynx"    // Binary
+	Openssl = "openssl" // Binary
 
 	ErrMissing = fmt.Errorf("resource missing")
 )
@@ -80,6 +83,7 @@ type Message struct {
 	gpgStatus    *gpg.Status
 	Response     *gmail.Message
 
+	raw         string
 	attachments []*Attachment
 }
 
@@ -102,6 +106,17 @@ func (msg *Message) Attachments(ctx context.Context) ([]*Attachment, error) {
 }
 
 func (msg *Message) Raw(ctx context.Context) (string, error) {
+	msg.m.Lock()
+	defer msg.m.Unlock()
+	return msg.rawNoLock(ctx)
+}
+
+func (msg *Message) rawNoLock(ctx context.Context) (string, error) {
+	// Check cache.
+	if msg.raw != "" {
+		return msg.raw, nil
+	}
+
 	m, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).Format(levelRaw).Context(ctx).Do()
 	if err != nil {
 		return "", err
@@ -110,7 +125,8 @@ func (msg *Message) Raw(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return dec, nil
+	msg.raw = dec
+	return msg.raw, nil
 }
 
 // called with lock held
@@ -717,7 +733,9 @@ func (msg *Message) ReloadLabels(ctx context.Context) error {
 	return nil
 }
 
-func (msg *Message) tryGPGSigned(ctx context.Context) error {
+// try verifying any signatures.
+// CALLED WITH MUTEX HELD
+func (msg *Message) trySigned(ctx context.Context) error {
 	// https://tools.ietf.org/html/rfc3156
 	if msg.Response.Payload.MimeType != "multipart/signed" {
 		return nil
@@ -740,9 +758,10 @@ func (msg *Message) tryGPGSigned(ctx context.Context) error {
 			dec = hp + dec
 			// TODO: what if it's signed HTML?
 		case "application/pgp-signature":
+			// GPG/PGP signed
 			partSig = p
 		case "application/x-pkcs7-signature":
-			log.Warningf("Unsupported signature format: %q", p.MimeType)
+			return msg.trySMIMESigned(ctx)
 		default:
 			log.Warningf("Found unexpected part in signed packet: %q", p.MimeType)
 		}
@@ -954,7 +973,7 @@ func (msg *Message) load(ctx context.Context, level DataLevel) error {
 		if err := msg.tryGPGEncrypted(ctx); err != nil {
 			msg.body = fmt.Sprintf("%sDecrypting GPG: %v%s", display.Red, err, display.Grey)
 		}
-		if err := msg.tryGPGSigned(ctx); err != nil {
+		if err := msg.trySigned(ctx); err != nil {
 			log.Errorf("Checking GPG signature: %v", err)
 		}
 		msg.originalBody = msg.body
