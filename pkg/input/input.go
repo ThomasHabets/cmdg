@@ -151,16 +151,20 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 	// * Wake up CPU at least every 50ms
 	fds := unix.FdSet{}
 	fds.Bits[uint(fd)/unix.NFDBITS] |= (1 << (uint(fd) % unix.NFDBITS))
-	n, err := unix.Select(fd+1, &fds, &unix.FdSet{}, &unix.FdSet{}, duration2Timeval(timeout))
-	if err == syscall.EINTR {
-		log.Warningf("unix.Select() returned EINTR")
-		t := time.Now().Sub(deadline)
-		if t < 0 {
+	var n int
+	var err error
+	for {
+		to := deadline.Sub(time.Now())
+		if to < 0 {
 			return 0, errTimeout
 		}
-		return readByte(fd, t)
+		n, err = unix.Select(fd+1, &fds, &unix.FdSet{}, &unix.FdSet{}, duration2Timeval(to))
+		if err == syscall.EINTR {
+			log.Debugf("unix.Select() returned EINTR")
+		} else {
+			break
+		}
 	}
-
 	if err != nil {
 		return 0, errors.Wrapf(err, "unix.Select()")
 	}
