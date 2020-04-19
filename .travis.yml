@@ -1,6 +1,6 @@
 language: go
 go:
-  - 1.11
+  - 1.13
   - tip
 sudo: false
 install:
