@@ -362,14 +362,17 @@ type Label struct {
 	ID       string
 	Label    string
 	Response *gmail.Label
+	m        sync.Mutex
 }
 
 func (l *Label) LabelString() string {
+	l.m.Lock()
+	defer l.m.Unlock()
 	if l.Response == nil {
 		// This should not be possible.
-		log.Errorf("Label response is nil:")
+		log.Errorf("Label response is nil for label ID %q", l.ID)
 		debug.PrintStack()
-		return "<Internal error: label response nil>"
+		return fmt.Sprintf("<Internal error: label response nil for label ID %q>", l.ID)
 	}
 	if l.Response.Color == nil {
 		return fmt.Sprintf("%s%s", display.Normal, l.Label)
@@ -378,6 +381,8 @@ func (l *Label) LabelString() string {
 }
 
 func (l *Label) LabelColor() string {
+	l.m.Lock()
+	defer l.m.Unlock()
 	if l.Response == nil {
 		return ""
 	}
@@ -417,7 +422,21 @@ func (msg *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, e
 			ID:    l,
 			Label: "<unknown>",
 		}
-		ret = append(ret, msg.conn.LabelCache(l2))
+		// Turn it into a fully lod label, if possible.
+		l3 := msg.conn.LabelCache(l2)
+
+		// Not loaded. Load it.
+		if l3.Response == nil {
+			log.Infof("Late loading of label ID %q", l)
+			l4, err := msg.conn.gmail.Users.Labels.Get(email, l).Context(ctx).Do()
+			if err != nil {
+				log.Errorf("Failed to fetch label ID %q: %v", l, err)
+			}
+			l3.m.Lock()
+			l3.Response = l4
+			l3.m.Unlock()
+		}
+		ret = append(ret, l3)
 	}
 	return ret, nil
 }
