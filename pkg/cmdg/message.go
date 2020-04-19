@@ -648,9 +648,13 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 		log.Debugf("Alt mimetype: %q", p.MimeType)
 		switch p.MimeType {
 		case wantT:
-			ret = append(ret, dec)
+			if len(strings.Trim(dec, "\n\r \t")) > 0 {
+				ret = append(ret, dec)
+			}
 		case acceptT:
-			alt = append(alt, dec)
+			if len(strings.Trim(dec, "\n\r \t")) > 0 {
+				alt = append(alt, dec)
+			}
 		case "multipart/alternative", "multipart/related", "multipart/signed", "multipart/mixed":
 			t, err := makeBodyAlt(ctx, p, preferHTML)
 			if err != nil {
