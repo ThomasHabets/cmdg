@@ -411,10 +411,12 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 		select {
 		case <-ov.keys.Winch():
 			log.Infof("OpenMessageView got WINCH")
+			s := scroll
 			if err := initScreen(); err != nil {
 				// Screen failed to init. Yeah it's time to bail.
 				return nil, err
 			}
+			scroll = s
 			go func() {
 				ov.update <- struct{}{}
 			}()
