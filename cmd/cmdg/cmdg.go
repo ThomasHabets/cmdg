@@ -136,7 +136,7 @@ func main() {
 	}
 
 	if *versionFlag {
-		fmt.Printf("cmdg %s\nhttps://github.com/ThomasHabets/cmdg", version)
+		fmt.Printf("cmdg %s\nhttps://github.com/ThomasHabets/cmdg\n", version)
 		return
 	}
 
