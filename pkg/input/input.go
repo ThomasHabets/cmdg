@@ -181,6 +181,7 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 	} else if n != 1 {
 		return 0, fmt.Errorf("read %d bytes, expected 1", n)
 	}
+	//log.Infof("Read byte: %v", b[0])
 	return b[0], nil
 }
 
@@ -216,6 +217,44 @@ func readKey(fd int) (string, error) {
 	// Construct full key.
 	key := fmt.Sprintf("%c", b)
 	if b != EscChar {
+		if (b & 0xe0) == 0xc0 {
+			// Two-byte UTF-8.
+			b2, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
+			if err != nil {
+				return "", err
+			}
+			return string([]byte{b, b2}), nil
+		}
+		if (b & 0xf0) == 0xe0 {
+			// Three-byte UTF-8.
+			// TODO: untested.
+			b2, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
+			if err != nil {
+				return "", err
+			}
+			b3, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
+			if err != nil {
+				return "", err
+			}
+			return string([]byte{b, b2, b3}), nil
+		}
+		if (b & 0xf8) == 0xf0 {
+			// Four-byte UTF-8.
+			// TODO: untested.
+			b2, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
+			if err != nil {
+				return "", err
+			}
+			b3, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
+			if err != nil {
+				return "", err
+			}
+			b4, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
+			if err != nil {
+				return "", err
+			}
+			return string([]byte{b, b2, b3, b4}), nil
+		}
 		return key, nil
 	}
 
