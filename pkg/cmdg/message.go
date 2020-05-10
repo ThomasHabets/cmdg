@@ -320,25 +320,52 @@ func (msg *Message) GetReplyTo(ctx context.Context) (string, error) {
 	return msg.GetHeader(ctx, "From")
 }
 
+func filteredEmails(from string, cc map[string]bool) []string {
+	var ret []string
+	fa, err := mail.ParseAddress(from)
+	if err != nil {
+		log.Errorf("Failed to parse 'from' address %q: %v", from, err)
+		fa = &mail.Address{ // Dummy entry.
+			Address: "",
+		}
+	}
+	seen := map[string]bool{
+		fa.Address: true,
+	}
+	for s := range cc {
+		a, err := mail.ParseAddress(s)
+		if err != nil {
+			log.Errorf("Failed to parse 'cc' address %q: %v", s, err)
+			ret = append(ret, s)
+			continue
+		}
+		if !seen[a.Address] {
+			ret = append(ret, s)
+			seen[a.Address] = true
+		}
+	}
+	return ret
+}
+
 func (msg *Message) GetReplyToAll(ctx context.Context) (string, string, error) {
 	from, err := msg.GetReplyTo(ctx)
 	if err != nil {
 		return "", "", err
 	}
-	cc := []string{}
+	cc := make(map[string]bool)
 	if f, err := msg.GetHeader(ctx, "From"); err != nil {
 		return "", "", err
 	} else if f != from {
-		cc = append(cc, f)
+		cc[f] = true
 	}
 	if c, err := msg.GetHeader(ctx, "CC"); err == nil && len(c) != 0 {
-		cc = append(cc, c)
+		cc[c] = true
 	}
 	if c, err := msg.GetHeader(ctx, "To"); err == nil && len(c) != 0 {
 		// TODO: if this is not "me"
-		cc = append(cc, c)
+		cc[c] = true
 	}
-	return from, strings.Join(cc, ", "), err
+	return from, strings.Join(filteredEmails(from, cc), ", "), err
 }
 
 // Return email address (not name) of sender.
