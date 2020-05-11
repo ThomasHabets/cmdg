@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
@@ -170,6 +171,23 @@ func Strings2Options(ss []string) []*Option {
 	return ret
 }
 
+// trimOneChar removes bytes until the printed size of the string is reduced.
+// This is used by "backspace".
+func trimOneChar(s string) string {
+	l := runewidth.StringWidth(s)
+	if l == 0 {
+		return s
+	}
+	for c := 1; c <= len(s); c++ {
+		t := s[:len(s)-c]
+		if runewidth.StringWidth(t) < l {
+			return t
+		}
+	}
+	log.Errorf("Can't happen: we cut away all the characters when trimming %q!", s)
+	return s[:len(s)-1]
+}
+
 // Entry asks for a free-form input.
 // Example: Search.
 func Entry(prompt string, keys *input.Input) (string, error) {
@@ -191,9 +209,7 @@ func Entry(prompt string, keys *input.Input) (string, error) {
 			case input.Enter:
 				return cur, nil
 			case input.Backspace, input.CtrlH:
-				if len(cur) > 0 {
-					cur = cur[:len(cur)-1]
-				}
+				cur = trimOneChar(cur)
 			case input.CtrlU:
 				cur = ""
 			case input.CtrlC:
@@ -265,9 +281,7 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 		case input.CtrlC:
 			return nil, ErrAborted
 		case input.Backspace, input.CtrlH:
-			if len(cur) > 0 {
-				cur = cur[:len(cur)-1]
-			}
+			cur = trimOneChar(cur)
 		case input.CtrlU:
 			cur = ""
 		default:

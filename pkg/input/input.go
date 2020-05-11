@@ -219,6 +219,7 @@ func readKey(fd int) (string, error) {
 	if b != EscChar {
 		if (b & 0xe0) == 0xc0 {
 			// Two-byte UTF-8.
+			// Example: ö
 			b2, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
 			if err != nil {
 				return "", err
@@ -227,7 +228,7 @@ func readKey(fd int) (string, error) {
 		}
 		if (b & 0xf0) == 0xe0 {
 			// Three-byte UTF-8.
-			// TODO: untested.
+			// Example: ☃
 			b2, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
 			if err != nil {
 				return "", err
@@ -240,7 +241,7 @@ func readKey(fd int) (string, error) {
 		}
 		if (b & 0xf8) == 0xf0 {
 			// Four-byte UTF-8.
-			// TODO: untested.
+			// Example: 𐍈
 			b2, err := readByte(fd, maxTimeout(deadline, readMultibyteTimeout))
 			if err != nil {
 				return "", err
