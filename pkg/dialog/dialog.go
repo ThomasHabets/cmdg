@@ -173,7 +173,8 @@ func Strings2Options(ss []string) []*Option {
 
 // trimOneChar removes bytes until the printed size of the string is reduced.
 // This is used by "backspace".
-func trimOneChar(s string) string {
+// TODO: should this use utf8.DecodeLastRuneInString to remove one codepoint at a time?
+func TrimOneChar(s string) string {
 	l := runewidth.StringWidth(s)
 	if l == 0 {
 		return s
@@ -209,7 +210,7 @@ func Entry(prompt string, keys *input.Input) (string, error) {
 			case input.Enter:
 				return cur, nil
 			case input.Backspace, input.CtrlH:
-				cur = trimOneChar(cur)
+				cur = TrimOneChar(cur)
 			case input.CtrlU:
 				cur = ""
 			case input.CtrlC:
@@ -281,7 +282,7 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 		case input.CtrlC:
 			return nil, ErrAborted
 		case input.Backspace, input.CtrlH:
-			cur = trimOneChar(cur)
+			cur = TrimOneChar(cur)
 		case input.CtrlU:
 			cur = ""
 		default:

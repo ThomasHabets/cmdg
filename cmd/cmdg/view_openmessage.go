@@ -332,9 +332,7 @@ func (ov *OpenMessageView) incrementalSearch(ctx context.Context, inlines []stri
 		case input.CtrlS, input.CtrlN, input.Enter, input.Return:
 			start = found + 1
 		case input.CtrlH, input.Backspace:
-			if len(ov.incrementalQuery) > 0 {
-				ov.incrementalQuery = ov.incrementalQuery[0 : len(ov.incrementalQuery)-1]
-			}
+			ov.incrementalQuery = dialog.TrimOneChar(ov.incrementalQuery)
 		default:
 			if isGraphicString(key) {
 				ov.incrementalQuery += key

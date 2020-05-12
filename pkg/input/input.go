@@ -217,6 +217,8 @@ func readKey(fd int) (string, error) {
 	// Construct full key.
 	key := fmt.Sprintf("%c", b)
 	if b != EscChar {
+		// TODO: For these multibytes, should they be checked
+		// with utf8.DecodeRune, utf8.FullRune, or utf8.Valid?
 		if (b & 0xe0) == 0xc0 {
 			// Two-byte UTF-8.
 			// Example: ö
