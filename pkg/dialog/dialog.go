@@ -144,6 +144,7 @@ func Question(title string, opts []Option, keys *input.Input) (string, error) {
 	}
 }
 
+// filterSubmatch filters out all options not matching input. Case insensitive.
 func filterSubmatch(opts []*Option, filter string) []*Option {
 	var ret []*Option
 	for _, o := range opts {
