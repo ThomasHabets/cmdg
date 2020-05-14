@@ -26,12 +26,13 @@ type Status struct {
 var (
 	goodSignatureRE = regexp.MustCompile(`(?m)^gpg: Good signature from "(.*)"`)
 	badSignatureRE  = regexp.MustCompile(`(?m)^gpg: BAD signature from "(.*)"`)
-	encryptedRE     = regexp.MustCompile(`(?m)^gpg: encrypted with[^\n]+\n([^\n]+)\n`)
+	encryptedRE     = regexp.MustCompile(`(?m)^gpg: encrypted with[^\n]+\n\s*"([^\n]+)"\n`)
 	unprintableRE   = regexp.MustCompile(`[\033\r]`)
 )
 
 type GPG struct {
-	GPG string
+	GPG        string
+	Passphrase string // For testing.
 }
 
 func New(gpg string) *GPG {
@@ -44,6 +45,13 @@ func (gpg *GPG) Decrypt(ctx context.Context, dec string) (string, *Status, error
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
 	cmd := exec.CommandContext(ctx, gpg.GPG, "--batch", "--no-tty")
+	if gpg.Passphrase != "" {
+		// Used for testing.
+		cmd.Args = append(cmd.Args,
+			"--passphrase", gpg.Passphrase,
+			"--pinentry-mode", "loopback",
+		)
+	}
 	cmd.Stdin = bytes.NewBufferString(dec)
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout

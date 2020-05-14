@@ -11,3 +11,6 @@ install:
   - go get golang.org/x/oauth2
   - go get golang.org/x/text/encoding
   - go get google.golang.org/api/gmail/v1
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq gpg
