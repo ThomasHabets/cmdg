@@ -13,4 +13,4 @@ install:
   - go get google.golang.org/api/gmail/v1
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install -qq gnupg
+  - sudo apt-get install -qq gnupg2
