@@ -3,6 +3,7 @@ package cmdg
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -14,6 +15,13 @@ import (
 const (
 	maxContacts      = 10000
 	contactBatchSize = 50
+)
+
+var (
+	// Valid RFC5322 comment field. Actually this is a bit
+	// restrictive since some other chars are allowed per section
+	// 3.2.3. But this is playing it safe for now.
+	rfc5322commentRE = regexp.MustCompile(`^[A-Za-z0-9]+$`)
 )
 
 func (c *CmdG) Contacts() []string {
@@ -31,6 +39,13 @@ func (c *CmdG) LoadContacts(ctx context.Context) error {
 	defer c.m.Unlock()
 	c.contacts = co
 	return nil
+}
+
+func quoteNameIfNeeded(s string) string {
+	if rfc5322commentRE.MatchString(s) {
+		return s
+	}
+	return fmt.Sprintf("%q", s)
 }
 
 // GetContacts gets all contact's email addresses in "Name Name <email@example.com>" format.
@@ -84,7 +99,7 @@ func (c *CmdG) GetContacts(ctx context.Context) ([]string, error) {
 							pchan <- e.Value
 						} else {
 							if len(name) > 0 {
-								pchan <- fmt.Sprintf(`"%s" <%s>`, name, e.Value)
+								pchan <- fmt.Sprintf(`%s <%s>`, quoteNameIfNeeded(name), e.Value)
 							} else {
 								pchan <- e.Value
 							}
@@ -107,6 +122,8 @@ func (c *CmdG) GetContacts(ctx context.Context) ([]string, error) {
 	for e := range perr {
 		return nil, e
 	}
-	sort.Strings(ret)
+	sort.Slice(ret, func(i, j int) bool {
+		return strings.TrimLeft(ret[i], `"`) < strings.TrimLeft(ret[j], `"`)
+	})
 	return ret, nil
 }
