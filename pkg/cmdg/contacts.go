@@ -80,10 +80,11 @@ func (c *CmdG) GetContacts(ctx context.Context) ([]string, error) {
 					for _, e := range r.Person.EmailAddresses {
 						if strings.Contains(e.Value, " ") {
 							// Name already there.
+							log.Warningf("Contact email address contains a space: %q", e.Value)
 							pchan <- e.Value
 						} else {
 							if len(name) > 0 {
-								pchan <- fmt.Sprintf("%s <%s>", name, e.Value)
+								pchan <- fmt.Sprintf(`"%s" <%s>`, name, e.Value)
 							} else {
 								pchan <- e.Value
 							}
