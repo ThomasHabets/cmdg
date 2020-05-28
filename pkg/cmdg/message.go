@@ -36,6 +36,9 @@ const (
 	Starred = "STARRED"
 
 	tmpfilePattern = "cmdg-*"
+
+	defaultInboxBG = "#ffffff"
+	defaultInboxFG = "#000000"
 )
 
 var (
@@ -393,6 +396,7 @@ type Label struct {
 }
 
 func (l *Label) LabelString() string {
+	c := l.LabelColor()
 	l.m.Lock()
 	defer l.m.Unlock()
 	if l.Response == nil {
@@ -401,10 +405,10 @@ func (l *Label) LabelString() string {
 		debug.PrintStack()
 		return fmt.Sprintf("<Internal error: label response nil for label ID %q>", l.ID)
 	}
-	if l.Response.Color == nil {
-		return fmt.Sprintf("%s%s", display.Normal, l.Label)
+	if c == "" {
+		c = display.Normal
 	}
-	return fmt.Sprintf("%s%s%s", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label, display.Normal)
+	return fmt.Sprintf("%s%s%s", c, l.Label, display.Normal)
 }
 
 func (l *Label) LabelColor() string {
@@ -413,21 +417,42 @@ func (l *Label) LabelColor() string {
 	if l.Response == nil {
 		return ""
 	}
+	var c string
 	if l.Response.Color == nil {
-		return ""
+		if l.ID == Inbox {
+			c = colorMap(defaultInboxFG, defaultInboxBG)
+		} else {
+			return ""
+		}
+	} else {
+		c = colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor)
 	}
-	// TODO: use first *character*, not just first byte.
-	return fmt.Sprintf("%s%c", colorMap(l.Response.Color.TextColor, l.Response.Color.BackgroundColor), l.Label[0])
+	return c
 }
 
-func (msg *Message) GetLabelColors(ctx context.Context) (string, string, error) {
+func (l *Label) LabelColorChar() string {
+	c := l.LabelColor()
+	if c == "" {
+		return ""
+	}
+	l.m.Lock()
+	defer l.m.Unlock()
+	// TODO: use first *character*, not just first byte.
+	return fmt.Sprintf("%s%c", c, l.Label[0])
+}
+
+// Return two strings: Labels with just colors, and one with the label strings in those colors.
+func (msg *Message) GetLabelColors(ctx context.Context, exclude string) (string, string, error) {
 	ls, err := msg.GetLabels(ctx, false)
 	if err != nil {
 		return "", "", err
 	}
 	var ret1, ret2 []string
 	for _, l := range ls {
-		lc := l.LabelColor()
+		if l.ID == exclude {
+			continue
+		}
+		lc := l.LabelColorChar()
 		if lc != "" {
 			ret1 = append(ret1, lc)
 			ret2 = append(ret2, l.LabelString())

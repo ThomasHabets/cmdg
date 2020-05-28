@@ -371,7 +371,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			colors, fullColors, err := curmsg.GetLabelColors(ctx)
+			colors, fullColors, err := curmsg.GetLabelColors(ctx, mv.label)
 			if err != nil {
 				return err
 			}
