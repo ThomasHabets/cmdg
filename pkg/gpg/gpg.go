@@ -56,10 +56,10 @@ func (gpg *GPG) Decrypt(ctx context.Context, dec string) (string, *Status, error
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
 	if err := cmd.Start(); err != nil {
-		return "", nil, errors.Wrapf(err, "failed to start gpg (%q)", gpg.GPG)
+		return "", nil, errors.Wrapf(err, "failed to start gpg (%q): %q", gpg.GPG, stderr.String())
 	}
 	if err := cmd.Wait(); err != nil {
-		return "", nil, errors.Wrapf(err, "gpg decrypt failed")
+		return "", nil, errors.Wrapf(err, "gpg decrypt failed: %q", stderr.String())
 	}
 	status := &Status{}
 	if m := goodSignatureRE.FindStringSubmatch(stderr.String()); m != nil {
