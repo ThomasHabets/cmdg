@@ -13,11 +13,20 @@ import (
 )
 
 const (
-	gpg               = "gpg"
 	testKeyPassphrase = "abc123"
+	gpg2              = "gpg2"
+)
+
+var (
+	gpg = "gpg"
 )
 
 func TestMain(m *testing.M) {
+	// Check for gpg2 binary, and use that if it exists.
+	if err := exec.Command(gpg2, "--version").Run(); err == nil {
+		gpg = gpg2
+	}
+
 	dir, err := ioutil.TempDir("", "gpg-test")
 	if err != nil {
 		log.Fatalf("Failed to create tempdir: %v", err)
@@ -27,12 +36,12 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(dir)
 
 	// Create key.
-	cmd := exec.Command("gpg", "--batch", "--import", "test/thomas@habets.se.pub")
+	cmd := exec.Command(gpg, "--batch", "--import", "test/thomas@habets.se.pub")
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("Failed to import author key: %v", err)
 	}
 
-	cmd = exec.Command("gpg", "--batch", "--gen-key", "-")
+	cmd = exec.Command(gpg, "--batch", "--gen-key", "-")
 	cmd.Stdin = strings.NewReader(`%echo Generating a basic OpenPGP key
      Key-Type: DSA
      Key-Length: 1024
@@ -198,7 +207,7 @@ func TestDecrypt(t *testing.T) {
 	ctx := context.Background()
 
 	var enc bytes.Buffer
-	cmd := exec.CommandContext(ctx, "gpg", "--batch", "-a", "-e", "-r", "test@example.com")
+	cmd := exec.CommandContext(ctx, gpg, "--batch", "-a", "-e", "-r", "test@example.com")
 	cmd.Stdin = strings.NewReader("test message")
 	cmd.Stdout = &enc
 	if err := cmd.Run(); err != nil {
