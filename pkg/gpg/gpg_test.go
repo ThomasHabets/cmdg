@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Failed to import author key: %v", err)
 	}
 
-	cmd = exec.Command("gpg", "--batch", "--generate-key", "-")
+	cmd = exec.Command("gpg", "--batch", "--gen-key", "-")
 	cmd.Stdin = strings.NewReader(`%echo Generating a basic OpenPGP key
      Key-Type: DSA
      Key-Length: 1024
