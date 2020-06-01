@@ -791,6 +791,7 @@ func (msg *Message) GetUnpatchedBody(ctx context.Context) (string, error) {
 }
 
 func (msg *Message) ReloadLabels(ctx context.Context) error {
+	log.Debugf("Reloading labels of %q %s", msg.ID, string(debug.Stack()))
 	msg2, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).
 		Format(string(LevelMinimal)).
 		Context(ctx).
@@ -1018,6 +1019,7 @@ func (msg *Message) Preload(ctx context.Context, level DataLevel) error {
 
 func (msg *Message) load(ctx context.Context, level DataLevel) error {
 	st := time.Now()
+	log.Debugf("Loading message %q at level %v, stack %s", msg.ID, level, string(debug.Stack()))
 	msg2, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).
 		Format(string(level)).
 		Context(ctx).
@@ -1100,7 +1102,7 @@ func (d *Draft) load(ctx context.Context, level DataLevel) error {
 	if d.HasData(level) {
 		return nil
 	}
-
+	log.Debugf("Loading draft %q at level %v %s", d.ID, level, string(debug.Stack()))
 	r, err := d.conn.gmail.Users.Drafts.Get(email, d.ID).Context(ctx).Format(string(level)).Do()
 	if err != nil {
 		return err
