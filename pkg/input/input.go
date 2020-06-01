@@ -160,7 +160,7 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 		}
 		n, err = unix.Select(fd+1, &fds, &unix.FdSet{}, &unix.FdSet{}, duration2Timeval(to))
 		if err == syscall.EINTR {
-			log.Debugf("unix.Select() returned EINTR")
+			// log.Debugf("unix.Select() returned EINTR")
 		} else {
 			break
 		}
