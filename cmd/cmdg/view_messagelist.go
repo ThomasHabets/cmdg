@@ -391,8 +391,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			s += reset
 		} else {
 			go func(cur int) {
-				curmsg.Preload(ctx, cmdg.LevelMetadata)
-				mv.messageCh <- curmsg
+				if err := curmsg.Preload(ctx, cmdg.LevelMetadata); err != nil {
+					log.Warningf("Failed to load metadata for email ID %s: %v", curmsg.ID, err)
+				} else {
+					mv.messageCh <- curmsg
+				}
 			}(cur)
 		}
 
