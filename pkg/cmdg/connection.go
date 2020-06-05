@@ -463,6 +463,22 @@ func (c *CmdG) BatchArchive(ctx context.Context, ids []string) error {
 	}).Context(ctx).Do()
 }
 
+// BatchDelete deletes. Does not put in trash. Does not pass go:
+// "Immediately and permanently deletes the specified message. This operation cannot be undone."
+//
+// cmdg doesn't actually request oauth permission to do this, so this function is never used.
+// Instead BatchTrash is used.
+func (c *CmdG) BatchDelete(ctx context.Context, ids []string) error {
+	return c.gmail.Users.Messages.BatchDelete(email, &gmail.BatchDeleteMessagesRequest{
+		Ids: ids,
+	}).Context(ctx).Do()
+}
+
+// There isn't actually a BatchTrash, so we'll pretend labels.
+func (c *CmdG) BatchTrash(ctx context.Context, ids []string) error {
+	return c.BatchLabel(ctx, ids, Trash)
+}
+
 func (c *CmdG) BatchLabel(ctx context.Context, ids []string, labelID string) error {
 	return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
 		Ids:         ids,

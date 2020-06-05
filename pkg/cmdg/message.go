@@ -29,6 +29,7 @@ import (
 
 const (
 	Inbox = "INBOX"
+	Trash = "TRASH"
 
 	// Special labels.
 

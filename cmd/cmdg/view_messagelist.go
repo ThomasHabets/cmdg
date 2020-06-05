@@ -25,6 +25,7 @@ enter              — Open message
 space, x           — Mark message and advance
 X                  — Mark message and step up
 e                  — Archive marked messages
+d                  — Move marked messages to trash
 l                  — Label marked messages
 L                  — Unlabel marked messages
 *                  — Toggle starred on hilighted message
@@ -105,6 +106,27 @@ func NewMessageView(ctx context.Context, label, q string, in *input.Input) *Mess
 	}
 	go v.fetchPage(ctx, "")
 	return v
+}
+
+// returns:
+// * true if doing anything. If this is 'false' then don't use other two returns.
+// * new list of messages
+// * an offset of how much pos should go back by after removal
+func (mv *MessageView) applyMarked(ctx context.Context, name string, op func(context.Context, []string) error, marked map[string]bool) (bool, []*cmdg.Message, int) {
+	ids, nm, ofs := filterMarked(mv.messages, marked, mv.pos)
+	if len(ids) == 0 {
+		log.Infof("No marked messages to do do operation %q on", name)
+		return false, nil, 0
+	}
+	go func() {
+		st := time.Now()
+		if err := op(ctx, ids); err != nil {
+			mv.errors <- errors.Wrapf(err, "batch operation %q failed", name)
+		}
+		log.Infof("Batch operation %q on %d messages: %v", name, len(ids), time.Since(st))
+	}()
+	log.Infof("Batch operation %q on %d messages (in background)", name, len(ids))
+	return true, nm, ofs
 }
 
 func (mv *MessageView) fetchPage(ctx context.Context, token string) {
@@ -686,18 +708,10 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					return err
 				}
 			case "e":
-				ids, nm, ofs := filterMarked(mv.messages, marked, mv.pos)
-				if len(ids) == 0 {
+				ok, nm, ofs := mv.applyMarked(ctx, "archive", conn.BatchArchive, marked)
+				if !ok {
 					break
 				}
-				go func() {
-					st := time.Now()
-					if err := conn.BatchArchive(ctx, ids); err != nil {
-						mv.errors <- errors.Wrapf(err, "Batch archiving")
-					}
-					log.Infof("Batch archived %d: %v", len(ids), time.Since(st))
-				}()
-				log.Infof("Batch archiving %d (in background)", len(ids))
 				if mv.label == cmdg.Inbox {
 					mv.pos -= ofs
 					scroll -= ofs
@@ -708,6 +722,20 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					marked = map[string]bool{}
 					mkMessagePos()
 				}
+			case "d":
+				ok, nm, ofs := mv.applyMarked(ctx, "delete", conn.BatchTrash, marked)
+				if !ok {
+					break
+				}
+				mv.pos -= ofs
+				scroll -= ofs
+				if scroll < 0 {
+					scroll = 0
+				}
+				mv.messages = nm
+				marked = map[string]bool{}
+				mkMessagePos()
+
 			case "*":
 				// TODO: Because it's a toggle this is not suitable for batch operation.
 				curmsg := mv.messages[mv.pos]
