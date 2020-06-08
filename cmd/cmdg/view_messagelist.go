@@ -10,11 +10,13 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
+	"google.golang.org/api/gmail/v1"
+	"google.golang.org/api/googleapi"
+
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
 	"github.com/ThomasHabets/cmdg/pkg/dialog"
 	"github.com/ThomasHabets/cmdg/pkg/display"
 	"github.com/ThomasHabets/cmdg/pkg/input"
-	gmail "google.golang.org/api/gmail/v1"
 )
 
 const (
@@ -87,6 +89,7 @@ type MessageView struct {
 	pageCh          chan *cmdg.Page
 	messageCh       chan *cmdg.Message
 	historyUpdateCh chan historyUpdate
+	removeMessage   chan string
 
 	// Only for use by main thread.
 	messages  []*cmdg.Message
@@ -270,6 +273,21 @@ func filterMarked(msgs []*cmdg.Message, marked map[string]bool, pos int) ([]stri
 	return ids, ms, ofs
 }
 
+func filterMessage(msgs []*cmdg.Message, id string, pos int) ([]*cmdg.Message, int) {
+	var ret []*cmdg.Message
+
+	for n, msg := range msgs {
+		if msg.ID == id {
+			if n < pos {
+				pos--
+			}
+			continue
+		}
+		ret = append(ret, msg)
+	}
+	return ret, pos
+}
+
 func (mv *MessageView) historyCheck(ctx context.Context) error {
 	hists, hid, err := conn.History(ctx, mv.historyID, mv.label)
 	if err != nil {
@@ -415,6 +433,12 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			go func(cur int) {
 				if err := curmsg.Preload(ctx, cmdg.LevelMetadata); err != nil {
 					log.Warningf("Failed to load metadata for email ID %s: %v", curmsg.ID, err)
+					if e, ok := errors.Cause(err).(*googleapi.Error); ok {
+						log.Warningf("Failing to load was googleapi error %+v", e)
+						if e.Code == 404 {
+							mv.removeMessage <- curmsg.ID
+						}
+					}
 				} else {
 					mv.messageCh <- curmsg
 				}
@@ -651,6 +675,10 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					theresMore = false
 				}
 			}
+			mkMessagePos()
+
+		case id := <-mv.removeMessage:
+			mv.messages, mv.pos = filterMessage(mv.messages, id, mv.pos)
 			mkMessagePos()
 
 		case key, ok := <-mv.keys.Chan():
