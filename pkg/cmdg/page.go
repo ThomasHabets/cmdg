@@ -7,6 +7,7 @@ import (
 	gmail "google.golang.org/api/gmail/v1"
 )
 
+// Page implements some pagination thingy. TODO: document better.
 type Page struct {
 	Label string
 	Query string
@@ -18,6 +19,7 @@ type Page struct {
 	Response *gmail.ListMessagesResponse
 }
 
+// Next return the next page.
 func (p *Page) Next(ctx context.Context) (*Page, error) {
 	return p.conn.ListMessages(ctx, p.Label, p.Query, p.Response.NextPageToken)
 }

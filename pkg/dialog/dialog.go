@@ -172,7 +172,7 @@ func Strings2Options(ss []string) []*Option {
 	return ret
 }
 
-// trimOneChar removes bytes until the printed size of the string is reduced.
+// TrimOneChar removes bytes until the printed size of the string is reduced.
 // This is used by "backspace".
 // TODO: should this use utf8.DecodeLastRuneInString to remove one codepoint at a time?
 func TrimOneChar(s string) string {

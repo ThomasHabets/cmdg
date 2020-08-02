@@ -36,12 +36,17 @@ const (
 
 	accessType = "offline"
 	email      = "me"
+)
 
+// Different levels of detail to download.
+const (
 	LevelEmpty    DataLevel = ""         // Nothing
 	LevelMinimal  DataLevel = "minimal"  // ID, labels
 	LevelMetadata DataLevel = "metadata" // ID, labels, headers
 	LevelFull     DataLevel = "full"     // ID, labels, headers, payload
+)
 
+const (
 	// Not so much a level as a separate request. Type `string` so that it won't be usable as a `DataLevel`.
 	levelRaw string = "RAW"
 
@@ -49,19 +54,28 @@ const (
 )
 
 var (
-	Version            = "unspecified"
-	NewThread ThreadID = ""
+	// Version is the app version as reported in RPCs.
+	Version = "unspecified"
+
+	// NewThread is the thread ID to use for new threads.
+	NewThread ThreadID
 
 	shouldLogRPC = flag.Bool("log_rpc", false, "Log all RPCs.")
 	socks5       = flag.String("socks5", "", "Use SOCKS5 proxy. host:port")
 )
 
 type (
+	// DataLevel is the level of detail to download.
 	DataLevel string
+
+	// HistoryID is a sparse timeline of numbers.
 	HistoryID uint64
-	ThreadID  string
+
+	// ThreadID is IDs of threads.
+	ThreadID string
 )
 
+// CmdG is the main app for cmdg. It holds both rpc clients and various caches. Everything except the UI.
 type CmdG struct {
 	m            sync.RWMutex
 	authedClient *http.Client
@@ -77,6 +91,7 @@ func userAgent() string {
 	return "cmdg " + Version
 }
 
+// MessageCache returns the message from the cache, or nil if not found.
 func (c *CmdG) MessageCache(msg *Message) *Message {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -87,6 +102,7 @@ func (c *CmdG) MessageCache(msg *Message) *Message {
 	return msg
 }
 
+// LabelCache returns the label fro the cache, or nil if not found.
 func (c *CmdG) LabelCache(label *Label) *Label {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -97,6 +113,7 @@ func (c *CmdG) LabelCache(label *Label) *Label {
 	return label
 }
 
+// NewFake creates a fake client, used for testing.
 func NewFake(client *http.Client) (*CmdG, error) {
 	conn := &CmdG{
 		authedClient: client,
@@ -104,6 +121,7 @@ func NewFake(client *http.Client) (*CmdG, error) {
 	return conn, conn.setupClients()
 }
 
+// New creates a new CmdG.
 func New(fn string) (*CmdG, error) {
 	conn := &CmdG{
 		messageCache: make(map[string]*Message),
@@ -221,6 +239,7 @@ func logRPC(st time.Time, err error, s string, args ...interface{}) {
 	}
 }
 
+// LoadLabels batch loads all labels into the cache.
 func (c *CmdG) LoadLabels(ctx context.Context) error {
 	// Load initial labels.
 	st := time.Now()
@@ -245,6 +264,7 @@ func (c *CmdG) LoadLabels(ctx context.Context) error {
 	return nil
 }
 
+// Labels returns a list of all labels.
 func (c *CmdG) Labels() []*Label {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -264,6 +284,7 @@ func (c *CmdG) Labels() []*Label {
 	return ret
 }
 
+// GetProfile returns the profile for the current user.
 func (c *CmdG) GetProfile(ctx context.Context) (*gmail.Profile, error) {
 	var ret *gmail.Profile
 	err := wrapLogRPC("gmail.Users.GetProfile", func() (err error) {
@@ -273,11 +294,13 @@ func (c *CmdG) GetProfile(ctx context.Context) (*gmail.Profile, error) {
 	return ret, err
 }
 
+// Part is a part of a message. Contents and header.
 type Part struct {
 	Contents string
 	Header   textproto.MIMEHeader
 }
 
+// FullString returns the "serialized" part.
 func (p *Part) FullString() string {
 	var hs []string
 	for k, vs := range p.Header {
@@ -393,6 +416,7 @@ func (c *CmdG) send(ctx context.Context, threadID ThreadID, msg string) (err err
 	}, "email=%q threadID=%q msg=%q", email, threadID, msg)
 }
 
+// PutFile uploads a file into the config dir on Google drive.
 func (c *CmdG) PutFile(ctx context.Context, fn string, contents []byte) error {
 	const name = "signature.txt"
 	const folder = appDataFolder
@@ -433,6 +457,7 @@ func (c *CmdG) getFileID(ctx context.Context, fn string) (string, error) {
 	return "", os.ErrNotExist
 }
 
+// UpdateFile updates an existing file on Google drive in the config folder..
 func (c *CmdG) UpdateFile(ctx context.Context, fn string, contents []byte) error {
 	id, err := c.getFileID(ctx, fn)
 	if err != nil {
@@ -462,6 +487,7 @@ func (c *CmdG) UpdateFile(ctx context.Context, fn string, contents []byte) error
 	return nil
 }
 
+// GetFile downloads a file from the config folder.
 func (c *CmdG) GetFile(ctx context.Context, fn string) ([]byte, error) {
 	var token string
 	for {
@@ -496,6 +522,7 @@ func (c *CmdG) GetFile(ctx context.Context, fn string) ([]byte, error) {
 	return nil, os.ErrNotExist
 }
 
+// MakeDraft creates a new draft.
 func (c *CmdG) MakeDraft(ctx context.Context, msg string) error {
 	return wrapLogRPC("gmail.Users.Drafts.Create", func() error {
 		_, err := c.gmail.Users.Drafts.Create(email, &gmail.Draft{
@@ -507,6 +534,7 @@ func (c *CmdG) MakeDraft(ctx context.Context, msg string) error {
 	}, "email=%q msg=%q", email, msg)
 }
 
+// BatchArchive archives all the given message IDs.
 func (c *CmdG) BatchArchive(ctx context.Context, ids []string) error {
 	return wrapLogRPC("gmail.Users.Messages.BatchModify", func() error {
 		return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
@@ -529,11 +557,14 @@ func (c *CmdG) BatchDelete(ctx context.Context, ids []string) error {
 	}, "email=%q ids=%v", email, ids)
 }
 
-// There isn't actually a BatchTrash, so we'll pretend labels.
+// BatchTrash trashes the messages.
+//
+// There isn't actually a BatchTrash, so we'll pretend with just labels.
 func (c *CmdG) BatchTrash(ctx context.Context, ids []string) error {
 	return c.BatchLabel(ctx, ids, Trash)
 }
 
+// BatchLabel adds one new label to many messages.
 func (c *CmdG) BatchLabel(ctx context.Context, ids []string, labelID string) error {
 	return wrapLogRPC("gmail.Users.Messages.BatchModify", func() error {
 		return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
@@ -543,6 +574,7 @@ func (c *CmdG) BatchLabel(ctx context.Context, ids []string, labelID string) err
 	}, "email=%q add_labelID=%v ids=%v", email, labelID, ids)
 }
 
+// BatchUnlabel removes one label from many messages.
 func (c *CmdG) BatchUnlabel(ctx context.Context, ids []string, labelID string) (err error) {
 	return wrapLogRPC("gmail.Users.Messages.BatchModify", func() error {
 		return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
@@ -552,6 +584,7 @@ func (c *CmdG) BatchUnlabel(ctx context.Context, ids []string, labelID string) (
 	}, "email=%q remove_labelID=%v ids=%v", email, labelID, ids)
 }
 
+// HistoryID returns the current history ID.
 func (c *CmdG) HistoryID(ctx context.Context) (HistoryID, error) {
 	var p *gmail.Profile
 	err := wrapLogRPC("gmail.Users.GetProfile", func() (err error) {
@@ -597,6 +630,7 @@ func (c *CmdG) History(ctx context.Context, startID HistoryID, labelID string) (
 	return ret, h, nil
 }
 
+// ListMessages lists messages in a given label or query, with optional page token.
 func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*Page, error) {
 	const fields = "messages,resultSizeEstimate,nextPageToken"
 	nres := int64(pageSize)
@@ -633,6 +667,7 @@ func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*P
 	return p, nil
 }
 
+// ListDrafts lists all drafts.
 func (c *CmdG) ListDrafts(ctx context.Context) ([]*Draft, error) {
 	var ret []*Draft
 	if err := wrapLogRPC("gmail.Users.Drafts.List", func() error {

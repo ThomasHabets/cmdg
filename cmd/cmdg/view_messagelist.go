@@ -78,6 +78,7 @@ func (c *concurrency) Done() {
 	<-c.lock
 }
 
+// MessageView is the state for a message view.
 type MessageView struct {
 	// Static state.
 	label string
@@ -97,6 +98,7 @@ type MessageView struct {
 	historyID cmdg.HistoryID
 }
 
+// NewMessageView creates a new message view.
 func NewMessageView(ctx context.Context, label, q string, in *input.Input) *MessageView {
 	v := &MessageView{
 		label:           label,
@@ -163,6 +165,7 @@ func (mv *MessageView) fetchPage(ctx context.Context, token string) {
 	mv.pageCh <- page
 }
 
+// MessageViewOp is an operation to perform as the message closes.
 type MessageViewOp struct {
 	fun         func(*MessageView)
 	quit        bool
@@ -172,6 +175,7 @@ type MessageViewOp struct {
 	next *MessageViewOp
 }
 
+// Do does the op.
 func (op *MessageViewOp) Do(view *MessageView) {
 	if op == nil {
 		return
@@ -184,6 +188,7 @@ func (op *MessageViewOp) Do(view *MessageView) {
 	}
 }
 
+// IsQuit returns if op is `quit`.
 func (op *MessageViewOp) IsQuit(view *MessageView) bool {
 	if op == nil {
 		return false
@@ -194,6 +199,7 @@ func (op *MessageViewOp) IsQuit(view *MessageView) bool {
 	return op.next.IsQuit(view)
 }
 
+// IsNext returns if op is `next`.
 func (op *MessageViewOp) IsNext(view *MessageView) bool {
 	if op == nil {
 		return false
@@ -204,6 +210,7 @@ func (op *MessageViewOp) IsNext(view *MessageView) bool {
 	return op.next.IsNext(view)
 }
 
+// IsPrev returns if op is `prev`
 func (op *MessageViewOp) IsPrev(view *MessageView) bool {
 	if op == nil {
 		return false
@@ -214,6 +221,7 @@ func (op *MessageViewOp) IsPrev(view *MessageView) bool {
 	return op.next.IsPrev(view)
 }
 
+// OpRemoveCurrent creates an op to remove current message from a list.
 func OpRemoveCurrent(next *MessageViewOp) *MessageViewOp {
 	return &MessageViewOp{
 		fun: func(view *MessageView) {
@@ -227,18 +235,21 @@ func OpRemoveCurrent(next *MessageViewOp) *MessageViewOp {
 	}
 }
 
+// OpQuit creates an op to quit.
 func OpQuit() *MessageViewOp {
 	return &MessageViewOp{
 		quit: true,
 	}
 }
 
+// OpPrev creates an op to go to prev message.
 func OpPrev() *MessageViewOp {
 	return &MessageViewOp{
 		prevMessage: true,
 	}
 }
 
+// OpNext creates an op to go to the next message.
 func OpNext() *MessageViewOp {
 	return &MessageViewOp{
 		nextMessage: true,
@@ -340,6 +351,7 @@ func (mv *MessageView) historyCheck(ctx context.Context) error {
 	return nil
 }
 
+// Run runs the messagelist view.
 func (mv *MessageView) Run(ctx context.Context) error {
 	log.Infof("Running MessageView")
 	// TODO: defer a sync.WaitGroup.Wait() waiting on all goroutines spawned.

@@ -16,6 +16,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Status contains success or fail of a GPG operation.
 type Status struct {
 	Signed        string
 	Encrypted     []string
@@ -30,17 +31,20 @@ var (
 	unprintableRE   = regexp.MustCompile(`[\033\r]`)
 )
 
+// GPG is a gpg handle.
 type GPG struct {
 	GPG        string
 	Passphrase string // For testing.
 }
 
+// New creates a new GPG.
 func New(gpg string) *GPG {
 	return &GPG{
 		GPG: gpg,
 	}
 }
 
+// Decrypt decrypts a message.
 func (gpg *GPG) Decrypt(ctx context.Context, dec string) (string, *Status, error) {
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
@@ -75,6 +79,7 @@ func (gpg *GPG) Decrypt(ctx context.Context, dec string) (string, *Status, error
 	return stdout.String(), status, nil
 }
 
+// Verify verifies a message.
 func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
 	dir, err := ioutil.TempDir("", "gpg-signature")
 	if err != nil {
@@ -130,6 +135,7 @@ func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
 	return status, nil
 }
 
+// VerifyInline verifies non-detached signatures.
 func (gpg *GPG) VerifyInline(ctx context.Context, data string) (*Status, error) {
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, gpg.GPG, "--verify", "--no-tty", "-")

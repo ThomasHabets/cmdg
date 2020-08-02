@@ -27,15 +27,15 @@ import (
 	"github.com/ThomasHabets/cmdg/pkg/gpg"
 )
 
+// Special labels.
 const (
-	Inbox = "INBOX"
-	Trash = "TRASH"
-
-	// Special labels.
-
+	Inbox   = "INBOX"
+	Trash   = "TRASH"
 	Unread  = "UNREAD"
 	Starred = "STARRED"
+)
 
+const (
 	tmpfilePattern = "cmdg-*"
 
 	defaultInboxBG = "#ffffff"
@@ -43,14 +43,20 @@ const (
 )
 
 var (
+	// GPG is the handle to a GPG config.
 	GPG *gpg.GPG
 
-	Lynx    = "lynx"    // Binary
-	Openssl = "openssl" // Binary
+	// Lynx is the executable to use as web browser to use to render HTML to text.
+	Lynx = "lynx"
 
+	// Openssl is the executable is used to verify some signatures.
+	Openssl = "openssl"
+
+	// ErrMissing is used e.g. if a header is not present. As opposed to malformed.
 	ErrMissing = fmt.Errorf("resource missing")
 )
 
+// Attachment is an attachment.
 type Attachment struct {
 	ID       string
 	MsgID    string
@@ -59,6 +65,7 @@ type Attachment struct {
 	Part     *gmail.MessagePart
 }
 
+// Download downloads an attachment.
 func (a *Attachment) Download(ctx context.Context) ([]byte, error) {
 	if a.contents != nil {
 		return a.contents, nil
@@ -78,6 +85,7 @@ func (a *Attachment) Download(ctx context.Context) ([]byte, error) {
 	return []byte(d), nil
 }
 
+// Message is an email message.
 type Message struct {
 	m       sync.RWMutex
 	conn    *CmdG
@@ -95,6 +103,7 @@ type Message struct {
 	attachments []*Attachment
 }
 
+// ThreadID returns the thread ID of the message.
 func (msg *Message) ThreadID(ctx context.Context) (ThreadID, error) {
 	if err := msg.Preload(ctx, LevelMinimal); err != nil {
 		return NewThread, err
@@ -104,6 +113,7 @@ func (msg *Message) ThreadID(ctx context.Context) (ThreadID, error) {
 	return ThreadID(msg.Response.ThreadId), nil
 }
 
+// Attachments returns a list of attachments.
 func (msg *Message) Attachments(ctx context.Context) ([]*Attachment, error) {
 	if err := msg.Preload(ctx, LevelFull); err != nil {
 		return nil, err
@@ -113,6 +123,7 @@ func (msg *Message) Attachments(ctx context.Context) ([]*Attachment, error) {
 	return msg.attachments, nil
 }
 
+// Raw returns the raw message.
 func (msg *Message) Raw(ctx context.Context) (string, error) {
 	msg.m.Lock()
 	defer msg.m.Unlock()
@@ -160,16 +171,20 @@ func (msg *Message) annotateAttachments() error {
 	return nil
 }
 
+// GPGStatus returns an annotated GPG status.
 func (msg *Message) GPGStatus() *gpg.Status {
 	return msg.gpgStatus
 }
 
+// NewMessage creates a new message.
 func NewMessage(c *CmdG, msgID string) *Message {
 	return c.MessageCache(&Message{
 		conn: c,
 		ID:   msgID,
 	})
 }
+
+// NewMessageWithResponse creates a new message from data already received from the gmail API.
 func NewMessageWithResponse(c *CmdG, msgID string, resp *gmail.Message, level DataLevel) *Message {
 	m := NewMessage(c, msgID)
 	m.Response = resp
@@ -198,10 +213,12 @@ func (msg *Message) HasData(level DataLevel) bool {
 	return hasData(msg.level, level)
 }
 
+// IsUnread returns if the UNREAD label is set.
 func (msg *Message) IsUnread() bool {
 	return msg.HasLabel(Unread)
 }
 
+// HasLabel checks for a given labelID.
 func (msg *Message) HasLabel(labelID string) bool {
 	msg.m.Lock()
 	defer msg.m.Unlock()
@@ -216,6 +233,7 @@ func (msg *Message) HasLabel(labelID string) bool {
 	return false
 }
 
+// RemoveLabelID removes a label.
 func (msg *Message) RemoveLabelID(ctx context.Context, labelID string) error {
 	var nm *gmail.Message
 	st := time.Now()
@@ -306,7 +324,7 @@ func (msg *Message) AddLabelID(ctx context.Context, labelID string) error {
 	return nil
 }
 
-// ParseTime tries a few time formats and returns the one that works.
+// parseTime tries a few time formats and returns the one that works.
 func parseTime(s string) (time.Time, error) {
 	var t time.Time
 	var err error
@@ -332,6 +350,7 @@ func parseTime(s string) (time.Time, error) {
 	return t, err
 }
 
+// GetReplyTo returns the address to use for replies as the `To` line.
 func (msg *Message) GetReplyTo(ctx context.Context) (string, error) {
 	s, err := msg.GetHeader(ctx, "Reply-To")
 	if err == nil && s != "" {
@@ -367,6 +386,7 @@ func filteredEmails(from string, cc map[string]bool) []string {
 	return ret
 }
 
+// GetReplyToAll returns both To and CC lines for reply-all.
 func (msg *Message) GetReplyToAll(ctx context.Context) (string, string, error) {
 	from, err := msg.GetReplyTo(ctx)
 	if err != nil {
@@ -388,7 +408,7 @@ func (msg *Message) GetReplyToAll(ctx context.Context) (string, string, error) {
 	return from, strings.Join(filteredEmails(from, cc), ", "), err
 }
 
-// Return email address (not name) of sender.
+// GetFrom returns email address (not name) of sender.
 func (msg *Message) GetFrom(ctx context.Context) (string, error) {
 	s, err := msg.GetHeader(ctx, "From")
 	if err != nil {
@@ -405,6 +425,7 @@ func (msg *Message) GetFrom(ctx context.Context) (string, error) {
 	return a.Address, nil
 }
 
+// Label is a gmail label.
 type Label struct {
 	ID       string
 	Label    string
@@ -412,6 +433,7 @@ type Label struct {
 	m        sync.Mutex
 }
 
+// LabelString is the string of the label.
 func (l *Label) LabelString() string {
 	c := l.LabelColor()
 	l.m.Lock()
@@ -428,6 +450,7 @@ func (l *Label) LabelString() string {
 	return fmt.Sprintf("%s%s%s", c, l.Label, display.Normal)
 }
 
+// LabelColor returns an ANSI escape to render this label's color.
 func (l *Label) LabelColor() string {
 	l.m.Lock()
 	defer l.m.Unlock()
@@ -447,6 +470,7 @@ func (l *Label) LabelColor() string {
 	return c
 }
 
+// LabelColorChar returns a full string to render just one char wide label.
 func (l *Label) LabelColorChar() string {
 	c := l.LabelColor()
 	if c == "" {
@@ -458,7 +482,7 @@ func (l *Label) LabelColorChar() string {
 	return fmt.Sprintf("%s%c", c, l.Label[0])
 }
 
-// Return two strings: Labels with just colors, and one with the label strings in those colors.
+// GetLabelColors returns two strings: Labels with just colors, and one with the label strings in those colors.
 func (msg *Message) GetLabelColors(ctx context.Context, exclude string) (string, string, error) {
 	ls, err := msg.GetLabels(ctx, false)
 	if err != nil {
@@ -478,6 +502,7 @@ func (msg *Message) GetLabelColors(ctx context.Context, exclude string) (string,
 	return strings.Join(ret1, ""), strings.Join(ret2, " "), nil
 }
 
+// GetLabels returns all labels for the message.
 func (msg *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, error) {
 	if err := msg.Preload(ctx, LevelMinimal); err != nil {
 		return nil, err
@@ -624,6 +649,7 @@ func (msg *Message) GetLabelsString(ctx context.Context) (string, error) {
 	return strings.Join(s, ", "), nil
 }
 
+// GetOriginalTime returns the timestamp as claimed by the headers in its original timezone.
 func (msg *Message) GetOriginalTime(ctx context.Context) (time.Time, error) {
 	s, err := msg.GetHeader(ctx, "Date")
 	if err != nil {
@@ -636,12 +662,14 @@ func (msg *Message) GetOriginalTime(ctx context.Context) (time.Time, error) {
 	return ts, err
 }
 
+// GetTime returns the message's time in the local timezone.
 func (msg *Message) GetTime(ctx context.Context) (time.Time, error) {
 	ts, err := msg.GetOriginalTime(ctx)
 	ts = ts.Local()
 	return ts, err
 }
 
+// GetTimeFmt returns a `time` format string appropriate for the age of the message.
 func (msg *Message) GetTimeFmt(ctx context.Context) (string, error) {
 	ts, err := msg.GetTime(ctx)
 	if err != nil {
@@ -656,6 +684,7 @@ func (msg *Message) GetTimeFmt(ctx context.Context) (string, error) {
 	return ts.Format("15:04"), nil
 }
 
+// GetHeader returns a header.
 func (msg *Message) GetHeader(ctx context.Context, k string) (string, error) {
 	if err := msg.Preload(ctx, LevelMetadata); err != nil {
 		return "", err
@@ -667,13 +696,15 @@ func (msg *Message) GetHeader(ctx context.Context, k string) (string, error) {
 	return "", errors.Wrapf(ErrMissing, "header not found in msg %q: %q", msg.ID, k)
 }
 
-// mime decode for gmail. Seems to be special version of base64.
+// MIMEEncode does mime decode for gmail. Seems to be special version of base64.
 func MIMEEncode(s string) string {
 	s = base64.StdEncoding.EncodeToString([]byte(s))
 	s = strings.Replace(s, "+", "-", -1)
 	s = strings.Replace(s, "/", "_", -1)
 	return s
 }
+
+// MIMEDecode does mime encode for fmail. Seems to be a special version of base64.
 func MIMEDecode(s string) (string, error) {
 	s = strings.Replace(s, "-", "+", -1)
 	s = strings.Replace(s, "_", "/", -1)
@@ -790,6 +821,7 @@ func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (st
 	return makeBodyAlt(ctx, part, preferHTML)
 }
 
+// GetBody returns the message body.
 func (msg *Message) GetBody(ctx context.Context) (string, error) {
 	if err := msg.Preload(ctx, LevelFull); err != nil {
 		return "", err
@@ -797,6 +829,7 @@ func (msg *Message) GetBody(ctx context.Context) (string, error) {
 	return msg.body, nil
 }
 
+// GetBodyHTML returns the message's HTML body.
 func (msg *Message) GetBodyHTML(ctx context.Context) (string, error) {
 	if err := msg.Preload(ctx, LevelFull); err != nil {
 		return "", err
@@ -804,6 +837,7 @@ func (msg *Message) GetBodyHTML(ctx context.Context) (string, error) {
 	return msg.bodyHTML, nil
 }
 
+// GetUnpatchedBody returns the raw body, before fixups.
 func (msg *Message) GetUnpatchedBody(ctx context.Context) (string, error) {
 	if err := msg.Preload(ctx, LevelFull); err != nil {
 		return "", err
@@ -811,6 +845,7 @@ func (msg *Message) GetUnpatchedBody(ctx context.Context) (string, error) {
 	return msg.originalBody, nil
 }
 
+// ReloadLabels reloads label data for the message.
 func (msg *Message) ReloadLabels(ctx context.Context) error {
 	log.Debugf("Reloading labels of %q %s", msg.ID, string(debug.Stack()))
 	var msg2 *gmail.Message
@@ -1039,10 +1074,12 @@ func toUTF8Reader(header mail.Header, r io.Reader) (io.Reader, error) {
 	return r, nil
 }
 
+// Reload unconditionally reloads the message.
 func (msg *Message) Reload(ctx context.Context, level DataLevel) error {
 	return msg.load(ctx, level)
 }
 
+// Preload loads message data, unless it's already loaded.
 func (msg *Message) Preload(ctx context.Context, level DataLevel) error {
 	if msg.HasData(level) {
 		return nil
@@ -1102,6 +1139,7 @@ func (msg *Message) load(ctx context.Context, level DataLevel) error {
 	return nil
 }
 
+// Draft is a draft.
 type Draft struct {
 	ID       string
 	Response *gmail.Draft
@@ -1113,6 +1151,7 @@ type Draft struct {
 	body    string
 }
 
+// NewDraft returns a new draft.
 func NewDraft(c *CmdG, id string) *Draft {
 	return &Draft{
 		ID:   id,
@@ -1120,6 +1159,7 @@ func NewDraft(c *CmdG, id string) *Draft {
 	}
 }
 
+// GetHeader retrieves a header.
 func (d *Draft) GetHeader(ctx context.Context, h string) (string, error) {
 	if err := d.load(ctx, LevelMetadata); err != nil {
 		return "", err
@@ -1129,6 +1169,7 @@ func (d *Draft) GetHeader(ctx context.Context, h string) (string, error) {
 	return d.headers[strings.ToLower(h)], nil
 }
 
+// HasData returns if data at a given level is already loaded.
 func (d *Draft) HasData(level DataLevel) bool {
 	d.m.RLock()
 	defer d.m.RUnlock()
@@ -1165,6 +1206,7 @@ func (d *Draft) load(ctx context.Context, level DataLevel) error {
 	return nil
 }
 
+// GetBody returns the body.
 func (d *Draft) GetBody(ctx context.Context) (string, error) {
 	if err := d.load(ctx, LevelFull); err != nil {
 		return "", err
@@ -1172,6 +1214,7 @@ func (d *Draft) GetBody(ctx context.Context) (string, error) {
 	return d.body, nil
 }
 
+// UpdateParts updates a draft… right?
 func (d *Draft) UpdateParts(ctx context.Context, head mail.Header, parts []*Part) error {
 	//d.update(ctx,
 	return fmt.Errorf("NOT IMPLEMENTED")

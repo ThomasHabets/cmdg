@@ -22,10 +22,12 @@ const (
 	defaultClientSecret = ""
 )
 
+// ConfigOAuth contains the config for the oauth.
 type ConfigOAuth struct {
 	ClientID, ClientSecret, RefreshToken, AccessToken, APIKey string
 }
 
+// Config is… hmm… this should probably be cleand up.
 type Config struct {
 	OAuth ConfigOAuth
 }
@@ -109,6 +111,7 @@ func makeConfig() ([]byte, error) {
 	return b, nil
 }
 
+// Configure sets up configuration with oauth and stuff.
 func Configure(fn string) error {
 	b, err := makeConfig()
 	if err != nil {

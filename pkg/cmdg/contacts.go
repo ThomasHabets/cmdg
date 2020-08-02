@@ -23,12 +23,14 @@ var (
 	rfc5322commentRE = regexp.MustCompile(`^[A-Za-z0-9]+$`)
 )
 
+// Contacts returns a list of all contacts.
 func (c *CmdG) Contacts() []string {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	return append([]string{"me"}, c.contacts...)
 }
 
+// LoadContacts reads all contacts from the cloud.
 func (c *CmdG) LoadContacts(ctx context.Context) error {
 	co, err := c.GetContacts(ctx)
 	if err != nil {

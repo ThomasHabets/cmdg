@@ -107,6 +107,7 @@ func help(txt string, keys *input.Input) error {
 	}
 }
 
+// OpenMessageView is the view for an open message.
 type OpenMessageView struct {
 	msg    *cmdg.Message
 	keys   *input.Input
@@ -129,6 +130,7 @@ func dottime(t time.Time) string {
 	return t.UTC().Format("2006-01-02T15·04·05") + fmt.Sprintf("%+03d", s/3600)
 }
 
+// NewOpenMessageView creates a new open message view.
 func NewOpenMessageView(ctx context.Context, msg *cmdg.Message, in *input.Input) (*OpenMessageView, error) {
 	screen, err := display.NewScreen()
 	if err != nil {
@@ -158,6 +160,7 @@ func cancelledContext() context.Context {
 	return ctx
 }
 
+// Draw draws the open message.
 func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	// Some functions below need a context, but they should never make RPCs so let's give them
 	ctx := cancelledContext()
@@ -387,6 +390,7 @@ func (ov *OpenMessageView) incrementalSearch(ctx context.Context, inlines []stri
 	}
 }
 
+// Run runs the open message view event loop.
 func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 	log.Infof("Running OpenMessageView")
 	scroll := 0

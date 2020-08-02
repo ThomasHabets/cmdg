@@ -17,9 +17,11 @@ import (
 )
 
 const (
-	fd = 0
+	fd = 0 // stdin.
+)
 
-	// Named keys.
+// Named keys
+const (
 	EscChar = 27
 
 	CtrlC     = "\x03"
@@ -62,6 +64,7 @@ var (
 	readMultibyteTimeout = 10 * time.Millisecond
 )
 
+// Input is an input handler. Singleton, really.
 type Input struct {
 	running chan struct{} // Closed (non-blocking) if running.
 	stop    chan struct{} // Close to stop.
@@ -72,12 +75,14 @@ type Input struct {
 	pasteStatus []bool
 }
 
+// PastePush triggers/untriggers paste protection in the stack.
 func (i *Input) PastePush(b bool) {
 	i.m.Lock()
 	defer i.m.Unlock()
 	i.pasteStatus = append(i.pasteStatus, b)
 }
 
+// PastePop pops the status.
 func (i *Input) PastePop() {
 	i.m.Lock()
 	defer i.m.Unlock()
@@ -93,10 +98,12 @@ func (i *Input) pasteProtection() bool {
 	return i.pasteStatus[len(i.pasteStatus)-1]
 }
 
+// Chan returns the input stream channel.
 func (i *Input) Chan() <-chan string {
 	return i.keys
 }
 
+// Winch returns a SIGWINCH channel.
 func (i *Input) Winch() <-chan os.Signal {
 	return i.winch
 }
@@ -369,6 +376,7 @@ func (i *Input) Start() error {
 	return nil
 }
 
+// New creates a new input handler.
 func New() *Input {
 	i := &Input{
 		winch: make(chan os.Signal, 1),

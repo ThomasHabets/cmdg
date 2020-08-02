@@ -10,26 +10,21 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
+// 8 Color mode colors.
 const (
-	//
-	// In 8 color mode.
-	//
-
 	Red8   = "\033[31m"
 	BgRed8 = "\033[41m"
 	White8 = "\033[37m"
+)
 
-	//
-	// Bright colors (16 color mode).
-	//
-
+// 16 bit color mode bright colors.
+const (
 	BrightRed   = "\033[31;1m"
 	BgBrightRed = "\033[41;1m"
+)
 
-	//
-	// 256 color mode.
-	//
-
+// 256 color mode colors.
+const (
 	Black   = "\033[38;5;0m"
 	Red     = "\033[38;5;1m"
 	Green   = "\033[38;5;2m"
@@ -62,20 +57,24 @@ const (
 	Normal = White + BgBlack
 )
 
+// Color returns ANSI escape for a given color index.
 func Color(n int) string {
 	return fmt.Sprintf("\033[38;5;%dm", n)
 }
 
+// TermSize returns the terminal size.
 func TermSize() (int, int, error) {
 	return terminal.GetSize(0)
 }
 
+// Screen is a screen.
 type Screen struct {
 	Width  int
 	Height int
 	buffer []string
 }
 
+// NewScreen creates a new screen.
 func NewScreen() (*Screen, error) {
 	w, h, err := TermSize()
 	if err != nil {
@@ -84,6 +83,7 @@ func NewScreen() (*Screen, error) {
 	return NewScreen2(w, h), nil
 }
 
+// Copy copies a screen.
 func (s *Screen) Copy() *Screen {
 	r := &Screen{
 		Width:  s.Width,
@@ -96,6 +96,7 @@ func (s *Screen) Copy() *Screen {
 	return r
 }
 
+// NewScreen2 creates a new screen with given dimensions.
 func NewScreen2(w int, h int) *Screen {
 	return &Screen{
 		Width:  w,
@@ -104,10 +105,12 @@ func NewScreen2(w int, h int) *Screen {
 	}
 }
 
+// Clear clears the screen.
 func (s *Screen) Clear() {
 	s.buffer = make([]string, s.Height, s.Height)
 }
 
+// Draw redraws the screen.
 func (s *Screen) Draw() {
 	for n, l := range s.buffer {
 		pad := ""
@@ -126,14 +129,17 @@ func stripANSI(s string) string {
 	return stripANSIRE.ReplaceAllString(s, "")
 }
 
+// StringWidth returns the render width of a string.
 func StringWidth(s string) int {
 	return runewidth.StringWidth(stripANSI(s))
 }
 
+// FixedWidth returns a fixed width version of a string.
 func FixedWidth(s string, w int) string {
 	return runewidth.FillLeft(runewidth.Truncate(s, w, ""), w)
 }
 
+// Printlnf sets the content of a line to be a printfed string
 func (s *Screen) Printlnf(y int, fmts string, args ...interface{}) {
 	if y >= s.Height {
 		log.Warningf("Print off screen. %d>=%d", y, s.Height)
