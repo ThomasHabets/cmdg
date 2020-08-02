@@ -52,7 +52,8 @@ var (
 	Version            = "unspecified"
 	NewThread ThreadID = ""
 
-	socks5 = flag.String("socks5", "", "Use SOCKS5 proxy. host:port")
+	shouldLogRPC = flag.Bool("log_rpc", false, "Log all RPCs.")
+	socks5       = flag.String("socks5", "", "Use SOCKS5 proxy. host:port")
 )
 
 type (
@@ -207,10 +208,27 @@ func (c *CmdG) setupClients() error {
 	return nil
 }
 
+func wrapLogRPC(fn string, cb func() error, af string, args ...interface{}) error {
+	st := time.Now()
+	err := cb()
+	logRPC(st, err, fmt.Sprintf("%s(%s)", fn, af), args...)
+	return err
+}
+
+func logRPC(st time.Time, err error, s string, args ...interface{}) {
+	if *shouldLogRPC {
+		log.Infof("RPC> %s => %v %v", fmt.Sprintf(s, args...), err, time.Since(st))
+	}
+}
+
 func (c *CmdG) LoadLabels(ctx context.Context) error {
 	// Load initial labels.
 	st := time.Now()
-	res, err := c.gmail.Users.Labels.List(email).Context(ctx).Do()
+	var res *gmail.ListLabelsResponse
+	err := wrapLogRPC("gmail.Users.Labels.List", func() (err error) {
+		res, err = c.gmail.Users.Labels.List(email).Context(ctx).Do()
+		return
+	}, "email=%q", email)
 	if err != nil {
 		return err
 	}
@@ -247,7 +265,12 @@ func (c *CmdG) Labels() []*Label {
 }
 
 func (c *CmdG) GetProfile(ctx context.Context) (*gmail.Profile, error) {
-	return c.gmail.Users.GetProfile(email).Context(ctx).Do()
+	var ret *gmail.Profile
+	err := wrapLogRPC("gmail.Users.GetProfile", func() (err error) {
+		ret, err = c.gmail.Users.GetProfile(email).Context(ctx).Do()
+		return
+	}, "email=%q", email)
+	return ret, err
 }
 
 type Part struct {
@@ -360,19 +383,27 @@ func (c *CmdG) SendParts(ctx context.Context, threadID ThreadID, mp string, head
 	return c.send(ctx, threadID, msgs)
 }
 
-func (c *CmdG) send(ctx context.Context, threadID ThreadID, msg string) error {
-	_, err := c.gmail.Users.Messages.Send(email, &gmail.Message{
-		Raw:      MIMEEncode(msg),
-		ThreadId: string(threadID),
-	}).Context(ctx).Do()
-	return err
+func (c *CmdG) send(ctx context.Context, threadID ThreadID, msg string) (err error) {
+	return wrapLogRPC("gmail.Users.Messages.Send", func() error {
+		_, err = c.gmail.Users.Messages.Send(email, &gmail.Message{
+			Raw:      MIMEEncode(msg),
+			ThreadId: string(threadID),
+		}).Context(ctx).Do()
+		return err
+	}, "email=%q threadID=%q msg=%q", email, threadID, msg)
 }
 
 func (c *CmdG) PutFile(ctx context.Context, fn string, contents []byte) error {
-	if _, err := c.drive.Files.Create(&drive.File{
-		Name:    "signature.txt",
-		Parents: []string{appDataFolder},
-	}).Context(ctx).Media(bytes.NewBuffer(contents)).Do(); err != nil {
+	const name = "signature.txt"
+	const folder = appDataFolder
+	err := wrapLogRPC("drive.Files.Create", func() error {
+		_, err := c.drive.Files.Create(&drive.File{
+			Name:    name,
+			Parents: []string{folder},
+		}).Context(ctx).Media(bytes.NewBuffer(contents)).Do()
+		return err
+	}, "name=%q parents=%s", name, folder)
+	if err != nil {
 		return errors.Wrapf(err, "creating file %q with %d bytes of data", fn, len(contents))
 	}
 	return nil
@@ -381,7 +412,11 @@ func (c *CmdG) PutFile(ctx context.Context, fn string, contents []byte) error {
 func (c *CmdG) getFileID(ctx context.Context, fn string) (string, error) {
 	var token string
 	for {
-		l, err := c.drive.Files.List().Context(ctx).Spaces(appDataFolder).PageToken(token).Do()
+		var l *drive.FileList
+		err := wrapLogRPC("drive.Files.List", func() (err error) {
+			l, err = c.drive.Files.List().Context(ctx).Spaces(appDataFolder).PageToken(token).Do()
+			return
+		}, "folder=%q token=%q", appDataFolder, token)
 		if err != nil {
 			return "", err
 		}
@@ -402,10 +437,13 @@ func (c *CmdG) UpdateFile(ctx context.Context, fn string, contents []byte) error
 	id, err := c.getFileID(ctx, fn)
 	if err != nil {
 		if err == os.ErrNotExist {
-			if _, err := c.drive.Files.Create(&drive.File{
-				Name:    fn,
-				Parents: []string{appDataFolder},
-			}).Context(ctx).Media(bytes.NewBuffer(contents)).Do(); err != nil {
+			if err := wrapLogRPC("drive.Files.Create", func() error {
+				_, err := c.drive.Files.Create(&drive.File{
+					Name:    fn,
+					Parents: []string{appDataFolder},
+				}).Context(ctx).Media(bytes.NewBuffer(contents)).Do()
+				return err
+			}, "name=%q parent=%q", fn, appDataFolder); err != nil {
 				return errors.Wrapf(err, "creating file %q with %d bytes of data", fn, len(contents))
 			}
 			return nil
@@ -413,9 +451,12 @@ func (c *CmdG) UpdateFile(ctx context.Context, fn string, contents []byte) error
 		return errors.Wrapf(err, "getting file ID for %q", fn)
 	}
 
-	if _, err := c.drive.Files.Update(id, &drive.File{
-		Name: fn,
-	}).Context(ctx).Media(bytes.NewBuffer(contents)).Do(); err != nil {
+	if err := wrapLogRPC("drive.Files.Update", func() error {
+		_, err := c.drive.Files.Update(id, &drive.File{
+			Name: fn,
+		}).Context(ctx).Media(bytes.NewBuffer(contents)).Do()
+		return err
+	}, "name=%q", fn); err != nil {
 		return errors.Wrapf(err, "updating file %q, id %q", fn, id)
 	}
 	return nil
@@ -424,13 +465,21 @@ func (c *CmdG) UpdateFile(ctx context.Context, fn string, contents []byte) error
 func (c *CmdG) GetFile(ctx context.Context, fn string) ([]byte, error) {
 	var token string
 	for {
-		l, err := c.drive.Files.List().Context(ctx).Spaces("appDataFolder").PageToken(token).Do()
+		var l *drive.FileList
+		err := wrapLogRPC("drive.Files.List", func() (err error) {
+			l, err = c.drive.Files.List().Context(ctx).Spaces(appDataFolder).PageToken(token).Do()
+			return
+		}, "spaces=%q token=%q", appDataFolder, token)
 		if err != nil {
 			return nil, err
 		}
 		for _, f := range l.Files {
 			if f.Name == fn {
-				r, err := c.drive.Files.Get(f.Id).Context(ctx).Download()
+				var r *http.Response
+				err := wrapLogRPC("drive.Files.Get", func() (err error) {
+					r, err = c.drive.Files.Get(f.Id).Context(ctx).Download()
+					return
+				}, "fileID=%v", f.Id)
 				if err != nil {
 					return nil, err
 				}
@@ -448,19 +497,23 @@ func (c *CmdG) GetFile(ctx context.Context, fn string) ([]byte, error) {
 }
 
 func (c *CmdG) MakeDraft(ctx context.Context, msg string) error {
-	_, err := c.gmail.Users.Drafts.Create(email, &gmail.Draft{
-		Message: &gmail.Message{
-			Raw: MIMEEncode(msg),
-		},
-	}).Context(ctx).Do()
-	return err
+	return wrapLogRPC("gmail.Users.Drafts.Create", func() error {
+		_, err := c.gmail.Users.Drafts.Create(email, &gmail.Draft{
+			Message: &gmail.Message{
+				Raw: MIMEEncode(msg),
+			},
+		}).Context(ctx).Do()
+		return err
+	}, "email=%q msg=%q", email, msg)
 }
 
 func (c *CmdG) BatchArchive(ctx context.Context, ids []string) error {
-	return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
-		Ids:            ids,
-		RemoveLabelIds: []string{Inbox},
-	}).Context(ctx).Do()
+	return wrapLogRPC("gmail.Users.Messages.BatchModify", func() error {
+		return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
+			Ids:            ids,
+			RemoveLabelIds: []string{Inbox},
+		}).Context(ctx).Do()
+	}, "email=%q remove=INBOX ids=%v)", email, ids)
 }
 
 // BatchDelete deletes. Does not put in trash. Does not pass go:
@@ -469,9 +522,11 @@ func (c *CmdG) BatchArchive(ctx context.Context, ids []string) error {
 // cmdg doesn't actually request oauth permission to do this, so this function is never used.
 // Instead BatchTrash is used.
 func (c *CmdG) BatchDelete(ctx context.Context, ids []string) error {
-	return c.gmail.Users.Messages.BatchDelete(email, &gmail.BatchDeleteMessagesRequest{
-		Ids: ids,
-	}).Context(ctx).Do()
+	return wrapLogRPC("gmail.Users.Messages.BatchDelete", func() error {
+		return c.gmail.Users.Messages.BatchDelete(email, &gmail.BatchDeleteMessagesRequest{
+			Ids: ids,
+		}).Context(ctx).Do()
+	}, "email=%q ids=%v", email, ids)
 }
 
 // There isn't actually a BatchTrash, so we'll pretend labels.
@@ -480,21 +535,29 @@ func (c *CmdG) BatchTrash(ctx context.Context, ids []string) error {
 }
 
 func (c *CmdG) BatchLabel(ctx context.Context, ids []string, labelID string) error {
-	return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
-		Ids:         ids,
-		AddLabelIds: []string{labelID},
-	}).Context(ctx).Do()
+	return wrapLogRPC("gmail.Users.Messages.BatchModify", func() error {
+		return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
+			Ids:         ids,
+			AddLabelIds: []string{labelID},
+		}).Context(ctx).Do()
+	}, "email=%q add_labelID=%v ids=%v", email, labelID, ids)
 }
 
-func (c *CmdG) BatchUnlabel(ctx context.Context, ids []string, labelID string) error {
-	return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
-		Ids:            ids,
-		RemoveLabelIds: []string{labelID},
-	}).Context(ctx).Do()
+func (c *CmdG) BatchUnlabel(ctx context.Context, ids []string, labelID string) (err error) {
+	return wrapLogRPC("gmail.Users.Messages.BatchModify", func() error {
+		return c.gmail.Users.Messages.BatchModify(email, &gmail.BatchModifyMessagesRequest{
+			Ids:            ids,
+			RemoveLabelIds: []string{labelID},
+		}).Context(ctx).Do()
+	}, "email=%q remove_labelID=%v ids=%v", email, labelID, ids)
 }
 
 func (c *CmdG) HistoryID(ctx context.Context) (HistoryID, error) {
-	p, err := c.gmail.Users.GetProfile(email).Context(ctx).Do()
+	var p *gmail.Profile
+	err := wrapLogRPC("gmail.Users.GetProfile", func() (err error) {
+		p, err = c.gmail.Users.GetProfile(email).Context(ctx).Do()
+		return
+	}, "email=%q", email)
 	if err != nil {
 		return 0, err
 	}
@@ -504,7 +567,12 @@ func (c *CmdG) HistoryID(ctx context.Context) (HistoryID, error) {
 // MoreHistory returns if stuff happened since start ID.
 func (c *CmdG) MoreHistory(ctx context.Context, start HistoryID, labelID string) (bool, error) {
 	log.Infof("History for %d %s", start, labelID)
-	r, err := c.gmail.Users.History.List(email).Context(ctx).StartHistoryId(uint64(start)).LabelId(labelID).Do()
+	var r *gmail.ListHistoryResponse
+	err := wrapLogRPC("gmail.Users.History.List", func() (err error) {
+
+		r, err = c.gmail.Users.History.List(email).Context(ctx).StartHistoryId(uint64(start)).LabelId(labelID).Do()
+		return
+	}, "email=%q historyID=%v labelID=%q", email, start, labelID)
 	if err != nil {
 		return false, err
 	}
@@ -516,30 +584,39 @@ func (c *CmdG) History(ctx context.Context, startID HistoryID, labelID string) (
 	log.Infof("History for %d %s", startID, labelID)
 	var ret []*gmail.History
 	var h HistoryID
-	if err := c.gmail.Users.History.List(email).Context(ctx).StartHistoryId(uint64(startID)).LabelId(labelID).Pages(ctx, func(r *gmail.ListHistoryResponse) error {
-		ret = append(ret, r.History...)
-		h = HistoryID(r.HistoryId)
-		return nil
-	}); err != nil {
+	err := wrapLogRPC("gmail.Users.History.List", func() error {
+		return c.gmail.Users.History.List(email).Context(ctx).StartHistoryId(uint64(startID)).LabelId(labelID).Pages(ctx, func(r *gmail.ListHistoryResponse) error {
+			ret = append(ret, r.History...)
+			h = HistoryID(r.HistoryId)
+			return nil
+		})
+	}, "email=%q historyID=%v labelID=%q", email, startID, labelID)
+	if err != nil {
 		return nil, 0, err
 	}
 	return ret, h, nil
 }
 
 func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*Page, error) {
+	const fields = "messages,resultSizeEstimate,nextPageToken"
 	nres := int64(pageSize)
+
 	q := c.gmail.Users.Messages.List(email).
 		PageToken(token).
 		MaxResults(int64(nres)).
 		Context(ctx).
-		Fields("messages,resultSizeEstimate,nextPageToken")
+		Fields(fields)
 	if query != "" {
 		q = q.Q(query)
 	}
 	if label != "" {
 		q = q.LabelIds(label)
 	}
-	res, err := q.Do()
+	var res *gmail.ListMessagesResponse
+	err := wrapLogRPC("gmail.Users.Messages.List", func() (err error) {
+		res, err = q.Do()
+		return
+	}, "email=%q token=%v labelID=%q query=%q size=%d fields=%q)", email, token, label, query, nres, fields)
 	if err != nil {
 		return nil, errors.Wrap(err, "listing messages")
 	}
@@ -558,18 +635,20 @@ func (c *CmdG) ListMessages(ctx context.Context, label, query, token string) (*P
 
 func (c *CmdG) ListDrafts(ctx context.Context) ([]*Draft, error) {
 	var ret []*Draft
-	if err := c.gmail.Users.Drafts.List(email).Pages(ctx, func(r *gmail.ListDraftsResponse) error {
-		for _, d := range r.Drafts {
-			nd := NewDraft(c, d.Id)
-			ret = append(ret, nd)
-			go func() {
-				if err := nd.load(ctx, LevelMetadata); err != nil {
-					log.Errorf("Loading a draft: %v", err)
-				}
-			}()
-		}
-		return nil
-	}); err != nil {
+	if err := wrapLogRPC("gmail.Users.Drafts.List", func() error {
+		return c.gmail.Users.Drafts.List(email).Pages(ctx, func(r *gmail.ListDraftsResponse) error {
+			for _, d := range r.Drafts {
+				nd := NewDraft(c, d.Id)
+				ret = append(ret, nd)
+				go func() {
+					if err := nd.load(ctx, LevelMetadata); err != nil {
+						log.Errorf("Loading a draft: %v", err)
+					}
+				}()
+			}
+			return nil
+		})
+	}, "email=%q", email); err != nil {
 		return nil, err
 	}
 	return ret, nil

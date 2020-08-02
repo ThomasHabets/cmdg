@@ -63,7 +63,11 @@ func (a *Attachment) Download(ctx context.Context) ([]byte, error) {
 	if a.contents != nil {
 		return a.contents, nil
 	}
-	body, err := a.conn.gmail.Users.Messages.Attachments.Get(email, a.MsgID, a.ID).Context(ctx).Do()
+	var body *gmail.MessagePartBody
+	err := wrapLogRPC("gmail.Users.Messages.Attachments.Get", func() (err error) {
+		body, err = a.conn.gmail.Users.Messages.Attachments.Get(email, a.MsgID, a.ID).Context(ctx).Do()
+		return
+	}, "email=%q msg=%v attachment=%v", email, a.MsgID, a.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +125,11 @@ func (msg *Message) rawNoLock(ctx context.Context) (string, error) {
 		return msg.raw, nil
 	}
 
-	m, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).Format(levelRaw).Context(ctx).Do()
+	var m *gmail.Message
+	err := wrapLogRPC("gmail.Users.Messages.Get", func() (err error) {
+		m, err = msg.conn.gmail.Users.Messages.Get(email, msg.ID).Format(levelRaw).Context(ctx).Do()
+		return
+	}, "email=%q msg=%v level=%s", email, msg.ID, levelRaw)
 	if err != nil {
 		return "", err
 	}
@@ -209,10 +217,14 @@ func (msg *Message) HasLabel(labelID string) bool {
 }
 
 func (msg *Message) RemoveLabelID(ctx context.Context, labelID string) error {
+	var nm *gmail.Message
 	st := time.Now()
-	nm, err := msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
-		RemoveLabelIds: []string{labelID},
-	}).Context(ctx).Do()
+	err := wrapLogRPC("gmail.Users.Messages.Modify", func() (err error) {
+		nm, err = msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
+			RemoveLabelIds: []string{labelID},
+		}).Context(ctx).Do()
+		return
+	}, "%q msg=%v remove_labelID=%v", email, msg.ID, labelID)
 	if err != nil {
 		return errors.Wrapf(err, "removing label ID %q from %q", labelID, msg.ID)
 	}
@@ -273,9 +285,13 @@ func (msg *Message) LocalLabels() []string {
 // AddLabelID adds a label to a message.
 func (msg *Message) AddLabelID(ctx context.Context, labelID string) error {
 	st := time.Now()
-	nm, err := msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
-		AddLabelIds: []string{labelID},
-	}).Context(ctx).Do()
+	var nm *gmail.Message
+	err := wrapLogRPC("gmail.Users.Messages.Modify", func() (err error) {
+		nm, err = msg.conn.gmail.Users.Messages.Modify(email, msg.ID, &gmail.ModifyMessageRequest{
+			AddLabelIds: []string{labelID},
+		}).Context(ctx).Do()
+		return
+	}, "email=%q msg=%v add_labelID=%v", email, msg.ID, labelID)
 	if err != nil {
 		return errors.Wrapf(err, "removing label ID %q from %q", labelID, msg.ID)
 	}
@@ -481,7 +497,11 @@ func (msg *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, e
 		// Not loaded. Load it.
 		if l3.Response == nil {
 			log.Infof("Late loading of label ID %q", l)
-			l4, err := msg.conn.gmail.Users.Labels.Get(email, l).Context(ctx).Do()
+			var l4 *gmail.Label
+			err := wrapLogRPC("gmail.Users.Messages.Labels.Get", func() (err error) {
+				l4, err = msg.conn.gmail.Users.Labels.Get(email, l).Context(ctx).Do()
+				return
+			}, "email=%q labelID=%v", email, l)
 			if err != nil {
 				log.Errorf("Failed to fetch label ID %q: %v", l, err)
 			}
@@ -793,10 +813,14 @@ func (msg *Message) GetUnpatchedBody(ctx context.Context) (string, error) {
 
 func (msg *Message) ReloadLabels(ctx context.Context) error {
 	log.Debugf("Reloading labels of %q %s", msg.ID, string(debug.Stack()))
-	msg2, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).
-		Format(string(LevelMinimal)).
-		Context(ctx).
-		Do()
+	var msg2 *gmail.Message
+	err := wrapLogRPC("gmail.Users.Messages.Get", func() (err error) {
+		msg2, err = msg.conn.gmail.Users.Messages.Get(email, msg.ID).
+			Format(string(LevelMinimal)).
+			Context(ctx).
+			Do()
+		return
+	}, "email=%q msgID=%v level=%s", email, msg.ID, LevelMinimal)
 	if err != nil {
 		return err
 	}
@@ -850,7 +874,11 @@ func (msg *Message) trySigned(ctx context.Context) error {
 	}
 
 	// Fetch attachment.
-	body, err := msg.conn.gmail.Users.Messages.Attachments.Get(email, msg.ID, partSig.Body.AttachmentId).Context(ctx).Do()
+	var body *gmail.MessagePartBody
+	err := wrapLogRPC("gmail.Users.Messages.Attachments.Get", func() (err error) {
+		body, err = msg.conn.gmail.Users.Messages.Attachments.Get(email, msg.ID, partSig.Body.AttachmentId).Context(ctx).Do()
+		return err
+	}, "email=%q msgID=%v attachmentID=%v", email, msg.ID, partSig.Body.AttachmentId)
 	if err != nil {
 		return errors.Wrap(err, "failed to download signature attachment")
 	}
@@ -914,7 +942,11 @@ func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 	}
 
 	// Fetch data attachment.
-	body, err := msg.conn.gmail.Users.Messages.Attachments.Get(email, msg.ID, partData.Body.AttachmentId).Context(ctx).Do()
+	var body *gmail.MessagePartBody
+	err := wrapLogRPC("gmail.Users.Messages.Attachments.Get", func() (err error) {
+		body, err = msg.conn.gmail.Users.Messages.Attachments.Get(email, msg.ID, partData.Body.AttachmentId).Context(ctx).Do()
+		return
+	}, "email=%q msgID=%v attachmentID=%v", email, msg.ID, partData.Body.AttachmentId)
 	if err != nil {
 		return errors.Wrap(err, "failed to download encrypted data attachment")
 	}
@@ -1021,10 +1053,14 @@ func (msg *Message) Preload(ctx context.Context, level DataLevel) error {
 func (msg *Message) load(ctx context.Context, level DataLevel) error {
 	st := time.Now()
 	log.Debugf("Loading message %q at level %v, stack %s", msg.ID, level, string(debug.Stack()))
-	msg2, err := msg.conn.gmail.Users.Messages.Get(email, msg.ID).
-		Format(string(level)).
-		Context(ctx).
-		Do()
+	var msg2 *gmail.Message
+	err := wrapLogRPC("gmail.Users.Messages.Get", func() (err error) {
+		msg2, err = msg.conn.gmail.Users.Messages.Get(email, msg.ID).
+			Format(string(level)).
+			Context(ctx).
+			Do()
+		return
+	}, "email=%q msgID=%v level=%s", email, msg.ID, level)
 	if err != nil {
 		return err
 	}
@@ -1104,8 +1140,11 @@ func (d *Draft) load(ctx context.Context, level DataLevel) error {
 		return nil
 	}
 	log.Debugf("Loading draft %q at level %v %s", d.ID, level, string(debug.Stack()))
-	r, err := d.conn.gmail.Users.Drafts.Get(email, d.ID).Context(ctx).Format(string(level)).Do()
-	if err != nil {
+	var r *gmail.Draft
+	if err := wrapLogRPC("gmail.User.Drafts.Get", func() (err error) {
+		r, err = d.conn.gmail.Users.Drafts.Get(email, d.ID).Context(ctx).Format(string(level)).Do()
+		return
+	}, "email=%q msgID=%v level=%v", email, d.ID, level); err != nil {
 		return err
 	}
 	d.m.Lock()
@@ -1117,6 +1156,7 @@ func (d *Draft) load(ctx context.Context, level DataLevel) error {
 		d.headers[strings.ToLower(h.Name)] = h.Value
 	}
 	if level == LevelFull {
+		var err error
 		d.body, err = makeBody(ctx, d.Response.Message.Payload, false)
 		if err != nil {
 			return errors.Wrap(err, "rendering draft body")
@@ -1138,12 +1178,14 @@ func (d *Draft) UpdateParts(ctx context.Context, head mail.Header, parts []*Part
 }
 
 func (d *Draft) update(ctx context.Context, content string) error {
-	_, err := d.conn.gmail.Users.Drafts.Update(email, d.ID, &gmail.Draft{
-		Message: &gmail.Message{
-			Raw: MIMEEncode(content),
-		},
-	}).Context(ctx).Do()
-	if err != nil {
+	if err := wrapLogRPC("gmail.Users.Drafts.Update", func() error {
+		_, err := d.conn.gmail.Users.Drafts.Update(email, d.ID, &gmail.Draft{
+			Message: &gmail.Message{
+				Raw: MIMEEncode(content),
+			},
+		}).Context(ctx).Do()
+		return err
+	}, "email=%q msgID=%v contents=%q", email, d.ID, content); err != nil {
 		return err
 	}
 
@@ -1159,11 +1201,15 @@ func (d *Draft) Send(ctx context.Context) error {
 	if err := d.load(ctx, LevelFull); err != nil {
 		return errors.Wrap(err, "downloading draft for send")
 	}
-	_, err := d.conn.gmail.Users.Drafts.Send(email, d.Response).Context(ctx).Do()
-	return err
+	return wrapLogRPC("gmail.USers.Drafts.Send", func() error {
+		_, err := d.conn.gmail.Users.Drafts.Send(email, d.Response).Context(ctx).Do()
+		return err
+	}, "email=%q draftID=%v", email, d.ID)
 }
 
 // Delete deletes the draft.
 func (d *Draft) Delete(ctx context.Context) error {
-	return d.conn.gmail.Users.Drafts.Delete(email, d.ID).Context(ctx).Do()
+	return wrapLogRPC("gmail.Users.Drafts.Delete", func() error {
+		return d.conn.gmail.Users.Drafts.Delete(email, d.ID).Context(ctx).Do()
+	}, "email=%q draftID=%v", email, d.ID)
 }
