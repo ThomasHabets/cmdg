@@ -972,6 +972,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					screen.Draw()
 				}
 			}
+			if len(mv.messages) == 0 {
+				screen.Printlnf(0, "<empty>")
+			}
 			log.Debugf("Print took %v", time.Since(st))
 		}
 		// Print status.
