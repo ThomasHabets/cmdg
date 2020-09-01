@@ -269,7 +269,7 @@ func OpNext() *MessageViewOp {
 // setting the new position and for adjusting current scroll position.
 func filterMarked(msgs []*cmdg.Message, marked map[string]bool, pos int) ([]string, []*cmdg.Message, int) {
 	var ids []string
-	var ms []*cmdg.Message
+	ms := []*cmdg.Message{}
 	ofs := 0
 	for n, msg := range msgs {
 		if marked[msg.ID] {
