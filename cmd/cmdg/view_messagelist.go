@@ -707,6 +707,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// Let's assume we've never gotten to the state where mv.pos >= len(mv.messages)
 					break
 				}
+				if mv.pos >= len(mv.messages) {
+					break
+				}
 				for {
 					vo, err := NewOpenMessageView(ctx, mv.messages[mv.pos], mv.keys)
 					if err != nil {
@@ -777,6 +780,9 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				mkMessagePos()
 
 			case "*":
+				if mv.pos >= len(mv.messages) {
+					break
+				}
 				// TODO: Because it's a toggle this is not suitable for batch operation.
 				curmsg := mv.messages[mv.pos]
 				f := curmsg.AddLabelID
@@ -878,11 +884,15 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				mv.pos = 0
 				scroll = 0
 			case "x", " ":
-				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
-				next()
+				if mv.pos < len(mv.messages) {
+					marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
+					next()
+				}
 			case "X":
-				marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
-				prev()
+				if mv.pos < len(mv.messages) {
+					marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
+					prev()
+				}
 			case "N", "n", "j", input.CtrlN, input.Down:
 				if !next() {
 					// If already on last one, don't redraw.
