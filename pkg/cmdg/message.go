@@ -350,6 +350,15 @@ func parseTime(s string) (time.Time, error) {
 	return t, err
 }
 
+// GetReferences returns a slice of references.
+func (msg *Message) GetReferences(ctx context.Context) ([]string, error) {
+	s, err := msg.GetHeader(ctx, "References")
+	if err != nil {
+		return nil, err
+	}
+	return []string{s}, nil
+}
+
 // GetReplyTo returns the address to use for replies as the `To` line.
 func (msg *Message) GetReplyTo(ctx context.Context) (string, error) {
 	s, err := msg.GetHeader(ctx, "Reply-To")

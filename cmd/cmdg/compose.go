@@ -21,6 +21,10 @@ import (
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
 
+type (
+	headOp func(*mail.Header)
+)
+
 const (
 	signedMultipartType = `signed; micalg=pgp-sha256; protocol="application/pgp-signature"`
 )
@@ -95,7 +99,7 @@ Subject:
 
 %s`, to, sig)
 
-	return compose(ctx, conn, keys, cmdg.NewThread, prefill)
+	return compose(ctx, conn, nil, keys, cmdg.NewThread, prefill)
 }
 
 func createSig(ctx context.Context, msg string) (string, error) {
@@ -165,16 +169,19 @@ func prepareMessage(ctx context.Context, msg string, attachments []*file) (*prep
 }
 
 // take message text and attachments, and turn it into mail headers and parts
-func sendMessage(ctx context.Context, conn *cmdg.CmdG, msg string, threadID cmdg.ThreadID, attachments []*file) error {
+func sendMessage(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, msg string, threadID cmdg.ThreadID, attachments []*file) error {
 	prep, err := prepareMessage(ctx, msg, attachments)
 	if err != nil {
 		return errors.Wrap(err, "preparing message")
+	}
+	for _, op := range headOps {
+		op(&prep.head)
 	}
 	return errors.Wrap(conn.SendParts(ctx, threadID, prep.mp, prep.head, prep.parts), "sending parts")
 }
 
 // compose() is used for compose, replies, and forwards.
-func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID cmdg.ThreadID, msg string) error {
+func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input.Input, threadID cmdg.ThreadID, msg string) error {
 	doEdit := true
 	var attachments []*file
 	for {
@@ -215,7 +222,7 @@ func compose(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, threadID c
 			for {
 				st := time.Now()
 
-				if err := sendMessage(ctx, conn, msg, threadID, attachments); err != nil {
+				if err := sendMessage(ctx, conn, headOps, msg, threadID, attachments); err != nil {
 					log.Errorf("Failed to send: %v", err)
 					a, err := dialog.Question(fmt.Sprintf("Failed to send (%q). Save to local file?", err.Error()), []dialog.Option{
 						{Key: "y", Label: "Y — Yes, save to local file"},

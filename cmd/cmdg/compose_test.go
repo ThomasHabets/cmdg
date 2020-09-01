@@ -222,7 +222,7 @@ World
 
 	for _, test := range tests {
 		ctx := context.Background()
-		err := sendMessage(ctx, c, test.msg, test.threadID, test.attachments)
+		err := sendMessage(ctx, c, nil, test.msg, test.threadID, test.attachments)
 		if test.bad && err == nil {
 			t.Errorf("%s: Expected bad, but err==nil", test.name)
 			continue

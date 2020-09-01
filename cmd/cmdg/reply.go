@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/mail"
+	"net/textproto"
 	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
 	"github.com/ThomasHabets/cmdg/pkg/dialog"
@@ -23,6 +26,10 @@ var (
 	replyPrefixes   = regexp.MustCompile(`(?i)^(Re|Sv|Aw): `)
 	forwardPrefixes = regexp.MustCompile(`(?i)^(Fwd): `)
 	removeCharsRE   = regexp.MustCompile(`\r`)
+
+	headerInReplyTo  = textproto.CanonicalMIMEHeaderKey("In-Reply-To")
+	headerReferences = textproto.CanonicalMIMEHeaderKey("References")
+	headerMessageID  = textproto.CanonicalMIMEHeaderKey("Message-ID")
 )
 
 func replyQuoted(s string) string {
@@ -75,7 +82,27 @@ func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to,
 	}
 
 	prefill := strings.Join(headers, "\n") + "\n\n" + strings.Join(body, "\n")
-	return compose(ctx, conn, keys, threadID, prefill)
+	refs, err := msg.GetReferences(ctx)
+	if err != nil {
+		// don't care
+	}
+
+	var headOps []headOp
+	if v, err := msg.GetHeader(ctx, headerMessageID); err != nil {
+		log.Errorf("Failed to get message ID when replying: %v", err)
+		if refs != nil {
+			headOps = append(headOps, func(head *mail.Header) {
+				(*head)[headerReferences] = []string{strings.Join(refs, " ")}
+			})
+		}
+	} else {
+		headOps = append(headOps, func(head *mail.Header) {
+			(*head)[headerInReplyTo] = []string{v}
+			(*head)[headerReferences] = []string{strings.Join(append(refs, v), " ")}
+		})
+	}
+
+	return compose(ctx, conn, headOps, keys, threadID, prefill)
 }
 
 func reply(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
