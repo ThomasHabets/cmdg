@@ -59,18 +59,7 @@ benefits.
 ### Building manually
 
 ```
-$ mkdir go
-$ cd go
-$ export GOPATH=$(pwd)
-$ for dep in github.com/mattn/go-runewidth
- github.com/pkg/errors
- github.com/sirupsen/logrus
- golang.org/x/crypto/ssh/terminal
- golang.org/x/oauth2
- golang.org/x/text/encoding
- google.golang.org/api/gmail/v1; do go get $dep; done
-$ go get github.com/ThomasHabets/cmdg
-$ go build github.com/ThomasHabets/cmdg/cmd/cmdg
+$ go build ./cmd/cmdg
 $ sudo cp cmdg /usr/local/bin
 ```
 
