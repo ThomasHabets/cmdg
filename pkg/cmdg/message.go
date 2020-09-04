@@ -340,6 +340,7 @@ func parseTime(s string) (time.Time, error) {
 		"Mon, _2 Jan 06 15:04:05 MST",
 		"2 Jan 06 15:04:05",
 		"_2 Jan 06 15:04:05",
+		"02 Jan 2006 15:04:05 -0700 (MST)",
 		time.RFC1123Z,
 	} {
 		t, err = time.Parse(layout, s)
