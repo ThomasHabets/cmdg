@@ -326,6 +326,9 @@ func (msg *Message) AddLabelID(ctx context.Context, labelID string) error {
 
 // parseTime tries a few time formats and returns the one that works.
 func parseTime(s string) (time.Time, error) {
+	if t, err := mail.ParseDate(s); err == nil {
+		return t, err
+	}
 	var t time.Time
 	var err error
 	for _, layout := range []string{
