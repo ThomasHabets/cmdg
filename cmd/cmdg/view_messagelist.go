@@ -30,7 +30,7 @@ e                  — Archive marked messages
 d                  — Move marked messages to trash
 l                  — Label marked messages
 L                  — Unlabel marked messages
-*                  — Toggle starred on hilighted message
+*                  — Toggle starred on highlighted message
 c                  — Compose new message
 C                  — Continue message from draft
 N, n, ^N, j, Down  — Next message
