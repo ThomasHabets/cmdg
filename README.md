@@ -80,9 +80,9 @@ a ClientID and ClientSecret. You can do this with the following steps:
   1. Navigate to the "APIs & Services > OAuth consent screen" page.
   1. Fill out the OAuth consent screen.
   1. Make sure to add scopes for the various APIs you'll need
-    1. Drive API - .../auth/drive.appdata
-    1. Gmail API - ../auth/gmail.modify
-    1. People API - .../auth/contacts.readonly
+     1. Drive API - `.../auth/drive.appdata`
+     1. Gmail API - `../auth/gmail.modify`
+     1. People API - `.../auth/contacts.readonly`
   1. Click the button "Create Credentials" and select "OAuth client ID" from the dropdown.
   1. Set the "Application type" to "Desktop app" and make the name anything you'd like.
   1. This should give you a Client ID and Client Secret you can provide to `cmdg`.
