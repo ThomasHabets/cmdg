@@ -563,7 +563,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			case "u":
 				return nil, nil
 			case "q":
-				return OpQuit(), nil
+				return nil, nil
 			case input.CtrlP:
 				return OpPrev(), nil
 			case input.CtrlN:
