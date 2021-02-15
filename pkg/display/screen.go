@@ -55,8 +55,8 @@ const (
 	NoWrap        = "\033[?7l"
 	DoWrap        = "\033[?7h"
 	ResetScroll   = "\033[r"
-	SaveCursor    = "\033[s"
-	RestoreCursor = "\033[u"
+	SaveCursor    = "\033[s" // TODO: actually this may not be supported
+	RestoreCursor = "\033[u" // by some terminals. Find some other way?
 
 	// Normal is not the same as Reset, because Reset resets Bold/Underline/Reverse.
 	Normal = White + BgBlack
