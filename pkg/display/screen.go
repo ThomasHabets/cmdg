@@ -48,10 +48,15 @@ const (
 	// Style
 	//
 
-	Bold      = "\033[1m"
-	Underline = "\033[4m"
-	Reverse   = "\033[7m"
-	Reset     = "\033[0m"
+	Bold          = "\033[1m"
+	Underline     = "\033[4m"
+	Reverse       = "\033[7m"
+	Reset         = "\033[0m"
+	NoWrap        = "\033[?7l"
+	DoWrap        = "\033[?7h"
+	ResetScroll   = "\033[r"
+	SaveCursor    = "\033[s"
+	RestoreCursor = "\033[u"
 
 	// Normal is not the same as Reset, because Reset resets Bold/Underline/Reverse.
 	Normal = White + BgBlack
@@ -69,9 +74,10 @@ func TermSize() (int, int, error) {
 
 // Screen is a screen.
 type Screen struct {
-	Width  int
-	Height int
-	buffer []string
+	Width      int
+	Height     int
+	buffer     []string
+	prevBuffer []string
 }
 
 // NewScreen creates a new screen.
@@ -110,15 +116,82 @@ func (s *Screen) Clear() {
 	s.buffer = make([]string, s.Height, s.Height)
 }
 
+// findScroll return the scroll offset (lines) and index of first line to scroll
+func findScroll(prev, cur []string) (int, int) {
+	if len(prev) != len(cur) {
+		return 0, 0
+	}
+
+	win := 0
+	start := 0
+	score := 0
+	for ofs := -len(prev); ofs < len(prev); ofs++ {
+		first := -1
+		cnt := 0
+		for i := 0; i < len(cur); i++ {
+			if i+ofs >= 0 && i+ofs < len(prev) && prev[i+ofs] == cur[i] {
+				cnt++
+				if first == -1 {
+					first = i
+				}
+			}
+		}
+		if score < cnt {
+			win = ofs
+			score = cnt
+			start = first
+		}
+	}
+	//log.Infof("Line diff score: ofs=%d score=%d", win, score)
+	return win, start
+}
+
 // Draw redraws the screen.
 func (s *Screen) Draw() {
+	ofs, start := findScroll(s.prevBuffer, s.buffer)
+	if ofs != 0 {
+		head := s.prevBuffer[:start]
+		if ofs > 0 {
+			// Scroll down.
+			log.Debugf("Scroll %d First: %d", ofs, start)
+			fmt.Printf("\033[%d;%dr\033[%dS", start+1, len(s.buffer)-1, ofs)
+			// TODO: Don't needlessly redraw bottom.
+			s.prevBuffer = append(head, s.prevBuffer[start+ofs:]...)
+		} else {
+			// Scroll up.
+			log.Debugf("Scroll %d, first %d", ofs, start)
+			fmt.Printf("\033[%d;%dr\033[%dT", start, len(s.buffer)-1, -ofs)
+			head := s.prevBuffer[:start+ofs]
+			mid := make([]string, -ofs, -ofs)
+			rest := s.prevBuffer[start+ofs:]
+			s.prevBuffer = append(head, append(mid, rest...)...)
+		}
+	}
+	var o []string
+	saved := 0
 	for n, l := range s.buffer {
+		if n < len(s.prevBuffer) && s.prevBuffer[n] == s.buffer[n] {
+			saved++
+			continue
+		}
+		log.Debugf("Line redraw miss: %d %q", n, l)
 		pad := ""
 		if padlen := s.Width - StringWidth(l); padlen > 0 {
 			pad = strings.Repeat(" ", padlen)
 		}
-		fmt.Printf("\033[%d;%dH%s%s%s", n+1, 1, l, pad, Reset)
+		o = append(o, fmt.Sprintf("\033[%d;%dH%s%s%s%s", n+1, 1, NoWrap, l, pad, Reset))
 	}
+	s.prevBuffer = s.buffer
+	s.buffer = s.Copy().buffer
+
+	// Place the cursor at the end and reset scroll.
+	o = append(o, fmt.Sprintf("\033[%d;%dH", len(s.buffer), s.Width))
+	// Reset scroll.
+	o = append(o, SaveCursor+ResetScroll+RestoreCursor)
+
+	os := strings.Join(o, "")
+	fmt.Print(os)
+	log.Debugf("Saved %d out of %d line while drawing. %d bytes", saved, len(s.buffer), len(os))
 }
 
 var (
@@ -180,4 +253,8 @@ func (s *Screen) Printf(y, x int, fmts string, args ...interface{}) {
 		b += strings.Repeat(" ", add)
 	}
 	s.buffer[y] = b
+}
+
+func Exit() {
+	fmt.Println(SaveCursor + Reset + DoWrap + ResetScroll + RestoreCursor)
 }

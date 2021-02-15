@@ -39,6 +39,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
+	"github.com/ThomasHabets/cmdg/pkg/display"
 	"github.com/ThomasHabets/cmdg/pkg/gpg"
 	"github.com/ThomasHabets/cmdg/pkg/input"
 )
@@ -97,6 +98,7 @@ func loadSignature(ctx context.Context) error {
 }
 
 func run(ctx context.Context) error {
+	defer display.Exit()
 	keys := input.New()
 	if err := keys.Start(); err != nil {
 		return err
