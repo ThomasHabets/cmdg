@@ -147,7 +147,7 @@ func findScroll(prev, cur []string) (int, int) {
 }
 
 // ClearCache clears the incremental scroll buffer and forces a re-render.
-func (s * Screen) ClearCache() {
+func (s *Screen) ClearCache() {
 	s.prevBuffer = nil
 }
 

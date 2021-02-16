@@ -701,6 +701,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			log.Debugf("MessageListView got key %q", key)
 			switch key {
 			case "?", input.F1:
+				screen.ClearCache()
 				help(messageListViewHelp, mv.keys)
 			case input.Enter:
 				if len(mv.messages) == 0 {
@@ -802,6 +803,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					}
 				}()
 			case "l":
+				screen.ClearCache()
 				// TODO: can this be partially merged with 'L' code?
 				ids, _, _ := filterMarked(mv.messages, marked, mv.pos)
 				if len(ids) != 0 {
@@ -833,6 +835,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					}
 				}
 			case "L":
+				screen.ClearCache()
 				ids, _, _ := filterMarked(mv.messages, marked, mv.pos)
 				if len(ids) != 0 {
 					var opts []*dialog.Option
@@ -874,10 +877,12 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					}
 				}
 			case "c":
+				screen.ClearCache()
 				if err := composeNew(ctx, conn, mv.keys); err != nil {
 					mv.errors <- errors.Wrapf(err, "Composing new message")
 				}
 			case "C":
+				screen.ClearCache()
 				if err := continueDraft(ctx, conn, mv.keys); err != nil {
 					mv.errors <- errors.Wrapf(err, "Continuing draft")
 				}
@@ -905,10 +910,12 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					continue
 				}
 			case "r", input.CtrlR:
+				screen.ClearCache()
 				empty()
 				screen.Clear()
 				go mv.fetchPage(ctx, "")
 			case "g":
+				screen.ClearCache()
 				var opts []*dialog.Option
 				for _, l := range conn.Labels() {
 					if strings.HasPrefix(l.ID, "CATEGORY_") {
@@ -938,6 +945,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				// stack frame on every navigation.
 				return NewMessageView(ctx, cmdg.Inbox, "", mv.keys).Run(ctx)
 			case "s", input.CtrlS:
+				screen.ClearCache()
 				q, err := dialog.Entry("Query> ", mv.keys)
 				if err == dialog.ErrAborted {
 					// That's fine.
