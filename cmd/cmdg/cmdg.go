@@ -98,7 +98,12 @@ func loadSignature(ctx context.Context) error {
 }
 
 func run(ctx context.Context) error {
-	defer display.Exit()
+	defer func() {
+		display.Exit()
+		fmt.Print(display.TerminalTitle("Terminal"))
+	}()
+	// TODO: maybe change the title when there's new mail?
+	fmt.Print(display.TerminalTitle("cmdg"))
 	keys := input.New()
 	if err := keys.Start(); err != nil {
 		return err

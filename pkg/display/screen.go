@@ -67,6 +67,11 @@ func Color(n int) string {
 	return fmt.Sprintf("\033[38;5;%dm", n)
 }
 
+// TerminalTitle returns ANSI sequence to change the terminal title.
+func TerminalTitle(s string) string {
+	return fmt.Sprintf("\033]0;%s\007", s)
+}
+
 // TermSize returns the terminal size.
 func TermSize() (int, int, error) {
 	return terminal.GetSize(0)
