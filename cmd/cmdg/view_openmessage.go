@@ -413,7 +413,6 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 		select {
 		case <-ov.keys.Winch():
 			log.Infof("OpenMessageView got WINCH")
-			ov.screen.ClearCache()
 			s := scroll
 			if err := initScreen(); err != nil {
 				// Screen failed to init. Yeah it's time to bail.
@@ -491,7 +490,6 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					ov.update <- struct{}{}
 				}()
 			case "?", input.F1:
-				ov.screen.ClearCache()
 				help(openMessageViewHelp, ov.keys)
 			case "*":
 				if ov.msg.HasLabel(cmdg.Starred) {
@@ -508,7 +506,6 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				}
 				ov.Draw(lines, scroll)
 			case "l":
-				ov.screen.ClearCache()
 				var opts []*dialog.Option
 				for _, l := range conn.Labels() {
 					opts = append(opts, &dialog.Option{
@@ -534,7 +531,6 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				}
 				ov.Draw(lines, scroll)
 			case "L":
-				ov.screen.ClearCache()
 				var opts []*dialog.Option
 				labels, err := ov.msg.GetLabels(ctx, true)
 				if err != nil {
@@ -582,26 +578,25 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				scroll = 0
 				ov.Draw(lines, scroll)
 			case "n", input.Down:
+				ov.screen.UseCache()
 				scroll = ov.scroll(ctx, len(lines), scroll, 1)
 				ov.Draw(lines, scroll)
 			case " ", input.CtrlV, input.PgDown:
 				scroll = ov.scroll(ctx, len(lines), scroll, ov.screen.Height-10)
 				ov.Draw(lines, scroll)
 			case "p", input.Up:
+				ov.screen.UseCache()
 				scroll = ov.scroll(ctx, len(lines), scroll, -1)
 				ov.Draw(lines, scroll)
 			case "f":
-				ov.screen.ClearCache()
 				if err := forward(ctx, conn, ov.keys, ov.msg); err != nil {
 					ov.errors <- fmt.Errorf("Failed to forward: %v", err)
 				}
 			case "r":
-				ov.screen.ClearCache()
 				if err := reply(ctx, conn, ov.keys, ov.msg); err != nil {
 					ov.errors <- fmt.Errorf("Failed to reply: %v", err)
 				}
 			case "a":
-				ov.screen.ClearCache()
 				if err := replyAll(ctx, conn, ov.keys, ov.msg); err != nil {
 					ov.errors <- fmt.Errorf("Failed to replyAll: %v", err)
 				}
@@ -627,7 +622,6 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				}
 				ov.Draw(lines, scroll)
 			case "t": // Attachmments
-				ov.screen.ClearCache()
 				as, err := ov.msg.Attachments(ctx)
 				if err != nil {
 					ov.errors <- fmt.Errorf("Listing attachments failed: %v", err)
@@ -639,12 +633,10 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					}
 				}
 			case "\\":
-				ov.screen.ClearCache()
 				if err := ov.showRaw(ctx); err != nil {
 					ov.errors <- err
 				}
 			case "|":
-				ov.screen.ClearCache()
 				cmds, err := dialog.Entry("Command> ", ov.keys)
 				if err == dialog.ErrAborted || cmds == "" {
 					// User aborted; do nothing.

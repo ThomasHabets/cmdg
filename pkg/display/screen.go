@@ -83,6 +83,7 @@ type Screen struct {
 	Height     int
 	buffer     []string
 	prevBuffer []string
+	useCache   bool
 }
 
 // NewScreen creates a new screen.
@@ -152,30 +153,34 @@ func findScroll(prev, cur []string) (int, int) {
 }
 
 // ClearCache clears the incremental scroll buffer and forces a re-render.
-func (s *Screen) ClearCache() {
-	s.prevBuffer = nil
+func (s *Screen) UseCache() {
+	s.useCache = true
 }
 
 // Draw redraws the screen.
 func (s *Screen) Draw() {
-	ofs, start := findScroll(s.prevBuffer, s.buffer)
-	if ofs != 0 {
-		head := s.prevBuffer[:start]
-		if ofs > 0 {
-			// Scroll down.
-			log.Debugf("Scroll %d First: %d", ofs, start)
-			fmt.Printf("\033[%d;%dr\033[%dS", start+1, len(s.buffer)-1, ofs)
-			// TODO: Don't needlessly redraw bottom.
-			s.prevBuffer = append(head, s.prevBuffer[start+ofs:]...)
-		} else {
-			// Scroll up.
-			log.Debugf("Scroll %d, first %d", ofs, start)
-			fmt.Printf("\033[%d;%dr\033[%dT", start, len(s.buffer)-1, -ofs)
-			head := s.prevBuffer[:start+ofs]
-			mid := make([]string, -ofs, -ofs)
-			rest := s.prevBuffer[start+ofs:]
-			s.prevBuffer = append(head, append(mid, rest...)...)
+	if s.useCache {
+		ofs, start := findScroll(s.prevBuffer, s.buffer)
+		if ofs != 0 {
+			head := s.prevBuffer[:start]
+			if ofs > 0 {
+				// Scroll down.
+				log.Debugf("Scroll %d First: %d", ofs, start)
+				fmt.Printf("\033[%d;%dr\033[%dS", start+1, len(s.buffer)-1, ofs)
+				// TODO: Don't needlessly redraw bottom.
+				s.prevBuffer = append(head, s.prevBuffer[start+ofs:]...)
+			} else {
+				// Scroll up.
+				log.Debugf("Scroll %d, first %d", ofs, start)
+				fmt.Printf("\033[%d;%dr\033[%dT", start, len(s.buffer)-1, -ofs)
+				head := s.prevBuffer[:start+ofs]
+				mid := make([]string, -ofs, -ofs)
+				rest := s.prevBuffer[start+ofs:]
+				s.prevBuffer = append(head, append(mid, rest...)...)
+			}
 		}
+	} else {
+		s.prevBuffer = nil
 	}
 	var o []string
 	saved := 0
@@ -202,6 +207,7 @@ func (s *Screen) Draw() {
 	os := strings.Join(o, "")
 	fmt.Print(os)
 	log.Debugf("Saved %d out of %d line while drawing. %d bytes", saved, len(s.buffer), len(os))
+	s.useCache = false
 }
 
 var (
