@@ -711,6 +711,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					break
 				}
 				for {
+					screen.ClearCache()
 					vo, err := NewOpenMessageView(ctx, mv.messages[mv.pos], mv.keys)
 					if err != nil {
 						mv.errors <- errors.Wrapf(err, "Opening message")

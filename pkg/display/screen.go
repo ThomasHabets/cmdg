@@ -146,6 +146,11 @@ func findScroll(prev, cur []string) (int, int) {
 	return win, start
 }
 
+// ClearCache clears the incremental scroll buffer and forces a re-render.
+func (s * Screen) ClearCache() {
+	s.prevBuffer = nil
+}
+
 // Draw redraws the screen.
 func (s *Screen) Draw() {
 	ofs, start := findScroll(s.prevBuffer, s.buffer)
