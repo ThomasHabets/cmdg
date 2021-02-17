@@ -327,6 +327,7 @@ func (msg *Message) AddLabelID(ctx context.Context, labelID string) error {
 // parseTime tries a few time formats and returns the one that works.
 func parseTime(s string) (time.Time, error) {
 	if t, err := mail.ParseDate(s); err == nil {
+		log.Debugf("mail.ParseDate successfully parsed %q", s)
 		return t, err
 	}
 	var t time.Time
@@ -662,9 +663,14 @@ func (msg *Message) GetLabelsString(ctx context.Context) (string, error) {
 	return strings.Join(s, ", "), nil
 }
 
+// GetDateHeader returns the string that the Date header is set to.
+func (msg *Message) GetDateHeader(ctx context.Context) (string, error) {
+	return msg.GetHeader(ctx, "Date")
+}
+
 // GetOriginalTime returns the timestamp as claimed by the headers in its original timezone.
 func (msg *Message) GetOriginalTime(ctx context.Context) (time.Time, error) {
-	s, err := msg.GetHeader(ctx, "Date")
+	s, err := msg.GetDateHeader(ctx)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -686,7 +692,8 @@ func (msg *Message) GetTime(ctx context.Context) (time.Time, error) {
 func (msg *Message) GetTimeFmt(ctx context.Context) (string, error) {
 	ts, err := msg.GetTime(ctx)
 	if err != nil {
-		return "", err
+		failsafe, _ := msg.GetDateHeader(ctx)
+		return failsafe, err
 	}
 	if time.Since(ts) > 365*24*time.Hour {
 		return ts.Format("2006"), nil

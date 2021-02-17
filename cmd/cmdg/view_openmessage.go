@@ -223,16 +223,20 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	line++
 
 	// Date.
-	date, err := ov.msg.GetOriginalTime(ctx)
-	if err != nil {
-		ov.errors <- err
+
+	if date, err := ov.msg.GetOriginalTime(ctx); err != nil {
+		log.Warningf("Could not parse date for message: %v", err)
+		s, _ := ov.msg.GetDateHeader(ctx)
+		ov.screen.Printlnf(line, "Date: %s (parse error: %v)", s, err)
+		//ov.errors <- err
+	} else {
+		dateLocal := date.Local()
+		dt := ""
+		if *enableDottime {
+			dt = fmt.Sprintf(" (dottime: %s)", dottime(date))
+		}
+		ov.screen.Printlnf(line, "Date: %s%s", dateLocal.Format(tsLayout), dt)
 	}
-	dateLocal := date.Local()
-	dt := ""
-	if *enableDottime {
-		dt = fmt.Sprintf(" (dottime: %s)", dottime(date))
-	}
-	ov.screen.Printlnf(line, "Date: %s%s", dateLocal.Format(tsLayout), dt)
 	line++
 
 	// Subject
