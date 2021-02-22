@@ -845,9 +845,6 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					var opts []*dialog.Option
 				outer:
 					for _, l := range conn.Labels() {
-						if l.ID == cmdg.Inbox {
-							continue
-						}
 						for _, m := range ids {
 							if !mv.messages[messagePos[m]].HasLabel(l.ID) {
 								log.Warningf("Unknown label ID %q", l.ID)
