@@ -752,7 +752,14 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					return err
 				}
 			case "e":
-				ok, nm, ofs := mv.applyMarked(ctx, "archive", conn.BatchArchive, marked)
+				idch := make(chan []string)
+				ok, nm, ofs := mv.applyMarked(ctx, "archive", func(ctx context.Context, ids []string) error {
+					idch <- ids
+					return conn.BatchArchive(ctx, ids)
+				}, marked)
+				for _, id := range <-idch {
+					mv.messages[messagePos[id]].RemoveLabelIDLocal(cmdg.Inbox)
+				}
 				if !ok {
 					break
 				}
