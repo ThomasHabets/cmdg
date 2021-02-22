@@ -850,6 +850,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 						}
 						for _, m := range ids {
 							if !mv.messages[messagePos[m]].HasLabel(l.ID) {
+								log.Warningf("Unknown label ID %q", l.ID)
 								continue outer
 							}
 						}
