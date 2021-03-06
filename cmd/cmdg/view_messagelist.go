@@ -49,7 +49,7 @@ Press [enter] to exit
 var (
 	messageListReloadTime          = time.Minute
 	messageListHistoryCheckTime    = 10 * time.Second
-	messageListHistoryCheckTimeout = time.Minute
+	messageListHistoryCheckTimeout = 10 * time.Second
 )
 
 type historyUpdate struct {
