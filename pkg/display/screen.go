@@ -55,12 +55,20 @@ const (
 	NoWrap        = "\033[?7l"
 	DoWrap        = "\033[?7h"
 	ResetScroll   = "\033[r"
-	SaveCursor    = "\033[s" // TODO: actually this may not be supported
-	RestoreCursor = "\033[u" // by some terminals. Find some other way?
+	SaveCursor    = "\033[s"         // TODO: actually this may not be supported
+	RestoreCursor = "\033[u"         // by some terminals. Find some other way?
+	HideCursor    = "\033[?25l"      // TODO: actually this may not be supported
+	ShowCursor    = "\033[?25h"      // by some terminals. Find some other way?
+	Suspend       = "\033P=1s\033\\" // https://gitlab.freedesktop.org/terminal-wg/specifications/-/merge_requests/2
+	Resume        = "\033P=2s\033\\"
 
 	// Normal is not the same as Reset, because Reset resets Bold/Underline/Reverse.
 	Normal = White + BgBlack
 )
+
+type cursor struct {
+	x, y int
+}
 
 // Color returns ANSI escape for a given color index.
 func Color(n int) string {
@@ -84,6 +92,7 @@ type Screen struct {
 	buffer     []string
 	prevBuffer []string
 	useCache   bool
+	cursor     *cursor
 }
 
 // NewScreen creates a new screen.
@@ -204,10 +213,20 @@ func (s *Screen) Draw() {
 	// Reset scroll.
 	o = append(o, SaveCursor+ResetScroll+RestoreCursor)
 
-	os := strings.Join(o, "")
+	// Place cursor
+	if s.cursor != nil {
+		o = append(o, fmt.Sprintf("\033[%d;%dH", s.cursor.y+1, s.cursor.x))
+		s.cursor = nil
+	}
+
+	os := Suspend + HideCursor + strings.Join(o, "") + ShowCursor + Resume
 	fmt.Print(os)
 	log.Debugf("Saved %d out of %d line while drawing. %d bytes", saved, len(s.buffer), len(os))
 	s.useCache = false
+}
+
+func (s *Screen) SetCursor(y, x int) {
+	s.cursor = &cursor{x: x, y: y}
 }
 
 var (

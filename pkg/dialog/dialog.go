@@ -203,7 +203,9 @@ func Entry(prompt string, keys *input.Input) (string, error) {
 	defer keys.PastePop()
 	for {
 		start := 3
-		screen.Printlnf(start+2, "%s%s%s%s%s", prefix, display.Bold, prompt, display.Reset, cur)
+		content := fmt.Sprintf("%s%s%s%s%s", prefix, display.Bold, prompt, display.Reset, cur)
+		screen.Printlnf(start+2, "%s", content)
+		screen.SetCursor(start+2, display.StringWidth(content)+1)
 		screen.Draw()
 		select {
 		case key := <-keys.Chan():
@@ -241,7 +243,9 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 	for {
 		start := 3
 		prefix := "    "
-		screen.Printlnf(2, "%s%s%s", prefix, prompt, cur)
+		content := fmt.Sprintf("%s%s%s", prefix, prompt, cur)
+		screen.Printlnf(2, "%s", content)
+		screen.SetCursor(2, display.StringWidth(content)+1)
 		for n, o := range visible[scroll:] {
 			sstr := display.Reset + " "
 			if selected == n {
