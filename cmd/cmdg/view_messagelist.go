@@ -48,6 +48,7 @@ Press [enter] to exit
 
 var (
 	messageListReloadTime          = time.Minute
+	messageListReloadTimeout       = 40 * time.Second
 	messageListHistoryCheckTime    = 10 * time.Second
 	messageListHistoryCheckTimeout = 10 * time.Second
 )
@@ -135,6 +136,7 @@ func (mv *MessageView) applyMarked(ctx context.Context, name string, op func(con
 }
 
 func (mv *MessageView) fetchPage(ctx context.Context, token string) {
+	ctx, cancel := context.WithTimeout(ctx, messageListReloadTimeout)
 	if token == "" {
 		// Only update history on first page.
 		hid, err := conn.HistoryID(ctx)
@@ -153,10 +155,12 @@ func (mv *MessageView) fetchPage(ctx context.Context, token string) {
 	page, err := conn.ListMessages(ctx, mv.label, mv.query, token)
 	if err != nil {
 		mv.errors <- err
+		cancel()
 		return
 	}
 	log.Infof("Listing messages took %v", time.Since(st))
 	go func() {
+		defer cancel()
 		if err := page.PreloadSubjects(ctx); err != nil {
 			mv.errors <- err
 			return
