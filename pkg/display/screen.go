@@ -168,6 +168,7 @@ func (s *Screen) UseCache() {
 
 // Draw redraws the screen.
 func (s *Screen) Draw() {
+	var o []string
 	if s.useCache {
 		ofs, start := findScroll(s.prevBuffer, s.buffer)
 		if ofs != 0 {
@@ -175,13 +176,13 @@ func (s *Screen) Draw() {
 			if ofs > 0 {
 				// Scroll down.
 				log.Debugf("Scroll %d First: %d", ofs, start)
-				fmt.Printf("\033[%d;%dr\033[%dS", start+1, len(s.buffer)-1, ofs)
+				o = append(o, fmt.Sprintf("\033[%d;%dr\033[%dS", start+1, len(s.buffer)-1, ofs))
 				// TODO: Don't needlessly redraw bottom.
 				s.prevBuffer = append(head, s.prevBuffer[start+ofs:]...)
 			} else {
 				// Scroll up.
 				log.Debugf("Scroll %d, first %d", ofs, start)
-				fmt.Printf("\033[%d;%dr\033[%dT", start, len(s.buffer)-1, -ofs)
+				o = append(o, fmt.Sprintf("\033[%d;%dr\033[%dT", start, len(s.buffer)-1, -ofs))
 				head := s.prevBuffer[:start+ofs]
 				mid := make([]string, -ofs, -ofs)
 				rest := s.prevBuffer[start+ofs:]
@@ -191,7 +192,6 @@ func (s *Screen) Draw() {
 	} else {
 		s.prevBuffer = nil
 	}
-	var o []string
 	saved := 0
 	for n, l := range s.buffer {
 		if n < len(s.prevBuffer) && s.prevBuffer[n] == s.buffer[n] {
