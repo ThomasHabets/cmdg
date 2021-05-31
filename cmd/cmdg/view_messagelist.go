@@ -380,6 +380,10 @@ func (mv *MessageView) Run(ctx context.Context) error {
 	if err := initScreen(); err != nil {
 		return err
 	}
+	defer func() {
+		screen.Clear()
+		screen.Draw()
+	}()
 
 	mkMessagePos := func() {
 		messagePos = map[string]int{}
