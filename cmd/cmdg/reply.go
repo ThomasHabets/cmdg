@@ -36,7 +36,11 @@ func replyQuoted(s string) string {
 	lines := strings.Split(removeCharsRE.ReplaceAllString(s, ""), "\n")
 	var ret []string
 	for _, l := range lines {
-		ret = append(ret, strings.TrimRight("> "+l, spaces))
+		space := " "
+		if strings.HasPrefix(l, ">") {
+			space = ""
+		}
+		ret = append(ret, strings.TrimRight(">"+space+l, spaces))
 	}
 	return strings.Join(ret, "\n")
 }
