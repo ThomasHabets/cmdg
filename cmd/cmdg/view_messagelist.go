@@ -417,7 +417,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		}
 
 		if curmsg.HasData(cmdg.LevelMetadata) {
-			subj, err := curmsg.GetHeader(ctx, "subject")
+			subj, err := curmsg.GetSubject(ctx)
 			if errors.Cause(err) == cmdg.ErrMissing || subj == "" {
 				subj = "(No subject)"
 			} else if err != nil {

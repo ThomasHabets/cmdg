@@ -54,6 +54,24 @@ var (
 
 	// ErrMissing is used e.g. if a header is not present. As opposed to malformed.
 	ErrMissing = fmt.Errorf("resource missing")
+
+	// Included:
+	// * (L)etter
+	// * (N)umber
+	// * (P)unctuation
+	// * (S)ymbol
+	// * Space Separator (Zs)
+	//
+	// Not included:
+	// * Control (C)
+	// * Mark (M)
+	// * Other space: line (Zl), paragraph (Zp)
+	//
+	// See github.com/google/re2/wiki/Syntax
+	subjectStripRE = regexp.MustCompile(`[^\pL\pN\pP\pS\pZs]`)
+
+	// Alternatively, just remove newlines:
+	// subjectStripRE = regexp.MustCompile(`[\n\r]`)
 )
 
 // Attachment is an attachment.
@@ -111,6 +129,14 @@ func (msg *Message) ThreadID(ctx context.Context) (ThreadID, error) {
 	msg.m.RLock()
 	defer msg.m.RUnlock()
 	return ThreadID(msg.Response.ThreadId), nil
+}
+
+func (msg *Message) GetSubject(ctx context.Context) (string, error) {
+	subj, err := msg.GetHeader(ctx, "subject")
+	if err != nil {
+		return "", err
+	}
+	return subjectStripRE.ReplaceAllString(subj, ""), nil
 }
 
 // Attachments returns a list of attachments.
@@ -1187,6 +1213,14 @@ func (d *Draft) GetHeader(ctx context.Context, h string) (string, error) {
 	d.m.RLock()
 	defer d.m.RUnlock()
 	return d.headers[strings.ToLower(h)], nil
+}
+
+func (d *Draft) GetSubject(ctx context.Context) (string, error) {
+	s, err := d.GetHeader(ctx, "Subject")
+	if err != nil {
+		return "", err
+	}
+	return subjectStripRE.ReplaceAllString(s, ""), nil
 }
 
 // HasData returns if data at a given level is already loaded.

@@ -240,7 +240,7 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	line++
 
 	// Subject
-	subject, err := ov.msg.GetHeader(ctx, "Subject")
+	subject, err := ov.msg.GetSubject(ctx)
 	if err != nil {
 		ov.errors <- err
 		subject = fmt.Sprintf("Unknown: %q", err)

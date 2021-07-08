@@ -34,7 +34,7 @@ func continueDraft(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) erro
 			to = "<no recipient>"
 		}
 
-		subj, err := d.GetHeader(ctx, "Subject")
+		subj, err := d.GetSubject(ctx)
 		if err != nil {
 			subj = "<no subject>"
 		}

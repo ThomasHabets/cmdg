@@ -52,7 +52,7 @@ func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to,
 	if err != nil {
 		return err
 	}
-	subj, err := msg.GetHeader(ctx, "Subject")
+	subj, err := msg.GetSubject(ctx)
 	if err != nil {
 		return err
 	}
