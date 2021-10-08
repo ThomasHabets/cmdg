@@ -199,11 +199,8 @@ func (s *Screen) Draw() {
 			continue
 		}
 		log.Debugf("Line redraw miss: %d %q", n, l)
-		pad := ""
-		if padlen := s.Width - StringWidth(l); padlen > 0 {
-			pad = strings.Repeat(" ", padlen)
-		}
-		o = append(o, fmt.Sprintf("\033[%d;%dH%s%s%s%s", n+1, 1, NoWrap, l, pad, Reset))
+		l = FixedANSIWidthRight(l, s.Width)
+		o = append(o, fmt.Sprintf("\033[%d;%dH%s%s%s", n+1, 1, NoWrap, l, Reset))
 	}
 	s.prevBuffer = s.buffer
 	s.buffer = s.Copy().buffer
@@ -245,6 +242,35 @@ func StringWidth(s string) int {
 // FixedWidth returns a fixed width version of a string.
 func FixedWidth(s string, w int) string {
 	return runewidth.FillLeft(runewidth.Truncate(s, w, ""), w)
+}
+
+// FixedWidthRight returns a fixed width version of a string, padding on the right.
+// The function will not strip ANSI codes, nor count them as "length".
+func FixedANSIWidthRight(s string, w int) string {
+	return fixedANSIWidthRight2(s, w, 0)
+}
+
+func fixedANSIWidthRight2(s string, w int, recursive int) string {
+	// First make a guess about how many printable characters are actually ANSI.
+	// This will be wrong if ANSI codes get cut off.
+	ansiWidth := runewidth.StringWidth(s) - StringWidth(s)
+
+	// Target width is actual width plus width of ansi codes.
+	targetWidth := w + ansiWidth
+	ret := runewidth.FillRight(runewidth.Truncate(s, targetWidth, ""), targetWidth)
+
+	// Check if we left too much, which might happen when we cut off some ANSI codes.
+	if StringWidth(s) > w {
+		// 3 is arbitrary. It could be that as we cut off some
+		// ANSI, there's still some ANSI left that will be cut off.
+		const maxRecursive = 3
+
+		if recursive < maxRecursive {
+			return fixedANSIWidthRight2(ret, w, recursive+1)
+		}
+		log.Errorf("CAN'T HAPPEN: Failed to turn %q into size %d. Returning %q", s, w, ret)
+	}
+	return ret
 }
 
 // Printlnf sets the content of a line to be a printfed string
