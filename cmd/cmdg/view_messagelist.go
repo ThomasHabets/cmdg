@@ -765,11 +765,11 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					idch <- ids
 					return conn.BatchArchive(ctx, ids)
 				}, marked)
-				for _, id := range <-idch {
-					mv.messages[messagePos[id]].RemoveLabelIDLocal(cmdg.Inbox)
-				}
 				if !ok {
 					break
+				}
+				for _, id := range <-idch {
+					mv.messages[messagePos[id]].RemoveLabelIDLocal(cmdg.Inbox)
 				}
 				if mv.label == cmdg.Inbox {
 					mv.pos -= ofs
