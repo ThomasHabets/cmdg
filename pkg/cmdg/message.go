@@ -945,6 +945,8 @@ func (msg *Message) trySigned(ctx context.Context) error {
 			partSig = p
 		case "application/x-pkcs7-signature":
 			return msg.trySMIMESigned(ctx)
+		case "multipart/mixed":
+			log.Warningf("Multipart signed: %+v", p)
 		default:
 			log.Warningf("Found unexpected part in signed packet: %q", p.MimeType)
 		}
