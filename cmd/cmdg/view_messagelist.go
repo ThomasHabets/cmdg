@@ -958,7 +958,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// That's fine.
 				} else if err != nil {
 					mv.errors <- errors.Wrapf(err, "Getting query")
-				} else if q != "" {
+				} else {
 					nv := NewMessageView(ctx, "", q, mv.keys)
 					// TODO: not optimal, since it adds a
 					// stack frame on every navigation.
