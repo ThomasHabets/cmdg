@@ -54,6 +54,7 @@ var (
 	cfgFile         = flag.String("config", "", "Config file. Default is ~/"+path.Join(defaultConfigDir, configFileName))
 	gpgFlag         = flag.String("gpg", "gpg", "Path to GnuPG.")
 	logFile         = flag.String("log", "/dev/null", "Log debug data to this file.")
+	logJSON         = flag.Bool("log_json", false, "Log as JSON instead of text.")
 	configure       = flag.Bool("configure", false, "Configure OAuth.")
 	updateSignature = flag.Bool("update_signature", false, "Upload ~/.signature to app settings.")
 	verbose         = flag.Bool("verbose", false, "Turn on verbose logging.")
@@ -242,9 +243,13 @@ func main() {
 		}
 		defer f.Close()
 		log.SetOutput(f)
-		log.SetFormatter(&log.TextFormatter{
-			DisableColors: true,
-		})
+		if *logJSON {
+			log.SetFormatter(&log.JSONFormatter{})
+		} else {
+			log.SetFormatter(&log.TextFormatter{
+				DisableColors: true,
+			})
+		}
 	}
 
 	if err := run(ctx); err != nil {
