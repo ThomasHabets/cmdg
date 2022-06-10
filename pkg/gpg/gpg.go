@@ -3,6 +3,7 @@ package gpg
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -29,6 +30,8 @@ var (
 	badSignatureRE  = regexp.MustCompile(`(?m)^gpg: BAD signature from "(.*)"`)
 	encryptedRE     = regexp.MustCompile(`(?m)^gpg: encrypted with[^\n]+\n\s*"([^\n]+)"\n`)
 	unprintableRE   = regexp.MustCompile(`[\033\r]`)
+
+	debugNoRemove = flag.Bool("debug_keep_sig_tempfiles", false, "Keep signature tempfiles.")
 )
 
 // GPG is a gpg handle.
@@ -85,7 +88,9 @@ func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(dir)
+	if !*debugNoRemove {
+		defer os.RemoveAll(dir)
+	}
 
 	log.Infof("Checking signature with %q…", dir)
 	log.Debugf("Contents: %q", data)
