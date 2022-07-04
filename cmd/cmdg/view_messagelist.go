@@ -30,6 +30,7 @@ e                  — Archive marked messages
 d                  — Move marked messages to trash
 l                  — Label marked messages
 L                  — Unlabel marked messages
+I                  — Mark message as READ
 *                  — Toggle starred on highlighted message
 c                  — Compose new message
 C                  — Continue message from draft
@@ -788,12 +789,31 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				}
 				mv.pos -= ofs
 				scroll -= ofs
-				if scroll < 0 {
-					scroll = 0
+				if scroll < 0 { 
+                  scroll = 0
 				}
 				mv.messages = nm
 				marked = map[string]bool{}
 				mkMessagePos()
+
+            case "I":
+				idch := make(chan []string)
+				ok, nm, ofs := mv.applyMarked(ctx, "read", func(ctx context.Context, ids []string) error {
+					idch <- ids
+					return conn.BatchUnlabel(ctx, ids, cmdg.Unread)
+				}, marked)
+				for _, id := range <-idch {
+                  mv.messages[messagePos[id]].RemoveLabelIDLocal(cmdg.Unread)
+				}
+
+                // move current message forward
+				mv.pos -= ofs
+				scroll -= ofs
+				if scroll < 0 { scroll = 0 }
+				mv.messages = nm
+				marked = map[string]bool{}
+				mkMessagePos()
+                break
 
 			case "*":
 				if mv.pos >= len(mv.messages) {
