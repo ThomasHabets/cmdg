@@ -28,6 +28,7 @@ space, x           — Mark message and advance
 X                  — Mark message and step up
 e                  — Archive marked messages
 d                  — Move marked messages to trash
+I                  … Mark marked mails as read
 l                  — Label marked messages
 L                  — Unlabel marked messages
 *                  — Toggle starred on highlighted message
@@ -38,6 +39,7 @@ P, p, ^P, k, Up    — Previous message
 r, ^R              — Reload current view
 g                  — Go to label
 1                  — Go to inbox
+U                  … Mark marked mails as unread
 s, ^s              — Search
 q                  — Quit
 ^L                 — Refresh screen
@@ -780,6 +782,30 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					mv.messages = nm
 					marked = map[string]bool{}
 					mkMessagePos()
+				}
+			case "I": // Mark read.
+				idch := make(chan []string)
+				ok, _, _ := mv.applyMarked(ctx, "mark-read", func(ctx context.Context, ids []string) error {
+					idch <- ids
+					return conn.BatchUnlabel(ctx, ids, cmdg.Unread)
+				}, marked)
+				if !ok {
+					break
+				}
+				for _, id := range <-idch {
+					mv.messages[messagePos[id]].RemoveLabelIDLocal(cmdg.Unread)
+				}
+			case "U": // Mark unread.
+				idch := make(chan []string)
+				ok, _, _ := mv.applyMarked(ctx, "mark-unread", func(ctx context.Context, ids []string) error {
+					idch <- ids
+					return conn.BatchLabel(ctx, ids, cmdg.Unread)
+				}, marked)
+				if !ok {
+					break
+				}
+				for _, id := range <-idch {
+					mv.messages[messagePos[id]].AddLabelIDLocal(cmdg.Unread)
 				}
 			case "d":
 				ok, nm, ofs := mv.applyMarked(ctx, "delete", conn.BatchTrash, marked)
