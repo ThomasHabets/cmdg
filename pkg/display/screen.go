@@ -161,7 +161,7 @@ func findScroll(prev, cur []string) (int, int) {
 	return win, start
 }
 
-// ClearCache clears the incremental scroll buffer and forces a re-render.
+// UseCache tells screen to use the cache.
 func (s *Screen) UseCache() {
 	s.useCache = true
 }
@@ -222,6 +222,7 @@ func (s *Screen) Draw() {
 	s.useCache = false
 }
 
+// SetCursor sets the cursor position.
 func (s *Screen) SetCursor(y, x int) {
 	s.cursor = &cursor{x: x, y: y}
 }
@@ -244,7 +245,7 @@ func FixedWidth(s string, w int) string {
 	return runewidth.FillLeft(runewidth.Truncate(s, w, ""), w)
 }
 
-// FixedWidthRight returns a fixed width version of a string, padding on the right.
+// FixedANSIWidthRight returns a fixed width version of a string, padding on the right.
 // The function will not strip ANSI codes, nor count them as "length".
 func FixedANSIWidthRight(s string, w int) string {
 	return fixedANSIWidthRight2(s, w, 0)
@@ -316,6 +317,7 @@ func (s *Screen) Printf(y, x int, fmts string, args ...interface{}) {
 	s.buffer[y] = b
 }
 
+// Exit resets the output for exit.
 func Exit() {
 	fmt.Println(SaveCursor + Reset + DoWrap + ResetScroll + RestoreCursor)
 }

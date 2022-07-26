@@ -131,6 +131,7 @@ func (msg *Message) ThreadID(ctx context.Context) (ThreadID, error) {
 	return ThreadID(msg.Response.ThreadId), nil
 }
 
+// GetSubject returns the message subject.
 func (msg *Message) GetSubject(ctx context.Context) (string, error) {
 	subj, err := msg.GetHeader(ctx, "subject")
 	if err != nil {
@@ -1217,6 +1218,7 @@ func (d *Draft) GetHeader(ctx context.Context, h string) (string, error) {
 	return d.headers[strings.ToLower(h)], nil
 }
 
+// GetSubject returns the draft subject.
 func (d *Draft) GetSubject(ctx context.Context) (string, error) {
 	s, err := d.GetHeader(ctx, "Subject")
 	if err != nil {
