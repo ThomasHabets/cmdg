@@ -261,7 +261,7 @@ func fixedANSIWidthRight2(s string, w int, recursive int) string {
 	ret := runewidth.FillRight(runewidth.Truncate(s, targetWidth, ""), targetWidth)
 
 	// Check if we left too much, which might happen when we cut off some ANSI codes.
-	if StringWidth(s) > w {
+	if StringWidth(ret) > w {
 		// 3 is arbitrary. It could be that as we cut off some
 		// ANSI, there's still some ANSI left that will be cut off.
 		const maxRecursive = 3
@@ -269,7 +269,7 @@ func fixedANSIWidthRight2(s string, w int, recursive int) string {
 		if recursive < maxRecursive {
 			return fixedANSIWidthRight2(ret, w, recursive+1)
 		}
-		log.Errorf("CAN'T HAPPEN: Failed to turn %q into size %d. Returning %q", s, w, ret)
+		log.Errorf("CAN'T HAPPEN: Failed to turn %q into size %d. Returning %q, size %d", s, w, ret, StringWidth(s))
 	}
 	return ret
 }
