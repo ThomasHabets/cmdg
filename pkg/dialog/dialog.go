@@ -280,9 +280,11 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 				selected = len(visible) - 1
 			}
 		case input.CtrlP, input.Up:
-			selected--
-			if selected < 0 && !free {
-				selected = 0
+			if selected > -1 {
+				selected--
+				if selected < 0 && !free {
+					selected = 0
+				}
 			}
 		case input.CtrlC:
 			return nil, ErrAborted
