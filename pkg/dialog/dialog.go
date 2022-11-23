@@ -274,12 +274,12 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 				}, nil
 			}
 			return visible[selected], nil
-		case input.CtrlN:
+		case input.CtrlN, input.Down:
 			selected++
 			if selected >= len(visible) {
 				selected = len(visible) - 1
 			}
-		case input.CtrlP:
+		case input.CtrlP, input.Up:
 			selected--
 			if selected < 0 && !free {
 				selected = 0
