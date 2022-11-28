@@ -920,7 +920,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				if err := continueDraft(ctx, conn, mv.keys); err != nil {
 					mv.errors <- errors.Wrapf(err, "Continuing draft")
 				}
-			case input.Home:
+			case input.Home, input.XHome:
 				mv.pos = 0
 				scroll = 0
 			case "x", " ":

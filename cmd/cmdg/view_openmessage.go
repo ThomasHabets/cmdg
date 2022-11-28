@@ -579,7 +579,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				} else {
 					return nil, nil
 				}
-			case input.Home:
+			case input.Home, input.XHome:
 				scroll = 0
 				ov.Draw(lines, scroll)
 			case "n", input.Down:

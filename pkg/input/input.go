@@ -53,6 +53,8 @@ const (
 	End               = "\x1B[4~"
 	PgUp              = "\x1B[5~"
 	PgDown            = "\x1B[6~"
+	XEnd              = "\x1B[E"
+	XHome             = "\x1B[H"
 )
 
 var (
