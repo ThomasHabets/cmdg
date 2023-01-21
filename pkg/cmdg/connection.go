@@ -186,8 +186,12 @@ func New(fn string) (*CmdG, error) {
 				AuthURL:  "https://accounts.google.com/o/oauth2/auth",
 				TokenURL: "https://accounts.google.com/o/oauth2/token",
 			},
-			Scopes:      []string{scope},
-			RedirectURL: oauthRedirectOffline,
+			Scopes: []string{scope},
+
+			// TODO: This method doesn't work anymore, so
+			// why is this code still here?
+			//
+			// RedirectURL: oauthRedirectOffline,
 		}
 		conn.authedClient = cfg.Client(ctx, token)
 	}

@@ -3,23 +3,31 @@ package cmdg
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"html"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"strings"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 )
 
 const (
-	spaces               = "\n\t\r "
-	oauthRedirectOffline = "urn:ietf:wg:oauth:2.0:oob"
+	spaces = "\n\t\r "
 
 	// Populate these for a binary-only release.
 	defaultClientID     = ""
 	defaultClientSecret = ""
+)
+
+var (
+	// TODO: Listen to a dynamic port.
+	oauthListenPort = flag.Int("oauth_listen_port", 8081, "Oauth port to listen to.")
 )
 
 // ConfigOAuth contains the config for the oauth.
@@ -48,6 +56,23 @@ func auth(cfg ConfigOAuth) (string, error) {
 	if accessType == "online" {
 		at = oauth2.AccessTypeOnline
 	}
+
+	codeCh := make(chan string)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		codes := r.URL.Query()["code"]
+		if len(codes) == 0 {
+			fmt.Fprintf(w, "Did not get a code. Something's wrong.")
+			return
+		}
+		defer close(codeCh)
+		fmt.Fprintf(w, "Got code %q. You can close this tab now.", html.EscapeString(codes[0]))
+		codeCh <- codes[0]
+	})
+	go func() {
+		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *oauthListenPort), nil))
+	}()
+
 	ocfg := oauth2.Config{
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret,
@@ -56,14 +81,11 @@ func auth(cfg ConfigOAuth) (string, error) {
 			TokenURL: "https://accounts.google.com/o/oauth2/token",
 		},
 		Scopes:      []string{scope},
-		RedirectURL: oauthRedirectOffline,
+		RedirectURL: fmt.Sprintf("http://localhost:%d/", *oauthListenPort),
 	}
 	fmt.Printf("Cut and paste this URL into your browser:\n  %s\n", ocfg.AuthCodeURL("", at))
-	fmt.Printf("Returned code: ")
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	if err != nil {
-		return "", err
-	}
+	line := <-codeCh
+	fmt.Printf("Returned code: %s\n", line)
 	token, err := ocfg.Exchange(oauth2.NoContext, line)
 	if err != nil {
 		return "", err
