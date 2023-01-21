@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -27,7 +28,7 @@ const (
 
 var (
 	// TODO: Listen to a dynamic port.
-	oauthListenPort = flag.Int("oauth_listen_port", 8081, "Oauth port to listen to.")
+	oauthListenPort = flag.Int("oauth_listen_port", 0, "Oauth port to listen to. 0 means pick dynamically.")
 )
 
 // ConfigOAuth contains the config for the oauth.
@@ -57,8 +58,18 @@ func auth(cfg ConfigOAuth) (string, error) {
 		at = oauth2.AccessTypeOnline
 	}
 
+	//
+	// Start a webserver.
+	//
+	ln, err := net.Listen("tcp", ":0")
+	if err != nil {
+		log.Fatalf("Failed to listen to TCP port 0 (any): %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	fmt.Printf("Listening to port %d\n", port)
+
 	codeCh := make(chan string)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	go http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		codes := r.URL.Query()["code"]
 		if len(codes) == 0 {
@@ -68,10 +79,8 @@ func auth(cfg ConfigOAuth) (string, error) {
 		defer close(codeCh)
 		fmt.Fprintf(w, "Got code %q. You can close this tab now.", html.EscapeString(codes[0]))
 		codeCh <- codes[0]
-	})
-	go func() {
-		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *oauthListenPort), nil))
-	}()
+	}))
+	// No need to clean up. This is run in -configure and will soon exit.
 
 	ocfg := oauth2.Config{
 		ClientID:     cfg.ClientID,
@@ -81,7 +90,7 @@ func auth(cfg ConfigOAuth) (string, error) {
 			TokenURL: "https://accounts.google.com/o/oauth2/token",
 		},
 		Scopes:      []string{scope},
-		RedirectURL: fmt.Sprintf("http://localhost:%d/", *oauthListenPort),
+		RedirectURL: fmt.Sprintf("http://localhost:%d/", port),
 	}
 	fmt.Printf("Cut and paste this URL into your browser:\n  %s\n", ocfg.AuthCodeURL("", at))
 	line := <-codeCh

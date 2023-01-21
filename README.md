@@ -93,7 +93,7 @@ $ cmdg -configure
 For now you have create one at https://console.developers.google.com]
 Cut and paste this URL into your browser:
   https://long-url....
-Returned code: <paste code here>
+Returned code: <code shows up here, just FYI>
 $
 ```
 This creates `~/.cmdg/cmdg.conf`.
