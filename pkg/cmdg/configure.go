@@ -152,7 +152,10 @@ func makeConfig(id,secret string) ([]byte, error) {
 func Configure(fn string) error {
 	conf, err := readConf(fn)
 	if err != nil {
-		log.Infof("Failed to read config %q: %v", conf, err)
+		log.Infof("Failed to read config %q: %v", fn, err)
+	} else {
+		log.Infof("Reusing ClientID/ClientSecret from %q", fn)
+		log.Infof("If you want to change ClientID/Secret then delete %q", fn)
 	}
 	b, err := makeConfig(conf.OAuth.ClientID, conf.OAuth.ClientSecret)
 	if err != nil {
