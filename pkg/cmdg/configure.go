@@ -102,12 +102,18 @@ func auth(cfg ConfigOAuth) (string, error) {
 	return token.RefreshToken, nil
 }
 
-func makeConfig() ([]byte, error) {
+func makeConfig(id,secret string) ([]byte, error) {
 	var err error
 
-	id := defaultClientID
-	secret := defaultClientSecret
+	// Use default, if available.
+	if id == "" {
+		id = defaultClientID
+	}
+	if secret == "" {
+		secret = defaultClientSecret
+	}
 
+	// Else ask.
 	if id == "" {
 		id, err = readLine("ClientID: ")
 		if err != nil {
@@ -144,7 +150,11 @@ func makeConfig() ([]byte, error) {
 
 // Configure sets up configuration with oauth and stuff.
 func Configure(fn string) error {
-	b, err := makeConfig()
+	conf, err := readConf(fn)
+	if err != nil {
+		log.Infof("Failed to read config %q: %v", conf, err)
+	}
+	b, err := makeConfig(conf.OAuth.ClientID, conf.OAuth.ClientSecret)
 	if err != nil {
 		return err
 	}

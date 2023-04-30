@@ -121,6 +121,18 @@ func NewFake(client *http.Client) (*CmdG, error) {
 	return conn, conn.setupClients()
 }
 
+func readConf(fn string) (Config, error) {
+	f, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return Config{}, err
+	}
+	var conf Config
+	if err := json.Unmarshal(f, &conf); err != nil {
+		return Config{}, errors.Wrapf(err, "unmarshalling config")
+	}
+	return conf, nil
+}
+
 // New creates a new CmdG.
 func New(fn string) (*CmdG, error) {
 	conn := &CmdG{
@@ -129,15 +141,9 @@ func New(fn string) (*CmdG, error) {
 	}
 
 	// Read config.
-	var conf Config
-	{
-		f, err := ioutil.ReadFile(fn)
-		if err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(f, &conf); err != nil {
-			return nil, errors.Wrapf(err, "unmarshalling config")
-		}
+	conf, err := readConf(fn)
+	if err != nil {
+		return nil, err
 	}
 
 	var tp http.RoundTripper
