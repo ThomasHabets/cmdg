@@ -190,6 +190,8 @@ func main() {
 		}
 	}
 
+	log.Infof("Loading settings…")
+	log.Infof("If you see \"Token has been expired or revoked\" then re-run cmdg with -configure")
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
