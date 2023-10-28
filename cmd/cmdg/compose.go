@@ -99,7 +99,18 @@ Subject:
 
 %s`, to, sig)
 
-	return compose(ctx, conn, nil, keys, cmdg.NewThread, prefill)
+	headOps := []headOp{
+		func(h *mail.Header) {
+			if h.Get("from") == "" {
+				t := conn.GetDefaultSender()
+				if t != "" {
+					(*h)["From"] = []string{t}
+				}
+			}
+		},
+	}
+
+	return compose(ctx, conn, headOps, keys, cmdg.NewThread, prefill)
 }
 
 func createSig(ctx context.Context, msg string) (string, error) {

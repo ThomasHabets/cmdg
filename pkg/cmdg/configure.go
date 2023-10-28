@@ -102,7 +102,7 @@ func auth(cfg ConfigOAuth) (string, error) {
 	return token.RefreshToken, nil
 }
 
-func makeConfig(id,secret string) ([]byte, error) {
+func makeConfig(id, secret string) ([]byte, error) {
 	var err error
 
 	// Use default, if available.

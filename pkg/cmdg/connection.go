@@ -51,6 +51,8 @@ const (
 	levelRaw string = "RAW"
 
 	appDataFolder = "appDataFolder"
+
+	settingsFileName = "settings.json"
 )
 
 var (
@@ -85,6 +87,7 @@ type CmdG struct {
 	messageCache map[string]*Message
 	labelCache   map[string]*Label
 	contacts     []string
+	settings     Settings
 }
 
 func userAgent() string {
@@ -530,6 +533,43 @@ func (c *CmdG) GetFile(ctx context.Context, fn string) ([]byte, error) {
 	}
 
 	return nil, os.ErrNotExist
+}
+
+// Settings stores settings in the app specific folder on Google Drive.
+type Settings struct {
+	Sender string `json:"sender,omitempty"`
+}
+
+// GetDefaultSender gets the default sender, if no From was provided at compose.
+func (c *CmdG) GetDefaultSender() string {
+	return c.settings.Sender
+}
+
+// SetDefaultSender sets default sender, used if the user didn't enter
+// a From line manually.
+func (c *CmdG) SetDefaultSender(s string) {
+	c.settings.Sender = s
+}
+
+// LoadSettings loads settings from app specific folder on Google Drive.
+func (c *CmdG) LoadSettings(ctx context.Context) error {
+	b, err := c.GetFile(ctx, settingsFileName)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(b, &c.settings); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SaveSettings saves settings to app specific folder on Google Drive.
+func (c *CmdG) SaveSettings(ctx context.Context) error {
+	b, err := json.Marshal(c.settings)
+	if err != nil {
+		return err
+	}
+	return c.UpdateFile(ctx, settingsFileName, b)
 }
 
 // MakeDraft creates a new draft.

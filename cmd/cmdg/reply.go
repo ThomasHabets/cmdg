@@ -91,7 +91,16 @@ func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to,
 		// don't care
 	}
 
-	var headOps []headOp
+	headOps := []headOp{
+		func(h *mail.Header) {
+			if h.Get("from") == "" {
+				t := conn.GetDefaultSender()
+				if t != "" {
+					(*h)["From"] = []string{t}
+				}
+			}
+		},
+	}
 	if v, err := msg.GetHeader(ctx, headerMessageID); err != nil {
 		log.Errorf("Failed to get message ID when replying: %v", err)
 		if refs != nil {

@@ -63,6 +63,8 @@ var (
 	lynx            = flag.String("lynx", "lynx", "HTML render binary.")
 	enableSign      = flag.Bool("sign", false, "Send signed emails by default.")
 
+	updateSender = flag.String("update_sender", "", `Update default sender address. E.g.: "John Doe" <john.doe@example.com>`)
+
 	conn *cmdg.CmdG
 
 	// Relative to configDir.
@@ -208,6 +210,21 @@ func main() {
 			log.Fatalf("Loading labels: %v", err)
 		}
 		log.Infof("Labels loaded")
+	}()
+
+	if *updateSender != "" {
+		conn.SetDefaultSender(*updateSender)
+		conn.SaveSettings(ctx)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := conn.LoadSettings(ctx); err != nil {
+			log.Errorf("Failed to load settings: %v", err)
+		} else {
+			log.Infof("Settings loaded")
+		}
 	}()
 
 	wg.Add(1)
