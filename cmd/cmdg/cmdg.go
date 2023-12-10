@@ -45,7 +45,7 @@ import (
 )
 
 const (
-	version           = "1.03"
+	version           = "1.04"
 	signatureFilename = "signature.txt"
 )
 
