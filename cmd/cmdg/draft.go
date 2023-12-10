@@ -107,18 +107,12 @@ func continueDraft(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) erro
 			}
 			return nil
 		case draftKeyDraft:
-			head, part, err := cmdg.ParseUserMessage(msg)
-			if err != nil {
-				// TODO: ask to retry
-				return errors.Wrapf(err, "failed to parse that message")
-			}
-
-			if err := draft.UpdateParts(ctx, head, []*cmdg.Part{part}); err != nil {
+			return errors.Wrap(draft.Update(ctx, msg), "updating draft")
+		case draftKeySend:
+			if err := draft.Update(ctx, msg); err != nil {
 				// TODO: allow option to save to local file.
 				return errors.Wrap(err, "updating draft")
 			}
-			return nil
-		case draftKeySend:
 			if err := draft.Send(ctx); err != nil {
 				// TODO: allow option to save to local file.
 				return errors.Wrap(err, "sending draft")
