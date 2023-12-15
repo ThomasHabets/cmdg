@@ -77,14 +77,18 @@ a ClientID and ClientSecret. You can do this with the following steps:
 
   1. Go to the [Google Developers Console](https://console.developers.google.com/apis).
   1. Select an existing project or create a new project
-  1. Navigate to the "APIs & Services > OAuth consent screen" page.
+  1. If they are not listed add them using "+ ENABLE APIS AND SERVICES".
+  1. Navigate to the "OAuth consent screen" page.
   1. Fill out the OAuth consent screen.
-  1. Make sure to add scopes for the various APIs you'll need
-     1. Drive API - `.../auth/drive.appdata`
-     1. Gmail API - `../auth/gmail.modify`
-     1. People API - `.../auth/contacts.readonly`
-  1. Click the button "Create Credentials" and select "OAuth client ID" from the dropdown.
+  1. Make sure to add scopes for the various APIs you'll need.  You may need to enter the following URLs under "Manually add scopes":
+     1. Drive API - `https://www.googleapis.com/auth/drive.appdata`
+     1. Gmail API - `https://www.googleapis.com/auth/gmail.modify`
+     1. People API - `https://www.googleapis.com/auth/contacts.readonly`
+  1. Navigate to the "Credentials"  page.
+  1. Click "+ CREATE CREDENTIALS"
+  1. Select "OAuth client ID" from the drop down.
   1. Set the "Application type" to "Desktop app" and make the name anything you'd like.
+  1. Click "CREATE"
   1. This should give you a Client ID and Client Secret you can provide to `cmdg`.
 
 ```
