@@ -77,12 +77,15 @@ a ClientID and ClientSecret. You can do this with the following steps:
 
   1. Go to the [Google Developers Console](https://console.developers.google.com/apis).
   1. Select an existing project or create a new project
-  1. If they are not listed add them using "+ ENABLE APIS AND SERVICES".
+  1. Visit the following URLs and ensure that these three APIs are enabled.
+     1. Gmail - `https://console.developers.google.com/apis/api/gmail.googleapis.com/overview`
+     1. Google Drive API `https://console.developers.google.com/apis/api/drive.googleapis.com/overview`
+     1. People API - `https://console.developers.google.com/apis/api/people.googleapis.com/overview`
   1. Navigate to the "OAuth consent screen" page.
   1. Fill out the OAuth consent screen.
   1. Make sure to add scopes for the various APIs you'll need.  You may need to enter the following URLs under "Manually add scopes":
-     1. Drive API - `https://www.googleapis.com/auth/drive.appdata`
      1. Gmail API - `https://www.googleapis.com/auth/gmail.modify`
+     1. Google Drive API - `https://www.googleapis.com/auth/drive.appdata`
      1. People API - `https://www.googleapis.com/auth/contacts.readonly`
   1. Navigate to the "Credentials"  page.
   1. Click "+ CREATE CREDENTIALS"
