@@ -3,7 +3,23 @@ package input
 import (
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
+
+func TestDuration(t *testing.T) {
+	for _, test := range []struct {
+		i time.Duration
+		o unix.Timeval
+	}{
+		{i: time.Second, o: unix.Timeval{Sec: 1, Usec: 0}},
+		{i: time.Millisecond, o: unix.Timeval{Sec: 0, Usec: 1000}},
+	} {
+		if got := *duration2Timeval(test.i); got != test.o {
+			t.Errorf("got %v want %v", got, test.o)
+		}
+	}
+}
 
 func TestMaxTimeoutSpace(t *testing.T) {
 	now := time.Now()

@@ -127,13 +127,24 @@ func (i *Input) Stop() {
 }
 
 func duration2Timeval(timeout time.Duration) *unix.Timeval {
-	// Workaround to set unix.Timeval since unix.Timeval.Usec is
+	// Workaround to set unix.Timeval since unix.Timeval.Sec/Usec is
 	// different types on different systems. :-(
 	// By last check it can only be int32 and int64:
-	// grep -A 2 ^'type Timeval struct ' ~/go/src/golang.org/x/sys/unix/*.go | grep Usec | sed 's/.*go-//' | awk '{print $2}' | sort | uniq
-	tv := &unix.Timeval{
-		Sec: timeout.Nanoseconds() / 1e9,
+	// grep -A 2 ^'type Timeval struct ' ~/go/src/golang.org/x/sys/unix/*.go | egrep 'Usec|Sec' | sed 's/.*go-//' | awk '{print $2}' | sort | uniq
+	tv := &unix.Timeval{}
+	var sec interface{}
+	sec = &tv.Sec
+	switch s := sec.(type) {
+	case *int64:
+		*s = timeout.Nanoseconds() / 1e9
+	case *int32:
+		*s = int32(timeout.Nanoseconds() / 1e9)
+	default:
+		log.Errorf("Unknown type of unix.Timeval.Sec")
+		tv.Sec = 0
+		tv.Usec = 50000
 	}
+
 	var usec interface{}
 	usec = &tv.Usec
 	switch u := usec.(type) {
