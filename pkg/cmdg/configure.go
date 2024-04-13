@@ -102,6 +102,10 @@ func auth(cfg ConfigOAuth) (string, error) {
 	return token.RefreshToken, nil
 }
 
+// Make a config, possibly by asking the user.
+//
+// If there's a default client ID/secret, then scrub that before
+// returning the blob.
 func makeConfig(id, secret string) ([]byte, error) {
 	var err error
 
@@ -140,6 +144,11 @@ func makeConfig(id, secret string) ([]byte, error) {
 			ClientSecret: secret,
 			RefreshToken: token,
 		},
+	}
+	// Don't store default ID/secret.
+	if id == defaultClientID {
+		conf.OAuth.ClientID = "";
+		conf.OAuth.ClientSecret = "";
 	}
 	b, err := json.Marshal(conf)
 	if err != nil {

@@ -133,6 +133,10 @@ func readConf(fn string) (Config, error) {
 	if err := json.Unmarshal(f, &conf); err != nil {
 		return Config{}, errors.Wrapf(err, "unmarshalling config")
 	}
+	if conf.OAuth.ClientID == "" {
+		conf.OAuth.ClientID = defaultClientID
+		conf.OAuth.ClientSecret = defaultClientSecret
+	}
 	return conf, nil
 }
 
