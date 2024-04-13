@@ -134,8 +134,8 @@ func readConf(fn string) (Config, error) {
 		return Config{}, errors.Wrapf(err, "unmarshalling config")
 	}
 	if conf.OAuth.ClientID == "" {
-		conf.OAuth.ClientID = defaultClientID
-		conf.OAuth.ClientSecret = defaultClientSecret
+		conf.OAuth.ClientID = DefaultClientID
+		conf.OAuth.ClientSecret = DefaultClientSecret
 	}
 	return conf, nil
 }

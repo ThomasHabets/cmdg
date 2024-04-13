@@ -20,10 +20,16 @@ import (
 
 const (
 	spaces = "\n\t\r "
+)
 
+var (
 	// Populate these for a binary-only release.
-	defaultClientID     = ""
-	defaultClientSecret = ""
+
+	// DefaultClientID is the Oauth client ID.
+	DefaultClientID     = ""
+
+	// DefaultClientSecret is the Oauth client secret.
+	DefaultClientSecret = ""
 )
 
 var (
@@ -111,10 +117,10 @@ func makeConfig(id, secret string) ([]byte, error) {
 
 	// Use default, if available.
 	if id == "" {
-		id = defaultClientID
+		id = DefaultClientID
 	}
 	if secret == "" {
-		secret = defaultClientSecret
+		secret = DefaultClientSecret
 	}
 
 	// Else ask.
@@ -146,7 +152,7 @@ func makeConfig(id, secret string) ([]byte, error) {
 		},
 	}
 	// Don't store default ID/secret.
-	if id == defaultClientID {
+	if id == DefaultClientID {
 		conf.OAuth.ClientID = "";
 		conf.OAuth.ClientSecret = "";
 	}

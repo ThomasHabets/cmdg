@@ -79,6 +79,21 @@ var (
 	labelReloadTime = time.Minute
 
 	signature string
+
+	// The way to build API keys in at build time is to build with
+	//
+	// ```
+	// go build  -ldflags "-X main.InitID=blah -X main.InitSecret=blah2" ./cmd/cmdg
+	// ```
+	//
+	// In theory we should be able to set cmdg.DefaultClientID
+	// directly, but I couldn't get it to work.
+
+	// InitID is the OAuth client ID.
+	InitID string
+
+	// InitSecret is the Oauth client secret.
+	InitSecret string
 )
 
 func configFilePath() string {
@@ -124,6 +139,10 @@ func run(ctx context.Context) error {
 }
 
 func main() {
+	if InitID != "" {
+		cmdg.DefaultClientID = InitID
+		cmdg.DefaultClientSecret = InitSecret
+	}
 	syscall.Umask(0077)
 	flag.Parse()
 	cmdg.Version = version
