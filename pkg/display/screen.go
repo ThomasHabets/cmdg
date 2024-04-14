@@ -2,12 +2,17 @@ package display
 
 import (
 	"fmt"
+	"flag"
 	"regexp"
 	"strings"
 
 	"github.com/mattn/go-runewidth"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
+)
+
+var (
+	useSuspend = flag.Bool("atomic_screen_updates", true, "Use atomic screen updates. Not supported on Windows, possibly other terminals too.")
 )
 
 // 8 Color mode colors.
@@ -216,7 +221,10 @@ func (s *Screen) Draw() {
 		s.cursor = nil
 	}
 
-	os := Suspend + HideCursor + strings.Join(o, "") + ShowCursor + Resume
+	os := HideCursor + strings.Join(o, "") + ShowCursor
+	if *useSuspend {
+		os = Suspend + os + Resume
+	}
 	fmt.Print(os)
 	log.Debugf("Saved %d out of %d line while drawing. %d bytes", saved, len(s.buffer), len(os))
 	s.useCache = false
