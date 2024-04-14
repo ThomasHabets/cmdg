@@ -1,0 +1,55 @@
+name: release
+
+on:
+  push:
+    tags:
+    - '*'
+
+jobs:
+  create_release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }} 
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+    outputs:
+      tag: ${{ github.ref_name }}
+
+  build_releases:
+    name: Build Releases
+    needs: create_release
+    strategy:
+      matrix:
+        platform: [ubuntu, macos]
+
+    runs-on: ${{ format('{0}-latest', matrix.platform) }}
+    permissions: write-all
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: 'go.sum'
+
+      - name: Build binary
+        run: |
+           go build -o 'cmdg-${{ matrix.platform }}' -ldflags '-X main.InitID=${{ secrets.CLIENT_ID }} -X main.InitSecret=${{ secrets.CLIENT_SECRET }}' ./cmd/cmdg
+
+      - name: Release binary
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create_release.outputs.tag }}
+          files: cmdg-${{ matrix.platform }}
+
+
