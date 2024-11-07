@@ -175,7 +175,15 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	}
 
 	// TODO: msg index.
-	ov.screen.Printlnf(line, "Scroll %d (%d%%)%s", scroll, min(100,int(100*float64(scroll)/float64(len(lines)-contentSpace))), searching)
+	ov.screen.Printlnf(
+		line,
+		"Scroll %d-%d/%d (%d%%)%s",
+		scroll,
+		scroll+contentSpace,
+		len(lines),
+		min(100,int(100*float64(scroll+contentSpace) / float64(len(lines)))),
+		searching,
+	)
 	line++
 
 	// From.
