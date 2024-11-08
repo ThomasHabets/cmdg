@@ -263,7 +263,7 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 
 		key := <-keys.Chan()
 		switch key {
-		case input.Enter:
+		case input.Enter, input.Right:
 			if selected < 0 {
 				if !free {
 					continue
