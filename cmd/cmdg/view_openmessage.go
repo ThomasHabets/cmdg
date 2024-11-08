@@ -573,7 +573,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					}
 					ov.Draw(lines, scroll)
 				}
-			case "u":
+			case "u", input.Left:
 				return nil, nil
 			case "q":
 				return OpQuit(), nil
@@ -643,7 +643,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					scroll = ns
 				}
 				ov.Draw(lines, scroll)
-			case "t": // Attachmments
+			case "t", input.Right: // Attachmments
 				as, err := ov.msg.Attachments(ctx)
 				if err != nil {
 					ov.errors <- fmt.Errorf("Listing attachments failed: %v", err)
