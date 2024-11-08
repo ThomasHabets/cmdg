@@ -713,7 +713,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			switch key {
 			case "?", input.F1:
 				help(messageListViewHelp, mv.keys)
-			case input.Enter:
+			case input.Enter, input.Right:
 				if len(mv.messages) == 0 {
 					// Let's assume we've never gotten to the state where mv.pos >= len(mv.messages)
 					break
