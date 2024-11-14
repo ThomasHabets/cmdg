@@ -28,7 +28,7 @@ space, x           — Mark message and advance
 X                  — Mark message and step up
 e                  — Archive marked messages
 d                  — Move marked messages to trash
-I                  … Mark marked mails as read
+I                  — Mark marked mails as read
 l                  — Label marked messages
 L                  — Unlabel marked messages
 *                  — Toggle starred on highlighted message
@@ -39,7 +39,7 @@ P, p, ^P, k, Up    — Previous message
 r, ^R              — Reload current view
 g                  — Go to label
 1                  — Go to inbox
-U                  … Mark marked mails as unread
+U                  — Mark marked mails as unread
 s, ^s              — Search
 q                  — Quit
 ^L                 — Refresh screen
