@@ -23,7 +23,7 @@ const (
 	scrollLimit = 5
 
 	messageListViewHelp = `?, F1              — Help
-enter              — Open message
+enter, →           — Open message
 space, x           — Mark message and advance
 X                  — Mark message and step up
 e                  — Archive marked messages

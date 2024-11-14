@@ -29,7 +29,7 @@ const (
 l              — Add label
 L              — Remove label
 *              — Toggle "starred"
-u              — Exit message
+u, ←           — Exit message
 U              — Mark unread
 n, Down        — Scroll down
 space          — Page down
@@ -43,7 +43,7 @@ s, ^s          — Search within message
 a              — Reply all
 d              — Delete
 e              — Archive
-t              — Browse attachments (if any)
+t, →           — Browse attachments (if any)
 H              — Force HTML view
 \              — Show raw message source
 |              — Pipe to command
