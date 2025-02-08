@@ -296,6 +296,12 @@ func (c *CmdG) Labels() []*Label {
 		if ret[j].ID == Inbox {
 			return false
 		}
+		if ret[i].ID == Trash {
+			return false
+		}
+		if ret[j].ID == Trash {
+			return true
+		}
 		return ret[i].Label < ret[j].Label
 	})
 	return ret
