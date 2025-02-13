@@ -825,7 +825,7 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 			if len(strings.Trim(dec, "\n\r \t")) > 0 {
 				alt = append(alt, dec)
 			}
-		case "multipart/alternative", "multipart/related", "multipart/signed", "multipart/mixed":
+		case "multipart/alternative", "multipart/related", "multipart/signed", "multipart/mixed", "message/rfc822":
 			t, err := makeBodyAlt(ctx, p, preferHTML)
 			if err != nil {
 				return "", err
