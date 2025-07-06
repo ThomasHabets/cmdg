@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +48,7 @@ U                  — Mark marked mails as unread
 s, ^s              — Search
 q                  — Quit
 ^L                 — Refresh screen
+|                  — Pipe the selected messages to an external command in mbox format
 
 Press [enter] to exit
 `
@@ -990,6 +996,48 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					// stack frame on every navigation.
 					return nv.Run(ctx)
 				}
+			case "|":
+				cmds, err := dialog.Entry("Command> ", mv.keys)
+				if err == dialog.ErrAborted || cmds == "" {
+					// User aborted; do nothing.
+					break
+				} else if err != nil {
+					mv.errors <- errors.Wrap(err, "failed to get pipe command")
+					break
+				}
+
+				xedmsgs := make([]*cmdg.Message, 0)
+				for _, msg := range mv.messages {
+					if marked[msg.ID] {
+						xedmsgs = append(xedmsgs, msg)
+					}
+				}
+
+				if len(xedmsgs) == 0 {
+					log.Infof("No marked messages to do do operation %q on", "batch pipe")
+					break
+				}
+
+				cmd := exec.CommandContext(ctx, *shell, "-c", cmds)
+				in, err := cmd.StdinPipe()
+				if err != nil {
+					// needz a showPager here too?
+					mv.errors <- errors.Wrap(err, "failed to setup pipe")
+					break
+				}
+
+				go batchPipeHelper(ctx, xedmsgs, in, mv.errors)
+
+				buf := new(bytes.Buffer)
+				cmd.Stdout = buf
+				cmd.Stderr = buf
+				if err := cmd.Run(); err != nil {
+					mv.errors <- errors.Wrapf(err, "failed run pipe command: %q", cmds)
+					break
+				}
+				if err := showPager(ctx, mv.keys, buf.String()); err != nil {
+					mv.errors <- showPager(ctx, mv.keys, buf.String())
+				}
 			case "q":
 				return nil
 			default:
@@ -1031,4 +1079,52 @@ func (mv *MessageView) Run(ctx context.Context) error {
 		screen.Draw()
 		log.Debugf("Draw took %v", time.Since(st))
 	}
+}
+
+func batchPipeHelper(ctx context.Context, xedmsgs []*cmdg.Message, in io.WriteCloser, ec chan error) {
+
+	defer in.Close()
+	dest := bufio.NewWriter(in)
+	defer dest.Flush()
+
+	// TODO(rjk): This is a lot of code. Pull into a function.
+
+	// Messages need to be time-sorted to look like a mbox.
+	sorted := make([]SortableMessage, 0, len(xedmsgs))
+	for _, m := range xedmsgs {
+		t, err := m.GetTime(ctx)
+		if err != nil {
+			ec <- errors.Wrap(err, "failed to get date of message")
+			return
+		}
+		from, err := m.GetFromAddress(ctx)
+		if err != nil {
+			ec <- errors.Wrap(err, "failed to get from of message")
+			return
+		}
+		sorted = append(sorted, SortableMessage{msg: m, t: t, from: from})
+	}
+	slices.SortFunc(sorted, func(a, b SortableMessage) int { return a.t.Compare(b.t) })
+
+	for _, m := range sorted {
+		ms, err := m.msg.Raw(ctx)
+		if err != nil {
+			ec <- errors.Wrap(err, "failed to get raw message")
+			// Skip a message whose raw form cannot be read.
+			continue
+		}
+
+		if err := printRFC822FromLine(dest, m); err != nil {
+			ec <- errors.Wrap(err, "failed to write RFC822 header")
+			// Give up if we can't write to the pipe.
+			return
+		}
+
+		if _, err := dest.WriteString(ms); err != nil {
+			ec <- errors.Wrap(err, "failed to write raw email bodies to pipe")
+			// Give up if we can't write to the pipe.
+			return
+		}
+	}
+
 }
