@@ -430,7 +430,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 				log.Infof("Failed to parse mail date: %v", err)
 				tm = "???"
 			}
-			from, err := curmsg.GetFrom(ctx)
+			from, err := curmsg.GetFromNameOrAddress(ctx)
 			if err != nil {
 				return err
 			}
