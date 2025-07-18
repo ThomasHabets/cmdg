@@ -10,7 +10,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/crypto v0.36.0
 	golang.org/x/net v0.38.0
-	golang.org/x/oauth2 v0.24.0
+	golang.org/x/oauth2 v0.27.0
 	golang.org/x/sys v0.31.0
 	google.golang.org/api v0.214.0
 )
