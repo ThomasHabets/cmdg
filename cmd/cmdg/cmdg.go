@@ -233,7 +233,9 @@ func main() {
 
 	if *updateSender != "" {
 		conn.SetDefaultSender(*updateSender)
-		conn.SaveSettings(ctx)
+		if err := conn.SaveSettings(ctx); err != nil {
+			log.Errorf("Failed to save settings: %v", err)
+		}
 	}
 
 	wg.Add(1)
