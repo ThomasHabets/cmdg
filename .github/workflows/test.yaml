@@ -18,5 +18,11 @@ jobs:
           go-version-file: 'go.mod'
           cache-dependency-path: 'go.sum'
       - name: Build binary
-        run: |
+        run:
            go build ./cmd/cmdg
+      - name: Vet
+        run:
+           go vet ./...
+      - name: Test
+        run:
+           go test ./...
