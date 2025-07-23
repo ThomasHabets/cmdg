@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -181,7 +180,7 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 		scroll,
 		min(scroll+contentSpace, len(lines)),
 		len(lines),
-		min(100,int(100*float64(scroll+contentSpace) / float64(len(lines)))),
+		min(100, int(100*float64(scroll+contentSpace)/float64(len(lines)))),
 		searching,
 	)
 	line++
@@ -681,7 +680,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					ov.errors <- errors.Wrapf(err, "failed run pipe command: %q", buf.String())
 					break
 				}
-				ov.errors <- ov.showPager(ctx, buf.String())
+				ov.errors <- showPager(ctx, ov.keys, buf.String())
 			case input.Backspace, input.CtrlH, input.PgUp, "Meta-v":
 				scroll = ov.scroll(ctx, len(lines), scroll, -(ov.screen.Height - 10))
 				ov.Draw(lines, scroll)
@@ -698,25 +697,7 @@ func (ov *OpenMessageView) showRaw(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "Fetching raw msg")
 	}
-	return ov.showPager(ctx, m)
-}
-
-func (ov *OpenMessageView) showPager(ctx context.Context, content string) error {
-	ov.keys.Stop()
-	defer ov.keys.Start()
-
-	cmd := exec.CommandContext(ctx, pagerBinary)
-	cmd.Stdin = strings.NewReader(content)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return errors.Wrapf(err, "failed to start pager %q", pagerBinary)
-	}
-	if err := cmd.Wait(); err != nil {
-		return errors.Wrapf(err, "pager %q failed", pagerBinary)
-	}
-	log.Infof("Pager finished")
-	return nil
+	return showPager(ctx, ov.keys, m)
 }
 
 func (ov *OpenMessageView) scroll(ctx context.Context, lines, scroll, inc int) int {

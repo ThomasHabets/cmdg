@@ -449,8 +449,9 @@ func (msg *Message) GetReplyToAll(ctx context.Context) (string, string, error) {
 	return from, strings.Join(filteredEmails(from, cc), ", "), err
 }
 
-// GetFrom returns email address (not name) of sender.
-func (msg *Message) GetFrom(ctx context.Context) (string, error) {
+// GetFromNameOrAddress returns the name (preferred) or address of the
+// sender.
+func (msg *Message) GetFromNameOrAddress(ctx context.Context) (string, error) {
 	s, err := msg.GetHeader(ctx, "From")
 	if err != nil {
 		return "", err
@@ -462,6 +463,20 @@ func (msg *Message) GetFrom(ctx context.Context) (string, error) {
 	}
 	if len(a.Name) > 0 {
 		return a.Name, nil
+	}
+	return a.Address, nil
+}
+
+// GetFromAddress returns the address of the sender.
+func (msg *Message) GetFromAddress(ctx context.Context) (string, error) {
+	s, err := msg.GetHeader(ctx, "From")
+	if err != nil {
+		return "", err
+	}
+	a, err := mail.ParseAddress(s)
+	if err != nil {
+		log.Warningf("%q is not a valid address: %v", s, err)
+		return "", err
 	}
 	return a.Address, nil
 }
