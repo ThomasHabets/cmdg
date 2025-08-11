@@ -266,6 +266,14 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	ov.screen.Printlnf(line, "Labels: %s", labels)
 	line++
 
+	// Message ID
+	if msgid, err := ov.msg.GetHeader(ctx, "Message-ID"); err == nil {
+		ov.screen.Printlnf(line, "Message-ID: %s", msgid)
+		line++
+	} else {
+		ov.errors <- err
+	}
+
 	ov.screen.Printlnf(line, strings.Repeat("—", ov.screen.Width))
 	line++
 
