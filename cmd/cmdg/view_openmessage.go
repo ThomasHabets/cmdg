@@ -54,6 +54,7 @@ Press [enter] to exit
 
 var (
 	enableDottime = flag.Bool("dottime", false, "Enable dottime.")
+	showMessageID = flag.Bool("show_message_id", false, "Show message ID in a message.")
 )
 
 func isGraphicString(s string) bool {
@@ -267,11 +268,13 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	line++
 
 	// Message ID
-	if msgid, err := ov.msg.GetHeader(ctx, "Message-ID"); err == nil {
-		ov.screen.Printlnf(line, "Message-ID: %s", msgid)
-		line++
-	} else {
-		ov.errors <- err
+	if *showMessageID {
+		if msgid, err := ov.msg.GetHeader(ctx, "Message-ID"); err == nil {
+			ov.screen.Printlnf(line, "Message-ID: %s", msgid)
+			line++
+		} else {
+			ov.errors <- err
+		}
 	}
 
 	ov.screen.Printlnf(line, strings.Repeat("—", ov.screen.Width))
