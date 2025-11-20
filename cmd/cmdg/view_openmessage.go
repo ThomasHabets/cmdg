@@ -95,7 +95,7 @@ func help(txt string, keys *input.Input) error {
 			maxlen = n
 		}
 	}
-	screen.Printlnf(0, strings.Repeat("—", screen.Width))
+	screen.Printlnf(0, "%s", strings.Repeat("—", screen.Width))
 	for n, l := range lines {
 		screen.Printlnf(n+1, "%s%s", strings.Repeat(" ", (screen.Width-maxlen)/2), l)
 	}
@@ -277,7 +277,7 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 		}
 	}
 
-	ov.screen.Printlnf(line, strings.Repeat("—", ov.screen.Width))
+	ov.screen.Printlnf(line, "%s", strings.Repeat("—", ov.screen.Width))
 	line++
 
 	// Draw body.
@@ -293,7 +293,7 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	} else {
 		log.Errorf("Scroll too high! %d >= %d", scroll, len(lines))
 	}
-	ov.screen.Printlnf(ov.screen.Height-2, strings.Repeat("—", ov.screen.Width))
+	ov.screen.Printlnf(ov.screen.Height-2, "%s", strings.Repeat("—", ov.screen.Width))
 	return nil
 }
 

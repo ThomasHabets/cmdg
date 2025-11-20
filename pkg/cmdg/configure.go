@@ -49,7 +49,7 @@ type Config struct {
 
 func readLine(s string) (string, error) {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf(s)
+	fmt.Print(s)
 	id, err := reader.ReadString('\n')
 	if err != nil {
 		return "", err
