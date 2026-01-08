@@ -52,6 +52,10 @@ func (gpg *GPG) Decrypt(ctx context.Context, dec string) (string, *Status, error
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
 	cmd := exec.CommandContext(ctx, gpg.GPG, "--batch", "--no-tty")
+
+	// Ensure that US gpg strings are used in gpg tp match regexp.
+	cmd.Env = append(os.Environ(), "LC_MESSAGES=C")
+
 	if gpg.Passphrase != "" {
 		// Used for testing.
 		cmd.Args = append(cmd.Args,
@@ -105,6 +109,10 @@ func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
 
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, gpg.GPG, "--verify", "--no-tty", sigFN, dataFN)
+
+	// Ensure that US gpg strings are used in gpg tp match regexp.
+	cmd.Env = append(os.Environ(), "LC_MESSAGES=C")
+
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		return nil, errors.Wrapf(err, "failed to start gpg (%q)", gpg.GPG)
@@ -144,6 +152,10 @@ func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
 func (gpg *GPG) VerifyInline(ctx context.Context, data string) (*Status, error) {
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, gpg.GPG, "--verify", "--no-tty", "-")
+
+	// Ensure that US gpg strings are used in gpg tp match regexp.
+	cmd.Env = append(os.Environ(), "LC_MESSAGES=C")
+
 	cmd.Stderr = &stderr
 	cmd.Stdin = strings.NewReader(data)
 	if err := cmd.Start(); err != nil {
