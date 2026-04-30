@@ -31,11 +31,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ThomasHabets/cmdg/pkg/cmdg"
@@ -295,4 +298,22 @@ func main() {
 	if err := run(ctx); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func showPager(ctx context.Context, keys *input.Input, content string) error {
+	keys.Stop()
+	defer keys.Start()
+
+	cmd := exec.CommandContext(ctx, pagerBinary)
+	cmd.Stdin = strings.NewReader(content)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return errors.Wrapf(err, "failed to start pager %q", pagerBinary)
+	}
+	if err := cmd.Wait(); err != nil {
+		return errors.Wrapf(err, "pager %q failed", pagerBinary)
+	}
+	log.Infof("Pager finished")
+	return nil
 }
