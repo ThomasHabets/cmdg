@@ -26,7 +26,7 @@ var (
 	// Populate these for a binary-only release.
 
 	// DefaultClientID is the Oauth client ID.
-	DefaultClientID     = ""
+	DefaultClientID = ""
 
 	// DefaultClientSecret is the Oauth client secret.
 	DefaultClientSecret = ""
@@ -153,8 +153,8 @@ func makeConfig(id, secret string) ([]byte, error) {
 	}
 	// Don't store default ID/secret.
 	if id == DefaultClientID {
-		conf.OAuth.ClientID = "";
-		conf.OAuth.ClientSecret = "";
+		conf.OAuth.ClientID = ""
+		conf.OAuth.ClientSecret = ""
 	}
 	b, err := json.Marshal(conf)
 	if err != nil {

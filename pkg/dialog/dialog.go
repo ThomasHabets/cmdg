@@ -305,3 +305,123 @@ func Selection(opts []*Option, prompt string, free bool, keys *input.Input) (*Op
 		last = cur
 	}
 }
+
+// splitLastToken splits a string into a prefix and the last token being typed,
+// delimited by comma or semicolon.
+func splitLastToken(s string) (string, string) {
+	idx := strings.LastIndexAny(s, ",;")
+	if idx < 0 {
+		return "", s
+	}
+	prefix := s[:idx+1]
+	last := s[idx+1:]
+	// Include leading whitespace of 'last' into 'prefix'.
+	trimmed := strings.TrimLeft(last, " \t")
+	prefix += last[:len(last)-len(trimmed)]
+	return prefix, trimmed
+}
+
+func validateEmails(s string) error {
+	parts := strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == ';'
+	})
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		// Basic email validation.
+		if !strings.Contains(p, "@") || !strings.Contains(p, ".") {
+			return fmt.Errorf("invalid email address: %q", p)
+		}
+	}
+	return nil
+}
+
+// MultiSelection is like Selection, but allows multiple comma/semicolon separated tokens.
+
+// It returns the full input string.
+func MultiSelection(opts []*Option, prompt string, keys *input.Input) (string, error) {
+	screen, err := display.NewScreen()
+	if err != nil {
+		return "", err
+	}
+	cur := ""
+	last := ""
+	selected := -1
+	scroll := 0 // TODO, implement scrolling.
+	visible := opts
+	keys.PastePush(false)
+	defer keys.PastePop()
+	for {
+		start := 3
+		prefix := "    "
+		content := fmt.Sprintf("%s%s%s", prefix, prompt, cur)
+		screen.Printlnf(2, "%s", content)
+		screen.SetCursor(2, display.StringWidth(content)+1)
+		for n, o := range visible[scroll:] {
+			sstr := display.Reset + " "
+			if selected == n {
+				sstr = display.Bold + ">"
+			}
+			screen.Printlnf(n+start, "%s%s %s", prefix, sstr, o)
+		}
+
+		// Clear the area.
+		for n := len(visible); n < len(opts); n++ {
+			screen.Printlnf(n+start, "")
+		}
+
+		screen.Draw()
+
+		key := <-keys.Chan()
+		switch key {
+		case input.Enter, input.Right:
+			if selected >= 0 {
+				prefix, _ := splitLastToken(cur)
+				cur = prefix + visible[selected].Key
+				if key == input.Right {
+					cur += ", "
+				}
+			}
+			if key == input.Enter {
+				if err := validateEmails(cur); err != nil {
+					Message("Invalid recipients", err.Error(), keys)
+					continue
+				}
+				return cur, nil
+			}
+		case input.CtrlN, input.Down:
+			selected++
+			if selected >= len(visible) {
+				selected = len(visible) - 1
+			}
+		case input.CtrlP, input.Up:
+			if selected > -1 {
+				selected--
+				if selected < 0 {
+					selected = -1
+				}
+			}
+		case input.CtrlC:
+			return "", ErrAborted
+		case input.Backspace, input.CtrlH:
+			cur = TrimOneChar(cur)
+		case input.CtrlU:
+			cur = ""
+		case input.Tab:
+			if selected >= 0 {
+				prefix, _ := splitLastToken(cur)
+				cur = prefix + visible[selected].Key + ", "
+			}
+		default:
+			cur += string(key)
+		}
+		if last != cur {
+			selected = -1
+			_, lastTok := splitLastToken(cur)
+			visible = filterSubmatch(opts, strings.TrimSpace(lastTok))
+		}
+		last = cur
+	}
+}

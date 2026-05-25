@@ -72,14 +72,13 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 }
 
 func composeNew(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
-	toOpt, err := dialog.Selection(dialog.Strings2Options(conn.Contacts()), "To> ", true, keys)
+	to, err := dialog.MultiSelection(dialog.Strings2Options(conn.Contacts()), "To> ", keys)
 	if err == dialog.ErrAborted {
 		return nil
 	} else if err != nil {
 		return err
 	}
 
-	to := toOpt.Key
 	if strings.EqualFold(to, "me") {
 		p, err := conn.GetProfile(ctx)
 		if err != nil {
@@ -87,7 +86,6 @@ func composeNew(ctx context.Context, conn *cmdg.CmdG, keys *input.Input) error {
 		}
 		to = p.EmailAddress
 	}
-
 	var sig string
 	if signature != "" {
 		sig = "--\n" + signature + "\n"
@@ -193,8 +191,8 @@ func sendMessage(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, msg str
 
 // compose() is used for compose, replies, and forwards.
 func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input.Input, threadID cmdg.ThreadID, msg string, attachments []*file) error {
-        doEdit := true
-        for {
+	doEdit := true
+	for {
 
 		var err error
 		if doEdit {

@@ -46,7 +46,8 @@ func replyQuoted(s string) string {
 }
 
 // Args:
-//   msg: Message to reply or forward.
+//
+//	msg: Message to reply or forward.
 func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to, cc, subjPrefix string, rmPrefix *regexp.Regexp, msg *cmdg.Message, attachments []*file) error {
 	b, err := msg.GetUnpatchedBody(ctx)
 	if err != nil {
@@ -136,13 +137,12 @@ func replyAll(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg
 
 func forward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
 	// Get recipient
-	toOpt, err := dialog.Selection(dialog.Strings2Options(conn.Contacts()), "To> ", true, keys)
+	to, err := dialog.MultiSelection(dialog.Strings2Options(conn.Contacts()), "To> ", keys)
 	if err == dialog.ErrAborted {
 		return nil
 	} else if err != nil {
 		return err
 	}
-	to := toOpt.Key
 	if strings.EqualFold(to, "me") {
 		p, err := conn.GetProfile(ctx)
 		if err != nil {

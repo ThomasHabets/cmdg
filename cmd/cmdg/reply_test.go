@@ -92,10 +92,10 @@ func TestForward_Extraction(t *testing.T) {
 		Transport: &mockRedirector{base: ts.URL},
 	}
 	conn, _ := cmdg.NewFake(client)
-	
+
 	// Get a message object
 	msg := cmdg.NewMessage(conn, "msg-123")
-	
+
 	// Test extraction logic directly to avoid UI blocking
 	atts, err := msg.Attachments(context.Background())
 	if err != nil {
@@ -107,7 +107,7 @@ func TestForward_Extraction(t *testing.T) {
 	if atts[0].Part.Filename != "test.txt" {
 		t.Errorf("Expected filename test.txt, got %s", atts[0].Part.Filename)
 	}
-	
+
 	content, err := atts[0].Download(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to download attachment: %v", err)

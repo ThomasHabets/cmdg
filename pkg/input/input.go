@@ -24,9 +24,11 @@ const (
 const (
 	EscChar = 27
 
-	CtrlC     = "\x03"
-	CtrlH     = "\x08"
-	Return    = "\x0a"
+	CtrlC  = "\x03"
+	CtrlH  = "\x08"
+	Tab    = "\x09"
+	Return = "\x0a"
+
 	CtrlL     = "\x0c"
 	Enter     = "\x0d"
 	CtrlN     = "\x0e"

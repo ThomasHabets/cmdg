@@ -182,7 +182,7 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 		scroll,
 		min(scroll+contentSpace, len(lines)),
 		len(lines),
-		min(100,int(100*float64(scroll+contentSpace) / float64(len(lines)))),
+		min(100, int(100*float64(scroll+contentSpace)/float64(len(lines)))),
 		searching,
 	)
 	line++

@@ -364,9 +364,10 @@ func ParseUserMessage(in string) (mail.Header, *Part, error) {
 
 // SendParts sends a multipart message.
 // Args:
-//   mp:    multipart type. "mixed" is a typical type.
-//   head:  Email header.
-//   parts: Email parts.
+//
+//	mp:    multipart type. "mixed" is a typical type.
+//	head:  Email header.
+//	parts: Email parts.
 func (c *CmdG) SendParts(ctx context.Context, threadID ThreadID, mp string, head mail.Header, parts []*Part) error {
 	var mbuf bytes.Buffer
 	w := multipart.NewWriter(&mbuf)

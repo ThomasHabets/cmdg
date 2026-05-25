@@ -1,8 +1,8 @@
 package display
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"regexp"
 	"strings"
 
