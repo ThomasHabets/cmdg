@@ -120,10 +120,11 @@ func (c *CmdG) LabelCache(label *Label) *Label {
 func NewFake(client *http.Client) (*CmdG, error) {
 	conn := &CmdG{
 		authedClient: client,
+		messageCache: make(map[string]*Message),
+		labelCache:   make(map[string]*Label),
 	}
 	return conn, conn.setupClients()
 }
-
 func readConf(fn string) (Config, error) {
 	f, err := ioutil.ReadFile(fn)
 	if err != nil {

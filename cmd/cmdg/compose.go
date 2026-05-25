@@ -110,7 +110,7 @@ Subject:
 		},
 	}
 
-	return compose(ctx, conn, headOps, keys, cmdg.NewThread, prefill)
+	return compose(ctx, conn, headOps, keys, cmdg.NewThread, prefill, nil)
 }
 
 func createSig(ctx context.Context, msg string) (string, error) {
@@ -192,10 +192,10 @@ func sendMessage(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, msg str
 }
 
 // compose() is used for compose, replies, and forwards.
-func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input.Input, threadID cmdg.ThreadID, msg string) error {
-	doEdit := true
-	var attachments []*file
-	for {
+func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input.Input, threadID cmdg.ThreadID, msg string, attachments []*file) error {
+        doEdit := true
+        for {
+
 		var err error
 		if doEdit {
 			// Get message content.

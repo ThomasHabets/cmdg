@@ -47,7 +47,7 @@ func replyQuoted(s string) string {
 
 // Args:
 //   msg: Message to reply or forward.
-func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to, cc, subjPrefix string, rmPrefix *regexp.Regexp, msg *cmdg.Message) error {
+func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to, cc, subjPrefix string, rmPrefix *regexp.Regexp, msg *cmdg.Message, attachments []*file) error {
 	b, err := msg.GetUnpatchedBody(ctx)
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to,
 		})
 	}
 
-	return compose(ctx, conn, headOps, keys, threadID, prefill)
+	return compose(ctx, conn, headOps, keys, threadID, prefill, attachments)
 }
 
 func reply(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
@@ -123,7 +123,7 @@ func reply(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Me
 	if err != nil {
 		return err
 	}
-	return replyOrForward(ctx, conn, keys, to, "", replyPrefix, replyPrefixes, msg)
+	return replyOrForward(ctx, conn, keys, to, "", replyPrefix, replyPrefixes, msg, nil)
 }
 
 func replyAll(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
@@ -131,7 +131,7 @@ func replyAll(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg
 	if err != nil {
 		return err
 	}
-	return replyOrForward(ctx, conn, keys, to, cc, replyPrefix, replyPrefixes, msg)
+	return replyOrForward(ctx, conn, keys, to, cc, replyPrefix, replyPrefixes, msg, nil)
 }
 
 func forward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.Message) error {
@@ -151,5 +151,20 @@ func forward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, msg *cmdg.
 		to = p.EmailAddress
 	}
 
-	return replyOrForward(ctx, conn, keys, to, "", forwardPrefix, forwardPrefixes, msg)
+	var atts []*file
+	as, err := msg.Attachments(ctx)
+	if err == nil {
+		for _, a := range as {
+			b, dlErr := a.Download(ctx)
+			if dlErr == nil && a.Part != nil {
+				atts = append(atts, &file{name: a.Part.Filename, content: b})
+			} else if dlErr != nil {
+				log.Errorf("Failed to download attachment %q: %v", a.Part.Filename, dlErr)
+			}
+		}
+	} else {
+		log.Errorf("Failed to get attachments: %v", err)
+	}
+
+	return replyOrForward(ctx, conn, keys, to, "", forwardPrefix, forwardPrefixes, msg, atts)
 }
