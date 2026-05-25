@@ -111,4 +111,10 @@ $ cmdg
 ```
 For keyboard shortcuts press '?' or F1 in most screens.
 
+### Multi-recipient Autocompletion
+When prompted for recipients (e.g., `To>`), you can enter multiple email addresses separated by commas (`,`) or semicolons (`;`).
+* **Tab**: Completes the currently highlighted contact and appends a comma and space.
+* **Right Arrow**: Same as Tab, allowing you to quickly chain multiple recipients from the contact list.
+* **Enter**: Completes the currently highlighted contact (if any), validates all addresses, and submits the list.
+
 To quit, press 'q'.
