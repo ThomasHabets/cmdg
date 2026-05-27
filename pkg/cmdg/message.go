@@ -4,20 +4,28 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	"image/png"
 	"io"
 	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
+	"net/http"
 	"net/mail"
+	"os"
 	"os/exec"
 	"regexp"
+
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
-
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/html/charset"
@@ -25,7 +33,13 @@ import (
 
 	"github.com/ThomasHabets/cmdg/pkg/display"
 	"github.com/ThomasHabets/cmdg/pkg/gpg"
-)
+	)
+
+	var (
+	// cmdgRenderBinary is the name of the external renderer binary.
+	cmdgRenderBinary = "cmdg-image-render"
+	)
+
 
 // Special labels.
 const (
@@ -44,8 +58,8 @@ var (
 	// GPG is the handle to a GPG config.
 	GPG *gpg.GPG
 
-	// Lynx is the executable to use as web browser to use to render HTML to text.
-	Lynx = "lynx"
+	// PreferredImageProtocol is set by the main package to communicate the user's preference.
+	PreferredImageProtocol string
 
 	// Openssl is the executable is used to verify some signatures.
 	Openssl = "openssl"
@@ -101,6 +115,306 @@ func (a *Attachment) Download(ctx context.Context) ([]byte, error) {
 	return []byte(d), nil
 }
 
+type InlineImage struct {
+	Source      string // CID or URL
+	X, Y        int    // Position in the text buffer
+	Width       int    // Width in terminal cells
+	Height      int    // Height in terminal cells
+	PixelWidth  int    // Original width in pixels
+	PixelHeight int    // Original height in pixels
+	Contents    []byte // Cached raw bytes
+	PNGContents []byte // Converted PNG bytes
+	KittyID     uint32 // ID for Kitty protocol
+	Found       bool   // True if marker was found in the current body
+}
+
+func ClearImages(proto string) {
+	if proto == "auto" {
+		proto = DetectImageProtocol()
+	}
+	log.Debugf("Clearing images for protocol %q", proto)
+	switch proto {
+	case "kitty":
+		// a=d: action=delete
+		// d=a: delete all placements on screen, but keep image data in memory
+		_, _ = os.Stdout.WriteString("\x1b_Ga=d,d=a\x1b\\")
+		_ = os.Stdout.Sync()
+	case "iterm2":
+		// iTerm2 clears on screen clear.
+	}
+}
+
+// ClearImageData clears both placements and image data from the terminal.
+func ClearImageData(proto string) {
+	if proto == "auto" {
+		proto = DetectImageProtocol()
+	}
+	log.Infof("Clearing image data for protocol %q", proto)
+	if proto == "kitty" {
+		// d=A: delete all images and placements
+		_, _ = os.Stdout.WriteString("\x1b_Ga=d,d=A\x1b\\")
+		_ = os.Stdout.Sync()
+	}
+}
+
+func (img *InlineImage) InViewport(scroll, headerLines, screenHeight int) bool {
+
+	screenY := img.Y - scroll + headerLines
+	// Image must be at least partially visible.
+	if screenY+img.Height <= headerLines {
+		return false
+	}
+	if screenY >= screenHeight-2 {
+		return false
+	}
+	return true
+}
+
+func findPartByCID(part *gmail.MessagePart, cid string) *gmail.MessagePart {
+	for _, h := range part.Headers {
+		if strings.ToLower(h.Name) == "content-id" && (h.Value == cid || h.Value == "<"+cid+">") {
+			return part
+		}
+	}
+	for _, p := range part.Parts {
+		if found := findPartByCID(p, cid); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func calculateCellOccupancy(pixelW, pixelH, termW, termH int) (int, int) {
+	// Assume 10x20 pixels per cell for now.
+	// TODO: dynamically detect this if possible.
+	cellW := pixelW / 10
+	cellH := pixelH / 20
+	if cellW == 0 {
+		cellW = 1
+	}
+	if cellH == 0 {
+		cellH = 1
+	}
+
+	// Scale to fit viewport if necessary.
+	if cellW > termW {
+		ratio := float64(termW) / float64(cellW)
+		cellW = termW
+		cellH = int(float64(cellH) * ratio)
+	}
+	if cellH > termH {
+		ratio := float64(termH) / float64(cellH)
+		cellH = termH
+		cellW = int(float64(cellW) * ratio)
+	}
+	if cellW == 0 {
+		cellW = 1
+	}
+	if cellH == 0 {
+		cellH = 1
+	}
+	return cellW, cellH
+}
+
+func KittyEncode(data []byte, w, h int) string {
+	b64 := base64.StdEncoding.EncodeToString(data)
+	// We use the simplest Kitty 'direct' protocol: a=T (transfer and display), t=d (direct), format is auto-detected.
+	// We wrap it in a string that can be printed.
+	return fmt.Sprintf("\x1b_Ga=T,t=d,c=%d,r=%d;%s\x1b\\", w, h, b64)
+}
+
+func ITerm2Encode(data []byte, w, h int) string {
+	b64 := base64.StdEncoding.EncodeToString(data)
+	return fmt.Sprintf("\x1b]1337;File=width=%d;height=%d;inline=1:%s\x1b\\", w, h, b64)
+}
+func DetectImageProtocol() string {
+	if PreferredImageProtocol == "none" {
+		return "none"
+	}
+	if PreferredImageProtocol != "auto" && PreferredImageProtocol != "" {
+		return PreferredImageProtocol
+	}
+
+	term := strings.ToLower(os.Getenv("TERM"))
+	termProg := strings.ToLower(os.Getenv("TERM_PROGRAM"))
+
+	// Kitty / Ghostty / WezTerm (Kitty protocol)
+	if strings.Contains(term, "kitty") || os.Getenv("KITTY_WINDOW_ID") != "" {
+		return "kitty"
+	}
+	if strings.Contains(term, "ghostty") || termProg == "ghostty" || os.Getenv("GHOSTTY_RESOURCES_DIR") != "" {
+		return "kitty"
+	}
+	if strings.Contains(term, "wezterm") || termProg == "wezterm" || os.Getenv("WEZTERM_EXECUTABLE") != "" {
+		return "kitty"
+	}
+
+	// iTerm2
+	if termProg == "iterm.app" || termProg == "iterm2" || os.Getenv("ITERM_SESSION_ID") != "" {
+		return "iterm2"
+	}
+
+	// Fallback for modern terminals
+	if os.Getenv("COLORTERM") != "" || strings.Contains(term, "256color") {
+		return "kitty"
+	}
+
+	return ""
+}
+
+// ResolveCID resolves a CID or URL to raw bytes.
+func (msg *Message) ResolveCID(ctx context.Context, cid string) ([]byte, error) {
+	if strings.HasPrefix(cid, "http://") || strings.HasPrefix(cid, "https://") {
+		req, err := http.NewRequestWithContext(ctx, "GET", cid, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			_ = resp.Body.Close()
+		}()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("failed to fetch image: %s", resp.Status)
+		}
+		return ioutil.ReadAll(resp.Body)
+	}
+
+	cid = strings.TrimPrefix(cid, "cid:")
+	msg.m.RLock()
+	payload := msg.Response.Payload
+	msg.m.RUnlock()
+	part := findPartByCID(payload, cid)
+	if part == nil {
+		return nil, fmt.Errorf("CID %q not found", cid)
+	}
+	if part.Body.Data != "" {
+		d, err := MIMEDecode(part.Body.Data)
+		return []byte(d), err
+	}
+	if part.Body.AttachmentId != "" {
+		att := &Attachment{
+			MsgID: msg.ID,
+			ID:    part.Body.AttachmentId,
+			Part:  part,
+			conn:  msg.conn,
+		}
+		return att.Download(ctx)
+	}
+	return nil, fmt.Errorf("CID %q has no data", cid)
+}
+
+// ProcessInlineImages identifies markers and calculates their terminal coordinates.
+func (msg *Message) ProcessInlineImages(ctx context.Context, body string, termW, termH int) string {
+	proto := DetectImageProtocol()
+	if proto == "none" {
+		return body
+	}
+
+	msg.m.RLock()
+	images := make([]*InlineImage, len(msg.inlineImages))
+	copy(images, msg.inlineImages)
+	msg.m.RUnlock()
+
+	log.Infof("Processing %d inline images against body length %d", len(images), len(body))
+
+	// We process line by line to accurately track the terminal Y coordinate.
+	lines := display.Wrap(body, termW)
+
+	var wg sync.WaitGroup
+	for i, img := range images {
+		// Reset Found flag for each render pass.
+		img.Found = false
+
+		// Only process if we haven't already resolved this image.
+		if len(img.Contents) == 0 {
+			wg.Add(1)
+			go func(idx int, img *InlineImage) {
+				defer wg.Done()
+				log.Infof("Resolving image %d: %s", idx, img.Source)
+				data, err := msg.ResolveCID(ctx, img.Source)
+				if err != nil {
+					log.Errorf("Failed to resolve image %q: %v", img.Source, err)
+					return
+				}
+
+				// Use Go stdlib to decode and convert to PNG.
+				imgObj, _, err := image.Decode(bytes.NewReader(data))
+				if err != nil {
+					log.Errorf("Failed to decode image %q: %v", img.Source, err)
+					return
+				}
+				var buf bytes.Buffer
+				if err := png.Encode(&buf, imgObj); err != nil {
+					log.Errorf("Failed to encode image %q to PNG: %v", img.Source, err)
+					return
+				}
+				bounds := imgObj.Bounds()
+				w, h := bounds.Dx(), bounds.Dy()
+				log.Infof("Image %d converted to PNG, size %dx%d", idx, w, h)
+
+				msg.m.Lock()
+				img.Contents = data
+				img.PNGContents = buf.Bytes()
+				img.PixelWidth = w
+				img.PixelHeight = h
+				img.Width, img.Height = calculateCellOccupancy(w, h, termW, termH)
+
+				if proto == "kitty" {
+					img.KittyID = allocKittyID()
+					log.Infof("Uploading image %d to kitty with ID %d", idx, img.KittyID)
+					kittyUploadImage(img.PNGContents, img.KittyID)
+				}
+				msg.m.Unlock()
+			}(i, img)
+		}
+	}
+	wg.Wait()
+
+	for i, img := range images {
+		// Search for this image's specific marker in the body lines.
+		// Note the spaces around the marker added by htmlRender.
+		marker := fmt.Sprintf(" ##IMG_%d_## ", i)
+		for ln := 0; ln < len(lines); ln++ {
+			idx := strings.Index(lines[ln], marker)
+			if idx >= 0 {
+				log.Infof("Image %d marker found at line %d, col %d", i, ln, idx)
+				img.X = idx
+				img.Y = ln
+				img.Found = true
+
+				// Replace the marker with spaces to preserve the layout.
+				lines[ln] = strings.Replace(lines[ln], marker, strings.Repeat(" ", img.Width), 1)
+
+				// If the image takes multiple rows, insert blank padding lines below.
+				if img.Height > 1 {
+					blanks := make([]string, img.Height-1)
+					for b := range blanks {
+						blanks[b] = ""
+					}
+					newLines := make([]string, 0, len(lines)+len(blanks))
+					newLines = append(newLines, lines[:ln+1]...)
+					newLines = append(newLines, blanks...)
+					newLines = append(newLines, lines[ln+1:]...)
+					lines = newLines
+				}
+				break
+			}
+		}
+		if !img.Found {
+			log.Debugf("Image %d marker %q not found in current body version", i, marker)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+func (msg *Message) InlineImages() []*InlineImage {
+	msg.m.RLock()
+	defer msg.m.RUnlock()
+	return msg.inlineImages
+}
+
 // Message is an email message.
 type Message struct {
 	m       sync.RWMutex
@@ -115,8 +429,9 @@ type Message struct {
 	gpgStatus    *gpg.Status
 	Response     *gmail.Message
 
-	raw         string
-	attachments []*Attachment
+	raw          string
+	attachments  []*Attachment
+	inlineImages []*InlineImage
 }
 
 // ThreadID returns the thread ID of the message.
@@ -772,23 +1087,105 @@ func partIsAttachment(p *gmail.MessagePart) bool {
 	return false
 }
 
-func htmlRender(ctx context.Context, s string) (string, error) {
-	var stdout bytes.Buffer
-	st := time.Now()
-	cmd := exec.CommandContext(ctx, Lynx, "-dump", "-stdin")
-	cmd.Stdin = strings.NewReader(s)
-	cmd.Stdout = &stdout
-	if err := cmd.Run(); err != nil {
-		return "", err
+var kittyNextID uint32 = 1
+
+func allocKittyID() uint32 {
+	return atomic.AddUint32(&kittyNextID, 1)
+}
+
+func (msg *Message) KittyUploadImage(data []byte, id uint32) {
+	kittyUploadImage(data, id)
+}
+
+func kittyUploadImage(data []byte, id uint32) {
+	if len(data) == 0 {
+		return
 	}
-	log.Infof("Rendered HTML in %v", time.Since(st))
-	return fmt.Sprintf("%sRendered HTML%s\n%s", display.Blue, display.Reset, stdout.String()), nil
+	payload := base64.StdEncoding.EncodeToString(data)
+	const chunkSize = 4096
+	for offset := 0; offset < len(payload); offset += chunkSize {
+		end := offset + chunkSize
+		if end > len(payload) {
+			end = len(payload)
+		}
+		more := "0"
+		if end < len(payload) {
+			more = "1"
+		}
+		chunk := payload[offset:end]
+		if offset == 0 {
+			// f=100 (PNG), a=t (transmit/upload), i=ID, q=2 (quiet), m=more
+			fmt.Printf("\x1b_Gf=100,a=t,i=%d,q=2,m=%s;%s\x1b\\", id, more, chunk)
+		} else {
+			fmt.Printf("\x1b_Gm=%s;%s\x1b\\", more, chunk)
+		}
+	}
+}
+
+func (msg *Message) KittyDisplayImage(id uint32, cols, rows, pxX, pxY, pxW, pxH int) string {
+	// a=p (put/display), i=ID, q=2 (quiet), C=1 (don't move cursor)
+	// c=cols, r=rows (destination size in cells)
+	// x,y,w,h (source sub-rectangle in pixels)
+	return fmt.Sprintf("\x1b_Ga=p,i=%d,q=2,C=1,c=%d,r=%d,x=%d,y=%d,w=%d,h=%d\x1b\\", id, cols, rows, pxX, pxY, pxW, pxH)
+}
+
+func (msg *Message) ITerm2Encode(data []byte, cols, rows int) string {
+	// width/height in character cells (ch/lp)
+	b64 := base64.StdEncoding.EncodeToString(data)
+	return fmt.Sprintf("\x1b]1337;File=width=%dch;height=%dlp;inline=1:%s\x1b\\", cols, rows, b64)
+}
+
+type renderImage struct {
+	Index  int    `json:"index"`
+	Source string `json:"source"`
+}
+
+type renderResponse struct {
+	RenderedText string        `json:"rendered_text"`
+	InlineImages []renderImage `json:"inline_images"`
+}
+
+func htmlRender(ctx context.Context, s string, startIdx *int) (string, []*InlineImage, error) {
+	bin, err := exec.LookPath(cmdgRenderBinary)
+	if err != nil {
+		// Fallback: simple text rendering (just return original for now, or strip tags)
+		log.Infof("External renderer %q not found, falling back to plain text", cmdgRenderBinary)
+		return s, nil, nil
+	}
+
+	cmd := exec.CommandContext(ctx, bin, "--start-index", fmt.Sprintf("%d", *startIdx))
+	cmd.Stdin = strings.NewReader(s)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", nil, errors.Wrapf(err, "executing external renderer")
+	}
+
+	var resp renderResponse
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return "", nil, errors.Wrapf(err, "parsing renderer JSON")
+	}
+
+	var images []*InlineImage
+	for _, img := range resp.InlineImages {
+		images = append(images, &InlineImage{
+			Source: img.Source,
+		})
+		// We don't need to update startIdx here because the external tool already
+		// handled the indexing, but we should update it for subsequent calls.
+		if img.Index >= *startIdx {
+			*startIdx = img.Index + 1
+		}
+	}
+
+	res := resp.RenderedText
+	log.Infof("Rendered HTML with external tool %q (len %d), found %d images", cmdgRenderBinary, len(res), len(images))
+	return fmt.Sprintf("%sRendered HTML%s\n%s", display.Blue, display.Reset, res), images, nil
 }
 
 var errNoUsablePart = fmt.Errorf("could not find message part usable as message body")
 
 // makeBodyAlt takes a multipart and tries to render the best thing it can from it.
-func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (string, error) {
+func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool, startIdx *int) (string, []*InlineImage, error) {
 	wantT := "text/plain"
 	acceptT := "text/html"
 	if preferHTML {
@@ -797,20 +1194,23 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 
 	var ret []string
 	var alt []string
+	var allImages []*InlineImage
 	for _, p := range part.Parts {
 		if partIsAttachment(p) {
 			continue
 		}
 		dec, err := MIMEDecode(string(p.Body.Data))
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		if p.MimeType == "text/html" {
-			dec, err = htmlRender(ctx, dec)
+			var images []*InlineImage
+			dec, images, err = htmlRender(ctx, dec, startIdx)
 			if err != nil {
-				return "", errors.Wrapf(err, "rendering HTML")
+				return "", nil, errors.Wrapf(err, "rendering HTML")
 			}
+			allImages = append(allImages, images...)
 		}
 
 		log.Debugf("Alt mimetype: %q", p.MimeType)
@@ -824,10 +1224,11 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 				alt = append(alt, dec)
 			}
 		case "multipart/alternative", "multipart/related", "multipart/signed", "multipart/mixed", "message/rfc822":
-			t, err := makeBodyAlt(ctx, p, preferHTML)
+			t, images, err := makeBodyAlt(ctx, p, preferHTML, startIdx)
 			if err != nil {
-				return "", err
+				return "", nil, err
 			}
+			allImages = append(allImages, images...)
 			// However it was rendered it should be rendered.
 			ret = append(ret, t)
 			alt = append(alt, t)
@@ -838,40 +1239,58 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 		}
 	}
 	if len(ret) > 0 {
-		return strings.Join(ret, "\n"), nil
+		return strings.Join(ret, "\n"), allImages, nil
 	}
-	return strings.Join(alt, "\n"), nil
+	if len(alt) > 0 {
+		return strings.Join(alt, "\n"), allImages, nil
+	}
+	return "", nil, errNoUsablePart
 }
 
-func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (string, error) {
+func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool, startIdx *int) (string, []*InlineImage, error) {
 	if len(part.Parts) == 0 {
 		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
 		data, err := MIMEDecode(string(part.Body.Data))
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		data = stripUnprintable(data)
 		if part.MimeType == "text/html" {
 			var err error
-			data, err = htmlRender(ctx, data)
+			var images []*InlineImage
+			data, images, err = htmlRender(ctx, data, startIdx)
 			if err != nil {
-				return "", errors.Wrapf(err, "rendering HTML")
+				return "", nil, errors.Wrapf(err, "rendering HTML")
 			}
+			return data, images, nil
 		}
-		return data, nil
+		return data, nil, nil
 	}
 
 	log.Infof("Message is type %q", part.MimeType)
-	return makeBodyAlt(ctx, part, preferHTML)
+	return makeBodyAlt(ctx, part, preferHTML, startIdx)
 }
-
 // GetBody returns the message body.
 func (msg *Message) GetBody(ctx context.Context) (string, error) {
 	if err := msg.Preload(ctx, LevelFull); err != nil {
 		return "", err
 	}
 	return msg.body, nil
+}
+
+// SetBody sets the message body.
+func (msg *Message) SetBody(body string) {
+	msg.m.Lock()
+	defer msg.m.Unlock()
+	msg.body = body
+}
+
+// SetBodyHTML sets the message body HTML.
+func (msg *Message) SetBodyHTML(body string) {
+	msg.m.Lock()
+	defer msg.m.Unlock()
+	msg.bodyHTML = body
 }
 
 // GetBodyHTML returns the message's HTML body.
@@ -1083,10 +1502,16 @@ func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 						Data: MIMEEncode(string(t)),
 					},
 				}
-				msg.body, err = makeBody(ctx, np, false)
+				idx := len(msg.inlineImages)
+				var images []*InlineImage
+				msg.body, images, err = makeBody(ctx, np, false, &idx)
 				if err != nil {
 					return errors.Wrap(err, "failed to decrypt")
 				}
+
+
+				msg.inlineImages = append(msg.inlineImages, images...)
+
 			} else {
 				_ = "TODO: handle attachment"
 			}
@@ -1156,6 +1581,18 @@ func (msg *Message) load(ctx context.Context, level DataLevel) error {
 	}
 	log.Debugf("Downloading message %q level %q took %v", msg.ID, level, time.Since(st))
 
+	var bHTML, b string
+	var iHTML, iBody []*InlineImage
+	var eHTML, eBody error
+	if level == LevelFull {
+		msg.m.Lock()
+		msg.inlineImages = nil
+		msg.m.Unlock()
+		idx := 0
+		bHTML, iHTML, eHTML = makeBody(ctx, msg2.Payload, true, &idx)
+		b, iBody, eBody = makeBody(ctx, msg2.Payload, false, &idx)
+	}
+
 	msg.m.Lock()
 	defer msg.m.Unlock()
 	msg.Response = msg2
@@ -1165,16 +1602,18 @@ func (msg *Message) load(ctx context.Context, level DataLevel) error {
 		msg.headers[strings.ToLower(h.Name)] = h.Value
 	}
 	if level == LevelFull {
-		msg.bodyHTML, err = makeBody(ctx, msg.Response.Payload, true)
-		if err != nil && err != errNoUsablePart {
-			return err
+		if eHTML != nil && eHTML != errNoUsablePart {
+			return eHTML
 		}
-		// TODO: do GPG stuff to HTML?
+		msg.bodyHTML = bHTML
+		msg.inlineImages = append(msg.inlineImages, iHTML...)
 
-		msg.body, err = makeBody(ctx, msg.Response.Payload, false)
-		if err != nil && err != errNoUsablePart {
-			return err
+		if eBody != nil && eBody != errNoUsablePart {
+			return eBody
 		}
+		msg.body = b
+		msg.inlineImages = append(msg.inlineImages, iBody...)
+
 		if err := msg.tryGPGEncrypted(ctx); err != nil {
 			msg.body = fmt.Sprintf("%sDecrypting GPG: %v%s", display.Red, err, display.Grey)
 		}
@@ -1260,11 +1699,13 @@ func (d *Draft) load(ctx context.Context, level DataLevel) error {
 	}
 	if level == LevelFull {
 		var err error
-		d.body, err = makeBody(ctx, d.Response.Message.Payload, false)
+		idx := 0
+		d.body, _, err = makeBody(ctx, d.Response.Message.Payload, false, &idx)
 		if err != nil {
 			return errors.Wrap(err, "rendering draft body")
 		}
 	}
+
 	return nil
 }
 

@@ -60,11 +60,10 @@ var (
 	verbose         = flag.Bool("verbose", false, "Turn on verbose logging.")
 	shell           = flag.String("shell", "/bin/sh", "Shell to shell out to.")
 	versionFlag     = flag.Bool("version", false, "Show version and exit.")
-	lynx            = flag.String("lynx", "lynx", "HTML render binary.")
 	enableSign      = flag.Bool("sign", false, "Send signed emails by default.")
+	imageProtocol   = flag.String("image_protocol", "none", "Terminal image protocol (none, kitty, iterm2, auto).")
 
 	updateSender = flag.String("update_sender", "", `Update default sender address. E.g.: "John Doe" <john.doe@example.com>`)
-
 	conn *cmdg.CmdG
 
 	// Relative to configDir.
@@ -133,6 +132,9 @@ func run(ctx context.Context) error {
 		log.Errorf("Bailing due to error: %v", err)
 	}
 	log.Infof("MessageView returned, stopping keys")
+	if *imageProtocol != "none" {
+		cmdg.ClearImages(*imageProtocol)
+	}
 	keys.Stop()
 	log.Infof("Shutting down")
 	return nil
@@ -146,8 +148,7 @@ func main() {
 	syscall.Umask(0077)
 	flag.Parse()
 	cmdg.Version = version
-
-	cmdg.Lynx = *lynx
+	cmdg.PreferredImageProtocol = *imageProtocol
 
 	log.Infof("cmdg %s", version)
 

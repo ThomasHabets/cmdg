@@ -210,6 +210,36 @@ Content-Type: text/plain; charset="UTF-8"
 World
 --[a-z0-9]+--`)),
 		},
+		{
+			name: "With attachments",
+			msg:  "To: foo@bar.com\nSubject: hello\n\nWorld",
+			attachments: []*file{
+				{name: "test1.txt", content: []byte("content1")},
+				{name: "test2.txt", content: []byte("content2")},
+			},
+			matching: regexp.MustCompile(crnl(`MIME-Version: 1.0
+Subject: hello
+To: foo@bar.com
+Content-Type: multipart/mixed; boundary="[a-z0-9]+"
+Content-Disposition: inline
+
+--[a-z0-9]+
+Content-Disposition: inline
+Content-Type: text/plain; charset="UTF-8"
+
+World
+--[a-z0-9]+
+Content-Disposition: attachment; filename="test1.txt"
+Content-Type: application/octet-stream; name="test1.txt"
+
+content1
+--[a-z0-9]+
+Content-Disposition: attachment; filename="test2.txt"
+Content-Type: application/octet-stream; name="test2.txt"
+
+content2
+--[a-z0-9]+--`)),
+		},
 	}
 
 	fs := fakeSend{}

@@ -109,13 +109,17 @@ func help(txt string, keys *input.Input) error {
 	}
 }
 
+type bodyUpdate struct {
+	lines []string
+}
+
 // OpenMessageView is the view for an open message.
 type OpenMessageView struct {
 	msg    *cmdg.Message
 	keys   *input.Input
 	screen *display.Screen
 
-	update chan struct{}
+	update chan bodyUpdate
 	errors chan error
 
 	inIncrementalSearch bool
@@ -142,16 +146,51 @@ func NewOpenMessageView(ctx context.Context, msg *cmdg.Message, in *input.Input)
 		msg:    msg,
 		keys:   in,
 		screen: screen,
-		update: make(chan struct{}),
+		update: make(chan bodyUpdate, 5),
 		errors: make(chan error, 20),
 	}
+	if *imageProtocol != "none" {
+		ov.preferHTML = true
+	}
+
+	triggerUpdate := func() {
+		go func() {
+			gb := ov.msg.GetBody
+			if ov.preferHTML {
+				gb = ov.msg.GetBodyHTML
+			}
+			b, err := gb(ctx)
+			if err != nil {
+				ov.errors <- errors.Wrapf(err, "Getting message body")
+				return
+			}
+			if *imageProtocol != "none" {
+				b = ov.msg.ProcessInlineImages(ctx, b, ov.screen.Width, ov.screen.Height)
+
+				// Ensure images are uploaded even if already cached in memory.
+				proto := *imageProtocol
+				if proto == "auto" {
+					proto = cmdg.DetectImageProtocol()
+				}
+				if proto == "kitty" {
+					for _, img := range ov.msg.InlineImages() {
+						if img.Found && len(img.PNGContents) > 0 {
+							ov.msg.KittyUploadImage(img.PNGContents, img.KittyID)
+						}
+					}
+				}
+			}
+			ov.update <- bodyUpdate{lines: display.Wrap(b, ov.screen.Width)}
+		}()
+	}
+
 	go func() {
 		st := time.Now()
 		if err := msg.Preload(ctx, cmdg.LevelFull); err != nil {
 			ov.errors <- err
 		}
 		log.Infof("Got full message in %v", time.Since(st))
-		ov.update <- struct{}{}
+		triggerUpdate()
 	}()
 	return ov, err
 }
@@ -281,6 +320,7 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 	line++
 
 	// Draw body.
+	bodyStart := line
 	if len(lines) > scroll {
 		for _, l := range lines[scroll:] {
 			l = strings.TrimRight(l, "\r ")
@@ -294,6 +334,77 @@ func (ov *OpenMessageView) Draw(lines []string, scroll int) error {
 		log.Errorf("Scroll too high! %d >= %d", scroll, len(lines))
 	}
 	ov.screen.Printlnf(ov.screen.Height-2, "%s", strings.Repeat("—", ov.screen.Width))
+
+	// Draw images.
+	if *imageProtocol != "none" {
+		proto := *imageProtocol
+		if proto == "auto" {
+			proto = cmdg.DetectImageProtocol()
+		}
+		if proto != "" && proto != "none" {
+			// Clear previous placements to avoid "smearing" during scroll.
+			// This uses d=a to keep image data in memory.
+			ov.screen.PostDraw += "\x1b_Ga=d,d=a\x1b\\"
+
+			bodyEnd := ov.screen.Height - 2
+
+			for _, img := range ov.msg.InlineImages() {
+				// Only draw if the marker was found in this body version.
+				if !img.Found {
+					continue
+				}
+				if img.InViewport(scroll, bodyStart, ov.screen.Height) && len(img.Contents) > 0 {
+					screenY := img.Y - scroll + bodyStart
+					drawY := screenY
+					drawX := img.X
+					drawH := img.Height
+
+					pxX := 0
+					pxY := 0
+					pxW := img.PixelWidth
+					pxH := img.PixelHeight
+
+					// Calculate pixel-per-cell ratio.
+					ratioY := float64(img.PixelHeight) / float64(img.Height)
+
+					// Clip at the top.
+					if drawY < bodyStart {
+						vOffset := bodyStart - drawY
+						pxY = int(float64(vOffset) * ratioY)
+						pxH -= pxY
+						drawH -= vOffset
+						drawY = bodyStart
+					}
+
+					// Clip at the bottom.
+					if drawY+drawH > bodyEnd {
+						clippedH := (drawY + drawH) - bodyEnd
+						pxH -= int(float64(clippedH) * ratioY)
+						drawH -= clippedH
+					}
+
+					if drawH <= 0 {
+						continue
+					}
+
+					log.Infof("Atomic image placement at %d,%d (c=%d r=%d, pxY=%d, pxH=%d)", drawX, drawY, img.Width, drawH, pxY, pxH)
+					var seq string
+					switch proto {
+					case "kitty":
+						seq = ov.msg.KittyDisplayImage(img.KittyID, img.Width, drawH, pxX, pxY, pxW, pxH)
+					case "iterm2":
+						seq = ov.msg.ITerm2Encode(img.PNGContents, img.Width, drawH)
+					}
+					if seq != "" {
+						ov.screen.PostDraw += fmt.Sprintf("\033[%d;%dH%s", drawY+1, drawX+1, seq)
+					}
+				}
+			}
+			ov.screen.PostDraw += fmt.Sprintf("\033[%d;1H", ov.screen.Height-1)
+		}
+	}
+
+	ov.screen.Draw()
 	return nil
 }
 
@@ -420,6 +531,15 @@ func (ov *OpenMessageView) incrementalSearch(ctx context.Context, inlines []stri
 // Run runs the open message view event loop.
 func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 	log.Infof("Running OpenMessageView")
+	if *imageProtocol != "none" {
+		proto := *imageProtocol
+		if proto == "auto" {
+			proto = cmdg.DetectImageProtocol()
+		}
+		// Clear all image data from PREVIOUS emails.
+		cmdg.ClearImageData(proto)
+		defer cmdg.ClearImageData(proto)
+	}
 	scroll := 0
 	initScreen := func() error {
 		var err error
@@ -435,6 +555,39 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 	}
 	ov.screen.Printf(0, 0, "Loading…")
 	ov.screen.Draw()
+
+	triggerUpdate := func() {
+		go func() {
+			gb := ov.msg.GetBody
+			if ov.preferHTML {
+				gb = ov.msg.GetBodyHTML
+			}
+			b, err := gb(ctx)
+			if err != nil {
+				ov.errors <- errors.Wrapf(err, "Getting message body")
+				return
+			}
+			if *imageProtocol != "none" {
+				log.Infof("Pre-processing inline images for body length %d", len(b))
+				b = ov.msg.ProcessInlineImages(ctx, b, ov.screen.Width, ov.screen.Height)
+
+				// Ensure images are uploaded even if already cached in memory.
+				proto := *imageProtocol
+				if proto == "auto" {
+					proto = cmdg.DetectImageProtocol()
+				}
+				if proto == "kitty" {
+					for _, img := range ov.msg.InlineImages() {
+						if img.Found && len(img.PNGContents) > 0 {
+							ov.msg.KittyUploadImage(img.PNGContents, img.KittyID)
+						}
+					}
+				}
+			}
+			ov.update <- bodyUpdate{lines: display.Wrap(b, ov.screen.Width)}
+		}()
+	}
+
 	var lines []string
 	for {
 		select {
@@ -446,44 +599,16 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 				return nil, err
 			}
 			scroll = s
-			go func() {
-				ov.update <- struct{}{}
-			}()
+			triggerUpdate()
 		case err := <-ov.errors:
 			if err != nil {
 				showError(ov.screen, ov.keys, err.Error())
 				ov.screen.Draw()
 			}
 			continue
-		case <-ov.update:
-			log.Infof("Message arrived")
-			gb := ov.msg.GetBody
-			if ov.preferHTML {
-				gb = ov.msg.GetBodyHTML
-			}
-			b, err := gb(ctx)
-			if err != nil {
-				ov.errors <- errors.Wrapf(err, "Getting message body")
-			} else {
-				lines = []string{}
-				for _, l := range strings.Split(b, "\n") {
-					if len(l) == 0 {
-						lines = append(lines, "")
-						continue
-					}
-					for len(l) > 0 {
-						// TODO: break on runewidth
-						// TODO: break on word boundary
-						if len(l) > ov.screen.Width {
-							lines = append(lines, l[:ov.screen.Width])
-							l = l[ov.screen.Width:]
-						} else {
-							lines = append(lines, l)
-							l = ""
-						}
-					}
-				}
-			}
+		case up := <-ov.update:
+			log.Infof("Body update arrived")
+			lines = up.lines
 			go func() {
 				if ov.msg.IsUnread() {
 					st := time.Now()
@@ -493,11 +618,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 						log.Infof("Marked unread in %v", time.Since(st))
 					}
 				}
-				// Does not need to be signaled to
-				// messageview; label list gets
-				// updated by RemoveLabelID.
 			}()
-			// Redraw could include fewer lines, because 'H' toggled HTML.
 			ov.screen.Clear()
 
 			// TODO: double check that scroll is not too high after `lines` was recreated.
@@ -516,7 +637,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 					if err := ov.msg.Reload(ctx, cmdg.LevelFull); err != nil {
 						ov.errors <- errors.Wrap(err, "reloading message")
 					}
-					ov.update <- struct{}{}
+					triggerUpdate()
 				}()
 			case "?", input.F1:
 				if err := help(openMessageViewHelp, ov.keys); err != nil {
@@ -652,9 +773,7 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			case "H":
 				ov.preferHTML = !ov.preferHTML
 				scroll = 0
-				go func() {
-					ov.update <- struct{}{}
-				}()
+				triggerUpdate()
 			case "e": // Archive
 				if err := ov.msg.RemoveLabelID(ctx, cmdg.Inbox); err != nil {
 					ov.errors <- fmt.Errorf("Failed to archive : %v", err)

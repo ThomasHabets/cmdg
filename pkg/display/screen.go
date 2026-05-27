@@ -100,6 +100,7 @@ type Screen struct {
 	prevBuffer []string
 	useCache   bool
 	cursor     *cursor
+	PostDraw   string
 }
 
 // NewScreen creates a new screen.
@@ -221,11 +222,12 @@ func (s *Screen) Draw() {
 		s.cursor = nil
 	}
 
-	os := HideCursor + strings.Join(o, "") + ShowCursor
+	os := HideCursor + strings.Join(o, "") + ShowCursor + s.PostDraw
 	if *useSuspend {
 		os = Suspend + os + Resume
 	}
 	fmt.Print(os)
+	s.PostDraw = ""
 	log.Debugf("Saved %d out of %d line while drawing. %d bytes", saved, len(s.buffer), len(os))
 	s.useCache = false
 }
@@ -236,7 +238,7 @@ func (s *Screen) SetCursor(y, x int) {
 }
 
 var (
-	stripANSIRE = regexp.MustCompile(`\033(?:\[[^a-zA-Z]*(?:[A-Za-z])?)?`)
+	stripANSIRE = regexp.MustCompile(`\x1b(?:\[[0-9;]*[a-zA-Z]|_G.*?\x1b\\|].*?(?:\x1b\\|\x07))?`)
 )
 
 func stripANSI(s string) string {
@@ -256,30 +258,43 @@ func FixedWidth(s string, w int) string {
 // FixedANSIWidthRight returns a fixed width version of a string, padding on the right.
 // The function will not strip ANSI codes, nor count them as "length".
 func FixedANSIWidthRight(s string, w int) string {
-	return fixedANSIWidthRight2(s, w, 0)
-}
+	runes := []rune(s)
+	currentWidth := 0
+	breakIdx := 0
+	inANSI := false
 
-func fixedANSIWidthRight2(s string, w int, recursive int) string {
-	// First make a guess about how many printable characters are actually ANSI.
-	// This will be wrong if ANSI codes get cut off.
-	ansiWidth := runewidth.StringWidth(s) - StringWidth(s)
-
-	// Target width is actual width plus width of ansi codes.
-	targetWidth := w + ansiWidth
-	ret := runewidth.FillRight(runewidth.Truncate(s, targetWidth, ""), targetWidth)
-
-	// Check if we left too much, which might happen when we cut off some ANSI codes.
-	if StringWidth(ret) > w {
-		// 3 is arbitrary. It could be that as we cut off some
-		// ANSI, there's still some ANSI left that will be cut off.
-		const maxRecursive = 3
-
-		if recursive < maxRecursive {
-			return fixedANSIWidthRight2(ret, w, recursive+1)
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if r == '\x1b' {
+			inANSI = true
 		}
-		log.Errorf("CAN'T HAPPEN: Failed to turn %q into size %d. Returning %q, size %d", s, w, ret, StringWidth(s))
+		if inANSI {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '\\' || r == '\x07' {
+				if r == '\\' && i > 0 && runes[i-1] == '\x1b' {
+					inANSI = false
+				} else if r == '\x07' {
+					inANSI = false
+				} else if r != ';' && r != '?' && r != '[' && !(r >= '0' && r <= '9') {
+					inANSI = false
+				}
+			}
+			breakIdx = i + 1
+			continue
+		}
+
+		rw := runewidth.RuneWidth(r)
+		if currentWidth+rw > w {
+			break
+		}
+		currentWidth += rw
+		breakIdx = i + 1
 	}
-	return ret
+
+	res := string(runes[:breakIdx])
+	if currentWidth < w {
+		res += strings.Repeat(" ", w-currentWidth)
+	}
+	return res
 }
 
 // Printlnf sets the content of a line to be a printfed string
@@ -328,4 +343,60 @@ func (s *Screen) Printf(y, x int, fmts string, args ...interface{}) {
 // Exit resets the output for exit.
 func Exit() {
 	fmt.Println(SaveCursor + Reset + DoWrap + ResetScroll + RestoreCursor)
+}
+
+// Wrap wraps a string to a given width, being aware of ANSI escape sequences.
+func Wrap(s string, w int) []string {
+	var lines []string
+	for _, l := range strings.Split(s, "\n") {
+		if len(l) == 0 {
+			lines = append(lines, "")
+			continue
+		}
+		for StringWidth(l) > 0 {
+			if StringWidth(l) <= w {
+				lines = append(lines, l)
+				break
+			}
+
+			// Find the break point that results in visible width <= w.
+			// We iterate through runes to be safe with multi-byte chars and ANSI.
+			breakIdx := 0
+			currentWidth := 0
+			inANSI := false
+			runes := []rune(l)
+			for i := 0; i < len(runes); i++ {
+				r := runes[i]
+				if r == '\x1b' {
+					inANSI = true
+				}
+				if inANSI {
+					if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '\\' || r == '\x07' {
+						// Potential end of sequence.
+						// Check for Kitty/OSC terminations.
+						if r == '\\' && i > 0 && runes[i-1] == '\x1b' {
+							inANSI = false
+						} else if r == '\x07' {
+							inANSI = false
+						} else if r != ';' && r != '?' && r != '[' && !(r >= '0' && r <= '9') {
+							// Standard CSI/other ends on a letter.
+							inANSI = false
+						}
+					}
+					breakIdx = i + 1
+					continue
+				}
+
+				rw := runewidth.RuneWidth(r)
+				if currentWidth+rw > w {
+					break
+				}
+				currentWidth += rw
+				breakIdx = i + 1
+			}
+			lines = append(lines, string(runes[:breakIdx]))
+			l = string(runes[breakIdx:])
+		}
+	}
+	return lines
 }
