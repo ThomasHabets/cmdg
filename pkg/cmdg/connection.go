@@ -1,3 +1,4 @@
+// Package cmdg provides the core logic for the cmdg GMail client.
 package cmdg
 
 import (
@@ -238,6 +239,7 @@ func (c *CmdG) setupClients() error {
 	// Set up people client.
 	{
 		var err error
+		//nolint:staticcheck
 		c.people, err = people.New(c.authedClient)
 		if err != nil {
 			return errors.Wrap(err, "creating People client")

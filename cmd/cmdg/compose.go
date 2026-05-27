@@ -51,9 +51,7 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 	// Stop UI.
 	keys.Stop()
 	defer func() {
-		if err := keys.Start(); err != nil {
-			log.Errorf("Failed to restart input: %v", err)
-		}
+		_ = keys.Start()
 	}()
 
 	cmd := exec.CommandContext(ctx, visualBinary, tmpf.Name())
@@ -272,11 +270,7 @@ func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input
 					break
 				}
 			}
-			/*
-				if a == "S" {
-					// TODO: also archive.
-				}
-			*/
+			// TODO: also archive if a == "S"
 			return nil
 		case "d":
 			st := time.Now()
@@ -293,7 +287,9 @@ func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input
 				break
 			}
 			if err != nil {
-				_ = dialog.Message("Failed to attach", fmt.Sprintf("Failed to attach file: %v", err), keys)
+				if err := dialog.Message("Failed to attach", fmt.Sprintf("Failed to attach file: %v", err), keys); err != nil {
+					log.Infof("Failed to show message: %v", err)
+				}
 			}
 			doEdit = false
 			attachments = append(attachments, f)
@@ -370,7 +366,7 @@ func chooseFile(ctx context.Context, keys *input.Input) (*file, error) {
 		// TODO: attach a ReadCloser?
 		b, err := ioutil.ReadFile(full)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "reading file %q", full)
 		}
 		return &file{
 			name:    fis[o.KeyInt].Name(),

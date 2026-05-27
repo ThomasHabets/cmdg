@@ -1,4 +1,4 @@
-// Package gpg supports gnupg integration.
+// Package gpg provides wrappers around the local GnuPG binary.
 package gpg
 
 import (

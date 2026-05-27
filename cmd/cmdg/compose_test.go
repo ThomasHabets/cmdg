@@ -23,9 +23,7 @@ type fakeSend struct {
 
 func (fs *fakeSend) bad(w http.ResponseWriter, f string, args ...interface{}) {
 	w.WriteHeader(http.StatusBadRequest)
-	if _, err := fmt.Fprintf(w, f, args...); err != nil {
-		fs.bad(w, "writing response failed: %v", err)
-	}
+	_, _ = fmt.Fprintf(w, f, args...)
 }
 
 func (fs *fakeSend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -61,9 +59,7 @@ func (fs *fakeSend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	fs.msg = string(raw)
 	w.WriteHeader(http.StatusOK)
-	if _, err := fmt.Fprintf(w, `{ "id": "12345" }`); err != nil {
-		fs.bad(w, "failed to write reply: %v", err)
-	}
+	_, _ = fmt.Fprintf(w, `{ "id": "12345" }`)
 }
 
 // net.RoundTripper that rewrites requests to the local fake.
@@ -84,7 +80,7 @@ func (redir *redirector) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func crnl(s string) string {
-	return strings.ReplaceAll(s, "\n", "\r\n")
+	return strings.Replace(s, "\n", "\r\n", -1)
 }
 
 func TestSendMessage(t *testing.T) {
@@ -208,6 +204,36 @@ Content-Disposition: inline
 Content-Type: text/plain; charset="UTF-8"
 
 World
+--[a-z0-9]+--`)),
+		},
+		{
+			name: "With attachments",
+			msg:  "To: foo@bar.com\nSubject: hello\n\nWorld",
+			attachments: []*file{
+				{name: "test1.txt", content: []byte("content1")},
+				{name: "test2.txt", content: []byte("content2")},
+			},
+			matching: regexp.MustCompile(crnl(`MIME-Version: 1.0
+Subject: hello
+To: foo@bar.com
+Content-Type: multipart/mixed; boundary="[a-z0-9]+"
+Content-Disposition: inline
+
+--[a-z0-9]+
+Content-Disposition: inline
+Content-Type: text/plain; charset="UTF-8"
+
+World
+--[a-z0-9]+
+Content-Disposition: attachment; filename="test1.txt"
+Content-Type: application/octet-stream; name="test1.txt"
+
+content1
+--[a-z0-9]+
+Content-Disposition: attachment; filename="test2.txt"
+Content-Type: application/octet-stream; name="test2.txt"
+
+content2
 --[a-z0-9]+--`)),
 		},
 	}

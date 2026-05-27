@@ -31,9 +31,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("Failed to create tempdir: %v", err)
 	}
-	if err := os.Setenv("GNUPGHOME", dir); err != nil {
-		log.Fatalf("Failed to setenv: %v", err)
-	}
+	_ = os.Setenv("GNUPGHOME", dir)
 	defer func() {
 		_ = os.Setenv("GNUPGHOME", "")
 	}()

@@ -1,3 +1,4 @@
+// Package cmdg provides the core logic for the cmdg GMail client.
 package cmdg
 
 import (

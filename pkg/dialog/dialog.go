@@ -329,11 +329,7 @@ func validateEmails(s string) error {
 			continue
 		}
 		// Basic email validation.
-		if p == "me" {
-			// Special case shortcut.
-			continue
-		}
-		if !strings.Contains(p, "@") {
+		if !strings.Contains(p, "@") || !strings.Contains(p, ".") {
 			return fmt.Errorf("invalid email address: %q", p)
 		}
 	}
@@ -341,7 +337,6 @@ func validateEmails(s string) error {
 }
 
 // MultiSelection is like Selection, but allows multiple comma/semicolon separated tokens.
-//
 // It returns the full input string.
 func MultiSelection(opts []*Option, prompt string, keys *input.Input) (string, error) {
 	screen, err := display.NewScreen()

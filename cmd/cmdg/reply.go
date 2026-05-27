@@ -89,8 +89,7 @@ func replyOrForward(ctx context.Context, conn *cmdg.CmdG, keys *input.Input, to,
 	prefill := strings.Join(headers, "\n") + "\n\n" + strings.Join(body, "\n")
 	refs, err := msg.GetReferences(ctx)
 	if err != nil {
-		// don't care
-		_ = err
+		log.Warningf("Failed to get references when replying: %v", err)
 	}
 
 	headOps := []headOp{

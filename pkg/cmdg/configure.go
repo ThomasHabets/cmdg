@@ -1,4 +1,4 @@
-// Package cmdg is the "library" part of the cmdg binary.
+// Package cmdg provides the core logic for the cmdg GMail client.
 package cmdg
 
 import (
@@ -30,11 +30,6 @@ var (
 
 	// DefaultClientSecret is the Oauth client secret.
 	DefaultClientSecret = ""
-)
-
-var (
-// TODO: Listen to a dynamic port.
-// oauthListenPort = flag.Int("oauth_listen_port", 0, "Oauth port to listen to. 0 means pick dynamically.")
 )
 
 // ConfigOAuth contains the config for the oauth.
@@ -76,19 +71,20 @@ func auth(cfg ConfigOAuth) (string, error) {
 
 	codeCh := make(chan string)
 	go func() {
-		_ = http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := r.ParseForm(); err != nil {
-				log.Fatalf("Failed to parse form: %v", err)
-			}
+		if err := http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = r.ParseForm()
 			codes := r.URL.Query()["code"]
 			if len(codes) == 0 {
+				w.WriteHeader(http.StatusBadRequest)
 				_, _ = fmt.Fprintf(w, "Did not get a code. Something's wrong.")
 				return
 			}
 			defer close(codeCh)
 			_, _ = fmt.Fprintf(w, "Got code %q. You can close this tab now.", html.EscapeString(codes[0]))
 			codeCh <- codes[0]
-		}))
+		})); err != nil && err != http.ErrServerClosed {
+			log.Errorf("HTTP server error: %v", err)
+		}
 	}()
 	// No need to clean up. This is run in -configure and will soon exit.
 
@@ -105,7 +101,6 @@ func auth(cfg ConfigOAuth) (string, error) {
 	fmt.Printf("Cut and paste this URL into your browser:\n  %s\n", ocfg.AuthCodeURL("", at))
 	line := <-codeCh
 	fmt.Printf("Returned code: %s\n", line)
-	//nolint:staticcheck
 	token, err := ocfg.Exchange(oauth2.NoContext, line)
 	if err != nil {
 		return "", err

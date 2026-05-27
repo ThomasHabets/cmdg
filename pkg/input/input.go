@@ -12,7 +12,6 @@ import (
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	//nolint:staticcheck
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/sys/unix"
 )
@@ -341,10 +340,9 @@ func (i *Input) Start() error {
 		defer close(i.running)
 		defer close(i.keys)
 		defer func() {
-			if err := terminal.Restore(fd, oldState); err != nil {
-				log.Infof("Failed to restore terminal: %v", err)
-			}
+			_ = terminal.Restore(fd, oldState)
 		}()
+
 		last := time.Now()
 		lastEnter := time.Now()
 		for {

@@ -49,7 +49,6 @@ Press [enter] to exit
 )
 
 var (
-	//messageListReloadTime          = time.Minute
 	messageListReloadTimeout       = 40 * time.Second
 	messageListHistoryCheckTime    = 10 * time.Second
 	messageListHistoryCheckTimeout = 10 * time.Second
@@ -713,7 +712,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			switch key {
 			case "?", input.F1:
 				if err := help(messageListViewHelp, mv.keys); err != nil {
-					log.Infof("help() failed: %v", err)
+					log.Errorf("Failed to show help: %v", err)
 				}
 			case input.Enter, input.Right:
 				if len(mv.messages) == 0 {
