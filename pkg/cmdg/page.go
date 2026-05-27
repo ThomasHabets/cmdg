@@ -2,6 +2,7 @@ package cmdg
 
 import (
 	"context"
+	"sync"
 
 	gmail "google.golang.org/api/gmail/v1"
 )
@@ -10,6 +11,8 @@ import (
 type Page struct {
 	Label string
 	Query string
+
+	m sync.RWMutex
 
 	conn     *CmdG
 	Messages []*Message
@@ -26,7 +29,7 @@ func (p *Page) PreloadSubjects(ctx context.Context) error {
 	conc := 100
 	sem := make(chan struct{}, conc)
 	num := len(p.Response.Messages)
-	errs := make([]error, num)
+	errs := make([]error, num, num)
 	for n := 0; n < len(p.Response.Messages); n++ {
 		n := n
 		sem <- struct{}{}

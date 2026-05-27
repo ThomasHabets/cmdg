@@ -31,15 +31,9 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("Failed to create tempdir: %v", err)
 	}
-	if err := os.Setenv("GNUPGHOME", dir); err != nil {
-		log.Fatalf("Failed to setenv: %v", err)
-	}
-	defer func() {
-		_ = os.Setenv("GNUPGHOME", "")
-	}()
-	defer func() {
-		_ = os.RemoveAll(dir)
-	}()
+	os.Setenv("GNUPGHOME", dir)
+	defer os.Setenv("GNUPGHOME", "")
+	defer os.RemoveAll(dir)
 
 	// Create key.
 	cmd := exec.Command(gpg, "--batch", "--import", "test/thomas@habets.se.pub")

@@ -1,4 +1,3 @@
-// Package gpg supports gnupg integration.
 package gpg
 
 import (
@@ -94,9 +93,7 @@ func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
 		return nil, err
 	}
 	if !*debugNoRemove {
-		defer func() {
-			_ = os.RemoveAll(dir)
-		}()
+		defer os.RemoveAll(dir)
 	}
 
 	log.Infof("Checking signature with %q…", dir)

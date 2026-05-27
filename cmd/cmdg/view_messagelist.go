@@ -49,7 +49,7 @@ Press [enter] to exit
 )
 
 var (
-	//messageListReloadTime          = time.Minute
+	messageListReloadTime          = time.Minute
 	messageListReloadTimeout       = 40 * time.Second
 	messageListHistoryCheckTime    = 10 * time.Second
 	messageListHistoryCheckTimeout = 10 * time.Second
@@ -712,9 +712,7 @@ func (mv *MessageView) Run(ctx context.Context) error {
 			log.Debugf("MessageListView got key %q", key)
 			switch key {
 			case "?", input.F1:
-				if err := help(messageListViewHelp, mv.keys); err != nil {
-					log.Infof("help() failed: %v", err)
-				}
+				help(messageListViewHelp, mv.keys)
 			case input.Enter, input.Right:
 				if len(mv.messages) == 0 {
 					// Let's assume we've never gotten to the state where mv.pos >= len(mv.messages)

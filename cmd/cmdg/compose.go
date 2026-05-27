@@ -41,7 +41,7 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 		}
 	}()
 	if _, err := tmpf.Write([]byte(prefill)); err != nil {
-		_ = tmpf.Close()
+		tmpf.Close()
 		return "", errors.Wrapf(err, "prefilling compose file %q with %d bytes", tmpf.Name(), len(prefill))
 	}
 	if err := tmpf.Close(); err != nil {
@@ -50,11 +50,7 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 
 	// Stop UI.
 	keys.Stop()
-	defer func() {
-		if err := keys.Start(); err != nil {
-			log.Errorf("Failed to restart input: %v", err)
-		}
-	}()
+	defer keys.Start()
 
 	cmd := exec.CommandContext(ctx, visualBinary, tmpf.Name())
 	cmd.Stdin = os.Stdin
@@ -255,7 +251,7 @@ func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input
 							return errors.Wrapf(err, "couldn't open local file")
 						}
 						if _, err := f.Write([]byte(msg)); err != nil {
-							_ = f.Close()
+							f.Close()
 							return errors.Wrapf(err, "couldn't write to local file")
 						}
 						if err := f.Close(); err != nil {
@@ -272,11 +268,9 @@ func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input
 					break
 				}
 			}
-			/*
-				if a == "S" {
-					// TODO: also archive.
-				}
-			*/
+			if a == "S" {
+				// TODO: also archive.
+			}
 			return nil
 		case "d":
 			st := time.Now()
@@ -293,7 +287,7 @@ func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input
 				break
 			}
 			if err != nil {
-				_ = dialog.Message("Failed to attach", fmt.Sprintf("Failed to attach file: %v", err), keys)
+				dialog.Message("Failed to attach", fmt.Sprintf("Failed to attach file: %v", err), keys)
 			}
 			doEdit = false
 			attachments = append(attachments, f)
@@ -369,9 +363,6 @@ func chooseFile(ctx context.Context, keys *input.Input) (*file, error) {
 		full := path.Join(startDir, fis[o.KeyInt].Name())
 		// TODO: attach a ReadCloser?
 		b, err := ioutil.ReadFile(full)
-		if err != nil {
-			return nil, err
-		}
 		return &file{
 			name:    fis[o.KeyInt].Name(),
 			content: b,

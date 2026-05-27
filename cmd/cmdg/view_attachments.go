@@ -27,7 +27,7 @@ func listAttachments(ctx context.Context, keys *input.Input, msg *cmdg.Message) 
 	if err != nil {
 		return err
 	}
-	ass := make([]string, len(as))
+	ass := make([]string, len(as), len(as))
 	for n, a := range as {
 		ass[n] = a.Part.Filename
 	}

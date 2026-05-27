@@ -28,7 +28,7 @@ type Option struct {
 // String gives string representation usable for showing to the user.
 func (o *Option) String() string {
 	if o.Label == "" {
-		return o.Key
+		return fmt.Sprintf("%s", o.Key)
 	}
 	return o.Label
 }
@@ -207,18 +207,20 @@ func Entry(prompt string, keys *input.Input) (string, error) {
 		screen.Printlnf(start+2, "%s", content)
 		screen.SetCursor(start+2, display.StringWidth(content)+1)
 		screen.Draw()
-		key := <-keys.Chan()
-		switch key {
-		case input.Enter:
-			return cur, nil
-		case input.Backspace, input.CtrlH:
-			cur = TrimOneChar(cur)
-		case input.CtrlU:
-			cur = ""
-		case input.CtrlC:
-			return "", ErrAborted
-		default:
-			cur += string(key)
+		select {
+		case key := <-keys.Chan():
+			switch key {
+			case input.Enter:
+				return cur, nil
+			case input.Backspace, input.CtrlH:
+				cur = TrimOneChar(cur)
+			case input.CtrlU:
+				cur = ""
+			case input.CtrlC:
+				return "", ErrAborted
+			default:
+				cur += string(key)
+			}
 		}
 	}
 }
@@ -329,11 +331,7 @@ func validateEmails(s string) error {
 			continue
 		}
 		// Basic email validation.
-		if p == "me" {
-			// Special case shortcut.
-			continue
-		}
-		if !strings.Contains(p, "@") {
+		if !strings.Contains(p, "@") || !strings.Contains(p, ".") {
 			return fmt.Errorf("invalid email address: %q", p)
 		}
 	}
@@ -341,7 +339,7 @@ func validateEmails(s string) error {
 }
 
 // MultiSelection is like Selection, but allows multiple comma/semicolon separated tokens.
-//
+
 // It returns the full input string.
 func MultiSelection(opts []*Option, prompt string, keys *input.Input) (string, error) {
 	screen, err := display.NewScreen()
@@ -388,9 +386,7 @@ func MultiSelection(opts []*Option, prompt string, keys *input.Input) (string, e
 			}
 			if key == input.Enter {
 				if err := validateEmails(cur); err != nil {
-					if err := Message("Invalid recipients", err.Error(), keys); err != nil {
-						log.Infof("Failed to show message: %v", err)
-					}
+					Message("Invalid recipients", err.Error(), keys)
 					continue
 				}
 				return cur, nil

@@ -12,7 +12,6 @@ import (
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	//nolint:staticcheck
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/sys/unix"
 )
@@ -135,7 +134,8 @@ func duration2Timeval(timeout time.Duration) *unix.Timeval {
 	// By last check it can only be int32 and int64:
 	// grep -A 2 ^'type Timeval struct ' ~/go/src/golang.org/x/sys/unix/*.go | egrep 'Usec|Sec' | sed 's/.*go-//' | awk '{print $2}' | sort | uniq
 	tv := &unix.Timeval{}
-	var sec interface{} = &tv.Sec
+	var sec interface{}
+	sec = &tv.Sec
 	switch s := sec.(type) {
 	case *int64:
 		*s = timeout.Nanoseconds() / 1e9
@@ -147,7 +147,8 @@ func duration2Timeval(timeout time.Duration) *unix.Timeval {
 		tv.Usec = 50000
 	}
 
-	var usec interface{} = &tv.Usec
+	var usec interface{}
+	usec = &tv.Usec
 	switch u := usec.(type) {
 	case *int64:
 		*u = (timeout.Nanoseconds() / 1000) % 1e6
@@ -175,7 +176,7 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 	var n int
 	var err error
 	for {
-		to := time.Until(deadline)
+		to := deadline.Sub(time.Now())
 		if to < 0 {
 			return 0, errTimeout
 		}
@@ -193,7 +194,7 @@ func readByte(fd int, timeout time.Duration) (byte, error) {
 		return 0, errTimeout
 	}
 	//idle := keyTime.Sub(last)
-	b := make([]byte, 1)
+	b := make([]byte, 1, 1)
 	//log.Infof("Non-iowait input time: %v", idle)
 	// log.Infof("About to read")
 
@@ -340,11 +341,7 @@ func (i *Input) Start() error {
 	go func() {
 		defer close(i.running)
 		defer close(i.keys)
-		defer func() {
-			if err := terminal.Restore(fd, oldState); err != nil {
-				log.Infof("Failed to restore terminal: %v", err)
-			}
-		}()
+		defer terminal.Restore(fd, oldState)
 		last := time.Now()
 		lastEnter := time.Now()
 		for {
