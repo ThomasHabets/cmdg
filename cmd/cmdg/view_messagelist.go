@@ -26,6 +26,7 @@ const (
 enter, →           — Open message
 space, x           — Mark message and advance
 X                  — Mark message and step up
+u                  — Unmark all messages
 e                  — Archive marked messages
 d                  — Move marked messages to trash
 I                  — Mark marked mails as read
@@ -935,6 +936,8 @@ func (mv *MessageView) Run(ctx context.Context) error {
 					marked[mv.messages[mv.pos].ID] = !marked[mv.messages[mv.pos].ID]
 					prev()
 				}
+			case "u":
+				marked = map[string]bool{}
 			case "N", "n", "j", input.CtrlN, input.Down:
 				screen.UseCache()
 				if !next() {
