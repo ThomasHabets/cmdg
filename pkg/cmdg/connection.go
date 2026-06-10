@@ -242,7 +242,7 @@ func (c *CmdG) setupClients() error {
 		if err != nil {
 			return errors.Wrap(err, "creating People client")
 		}
-		c.drive.UserAgent = userAgent()
+		c.people.UserAgent = userAgent()
 	}
 	return nil
 }
