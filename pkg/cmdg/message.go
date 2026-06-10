@@ -1019,9 +1019,12 @@ func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 			log.Warningf("Found unexpected part in encrypted packet: %q", p.MimeType)
 		}
 	}
-	if partMeta == nil || partData == nil {
-		log.Warningf("Encrypted packet missing either meta or data")
+	if partMeta == nil {
+		log.Warningf("Encrypted packet missing meta")
 	}
+        if partData == nil {
+                return fmt.Errorf("encrypted packet missing data")
+        }
 
 	// Fetch data attachment.
 	var body *gmail.MessagePartBody
