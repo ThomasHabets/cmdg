@@ -664,12 +664,13 @@ func (ov *OpenMessageView) Run(ctx context.Context) (*MessageViewOp, error) {
 			case "d": // Delete
 				if err := ov.msg.RemoveLabelID(ctx, cmdg.Inbox); err != nil {
 					ov.errors <- fmt.Errorf("Failed to delete (remove Inbox label) : %v", err)
-					if err := ov.msg.AddLabelID(ctx, cmdg.Trash); err != nil {
-						ov.errors <- fmt.Errorf("Failed to delete (add Trash label) : %v", err)
-					}
-				} else {
-					return OpRemoveCurrent(nil), nil
-				}
+                                        break
+                                }
+                                if err := ov.msg.AddLabelID(ctx, cmdg.Trash); err != nil {
+                                        ov.errors <- fmt.Errorf("Failed to delete (add Trash label) : %v", err)
+                                        break
+                                }
+                                return OpRemoveCurrent(nil), nil
 			case "s", input.CtrlS: // Search
 				ns, err := ov.incrementalSearch(ctx, lines)
 				if err != nil {
