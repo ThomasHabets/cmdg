@@ -22,8 +22,8 @@ benefits.
   also passwords, and can be used for more than GMail). OAuth2 is used
   instead, and cmdgs access can be revoked
   [here](https://security.google.com/settings/security/permissions).
-  cmdg can only access your GMail, and cannot lose your password even
-  if the machine it runs on gets hacked.
+  cmdg can only access your GMail and contacts, and cannot lose your password
+  even if the machine it runs on gets hacked.
 * The "labels" model is native in the cmdg UI, unlike IMAP clients
   that try to map GMail labels onto IMAP.
 * Contacts are taken from your Google contacts
