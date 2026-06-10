@@ -306,7 +306,7 @@ func (msg *Message) RemoveLabelIDLocal(labelID string) {
 	if msg.Response == nil {
 		return
 	}
-	nl := make([]string, len(msg.Response.LabelIds))
+	nl := make([]string, 0, len(msg.Response.LabelIds))
 	msg.m.Lock()
 	defer msg.m.Unlock()
 	for _, l := range msg.Response.LabelIds {
