@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -138,18 +139,17 @@ func openFile(ctx context.Context, data []byte, ext string) error {
 		if err := os.Remove(fn); err != nil {
 			log.Errorf("Failed to remove tempfile %q: %v", fn, err)
 			if waitErr == nil {
-                                waitErr = fmt.Errorf("failed to remove tempfile %q: %v", fn, err)
+				waitErr = fmt.Errorf("failed to remove tempfile %q: %v", fn, err)
 			}
 		}
 		return waitErr
 	}
 	if *openWait {
 		return w()
-	} else {
-		go func() {
-			_ = w()
-		}()
 	}
+	go func() {
+		_ = w()
+	}()
 	return nil
 
 }
