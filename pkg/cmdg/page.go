@@ -41,5 +41,10 @@ func (p *Page) PreloadSubjects(ctx context.Context) error {
 	for t := 0; t < conc; t++ {
 		sem <- struct{}{}
 	}
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
