@@ -295,9 +295,9 @@ func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input
 			if err != nil {
 				_ = dialog.Message("Failed to attach", fmt.Sprintf("Failed to attach file: %v", err), keys)
 			} else {
-                                doEdit = false
-                                attachments = append(attachments, f)
-                        }
+				doEdit = false
+				attachments = append(attachments, f)
+			}
 		default:
 			return fmt.Errorf("can't happen! Got %q from compose question", a)
 		}
