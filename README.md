@@ -86,7 +86,7 @@ a ClientID and ClientSecret. You can do this with the following steps:
   1. Make sure to add scopes for the various APIs you'll need.  You may need to enter the following URLs under "Manually add scopes":
      1. Gmail API - `https://www.googleapis.com/auth/gmail.modify`
      1. Google Drive API - `https://www.googleapis.com/auth/drive.appdata`
-     1. People API - `https://www.googleapis.com/auth/contacts.readonly`
+     1. People API - `https://www.googleapis.com/auth/contacts`
   1. Navigate to the "Credentials"  page.
   1. Click "+ CREATE CREDENTIALS"
   1. Select "OAuth client ID" from the drop down.
