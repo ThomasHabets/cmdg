@@ -2,6 +2,7 @@ package cmdg
 
 import (
 	"context"
+	"log"
 
 	gmail "google.golang.org/api/gmail/v1"
 )
@@ -43,7 +44,7 @@ func (p *Page) PreloadSubjects(ctx context.Context) error {
 	}
 	for _, err := range errs {
 		if err != nil {
-			return err
+			log.Printf("Preloading subjects: %v", err)
 		}
 	}
 	return nil
