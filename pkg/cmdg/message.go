@@ -800,7 +800,31 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 	var ret []string
 	var alt []string
 	for _, p := range part.Parts {
+		if p == nil {
+			continue
+		}
 		if partIsAttachment(p) {
+			continue
+		}
+		log.Debugf("Alt mimetype: %q", p.MimeType)
+
+		switch p.MimeType {
+		case "multipart/alternative", "multipart/related", "multipart/signed", "multipart/mixed", "message/rfc822":
+			t, err := makeBody(ctx, p, preferHTML)
+			if err == errNoUsablePart {
+				continue
+			}
+			if err != nil {
+				return "", err
+			}
+			// However it was rendered it should be rendered.
+			ret = append(ret, t)
+			alt = append(alt, t)
+			continue
+		}
+
+		if p.Body == nil {
+			log.Warningf("Skipping body part with nil body of type %q", p.MimeType)
 			continue
 		}
 		dec, err := MIMEDecode(string(p.Body.Data))
@@ -825,14 +849,6 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 			if len(strings.Trim(dec, "\n\r \t")) > 0 {
 				alt = append(alt, dec)
 			}
-		case "multipart/alternative", "multipart/related", "multipart/signed", "multipart/mixed", "message/rfc822":
-			t, err := makeBodyAlt(ctx, p, preferHTML)
-			if err != nil {
-				return "", err
-			}
-			// However it was rendered it should be rendered.
-			ret = append(ret, t)
-			alt = append(alt, t)
 		case "application/pkcs7-signature":
 			// Ignored for now.
 		default:
@@ -842,11 +858,17 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 	if len(ret) > 0 {
 		return strings.Join(ret, "\n"), nil
 	}
-	return strings.Join(alt, "\n"), nil
+	if len(alt) > 0 {
+		return strings.Join(alt, "\n"), nil
+	}
+	return "", errNoUsablePart
 }
 
 func makeBody(ctx context.Context, part *gmail.MessagePart, preferHTML bool) (string, error) {
 	if len(part.Parts) == 0 {
+		if part.Body == nil {
+			return "", errNoUsablePart
+		}
 		log.Infof("Single part body of type %q with input len %d", part.MimeType, len(part.Body.Data))
 		data, err := MIMEDecode(string(part.Body.Data))
 		if err != nil {
