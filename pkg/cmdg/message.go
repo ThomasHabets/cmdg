@@ -550,7 +550,7 @@ func (msg *Message) GetLabels(ctx context.Context, withUnread bool) ([]*Label, e
 	}
 	var ret []*Label
 	for _, l := range msg.Response.LabelIds {
-		if l == Unread {
+		if l == Unread && !withUnread {
 			continue
 		}
 		l2 := &Label{
