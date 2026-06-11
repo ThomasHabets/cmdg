@@ -120,11 +120,16 @@ func openFile(ctx context.Context, data []byte, ext string) error {
 		cmd.Stderr = os.Stderr
 	}
 	if err := cmd.Start(); err != nil {
+		if rmErr := os.Remove(fn); rmErr != nil {
+			log.Errorf("Failed to remove tempfile %q after opener start failure: %v", fn, rmErr)
+		}
 		return errors.Wrapf(err, "failed to start binary %q", *openBinary)
 	}
-	w := func() {
+	w := func() error {
+		var waitErr error
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("Failed to finish opening attachment %q using %q: %v", fn, *openBinary, err)
+			waitErr = errors.Wrapf(err, "failed to finish opening attachment %q using %q", fn, *openBinary)
+			log.Errorf("%v", waitErr)
 		}
 		if !*openWait {
 			// Some application openers run in the background, so keep the file around for a bit.
@@ -132,12 +137,18 @@ func openFile(ctx context.Context, data []byte, ext string) error {
 		}
 		if err := os.Remove(fn); err != nil {
 			log.Errorf("Failed to remove tempfile %q: %v", fn, err)
+			if waitErr == nil {
+                                waitErr = fmt.Errorf("failed to remove tempfile %q: %v", fn, err)
+			}
 		}
+		return waitErr
 	}
 	if *openWait {
-		w()
+		return w()
 	} else {
-		go w()
+		go func() {
+			_ = w()
+		}()
 	}
 	return nil
 
