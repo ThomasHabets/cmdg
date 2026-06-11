@@ -1024,9 +1024,9 @@ func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 	if partMeta == nil {
 		log.Warningf("Encrypted packet missing meta")
 	}
-        if partData == nil {
-                return fmt.Errorf("encrypted packet missing data")
-        }
+	if partData == nil {
+		return fmt.Errorf("encrypted packet missing data")
+	}
 
 	// Fetch data attachment.
 	var body *gmail.MessagePartBody
