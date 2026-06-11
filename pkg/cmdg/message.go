@@ -303,12 +303,12 @@ func (msg *Message) AddLabelIDLocal(labelID string) {
 // RemoveLabelIDLocal removes a local label from the local cache *only*. It'll be overwritten at next sync.
 // It's used for faster UI response time on label removing.
 func (msg *Message) RemoveLabelIDLocal(labelID string) {
+	msg.m.Lock()
+	defer msg.m.Unlock()
 	if msg.Response == nil {
 		return
 	}
 	nl := make([]string, 0, len(msg.Response.LabelIds))
-	msg.m.Lock()
-	defer msg.m.Unlock()
 	for _, l := range msg.Response.LabelIds {
 		if l != labelID {
 			nl = append(nl, l)
@@ -319,10 +319,12 @@ func (msg *Message) RemoveLabelIDLocal(labelID string) {
 
 // LocalLabels returns the label IDs, whatever they are. If we have not downloaded anything then empty list is returned.
 func (msg *Message) LocalLabels() []string {
+	msg.m.RLock()
+	defer msg.m.RUnlock()
 	if msg.Response == nil {
 		return nil
 	}
-	return msg.Response.LabelIds
+	return append([]string(nil), msg.Response.LabelIds...)
 }
 
 // AddLabelID adds a label to a message.
