@@ -232,6 +232,13 @@ func (s *Screen) Draw() {
 
 // SetCursor sets the cursor position.
 func (s *Screen) SetCursor(y, x int) {
+	if y < 0 || y >= s.Height {
+		log.Warningf("Set cursor off screen. y=%d height=%d", y, s.Height)
+		return
+	}
+	if x < 0 {
+		x = 0
+	}
 	s.cursor = &cursor{x: x, y: y}
 }
 
@@ -284,8 +291,8 @@ func fixedANSIWidthRight2(s string, w int, recursive int) string {
 
 // Printlnf sets the content of a line to be a printfed string
 func (s *Screen) Printlnf(y int, fmts string, args ...interface{}) {
-	if y >= s.Height {
-		log.Warningf("Print off screen. %d>=%d", y, s.Height)
+	if y < 0 || y >= s.Height {
+		log.Warningf("Print off screen. y=%d height=%d", y, s.Height)
 		return
 	}
 	str := fmt.Sprintf(fmts, args...)
@@ -294,6 +301,13 @@ func (s *Screen) Printlnf(y int, fmts string, args ...interface{}) {
 
 // Printf prints to a given point on the screen.
 func (s *Screen) Printf(y, x int, fmts string, args ...interface{}) {
+	if y < 0 || y >= s.Height {
+		log.Warningf("Print off screen. y=%d height=%d", y, s.Height)
+		return
+	}
+	if x < 0 {
+		x = 0
+	}
 	str := fmt.Sprintf(fmts, args...)
 	strw := StringWidth(str)
 	prefix := ""

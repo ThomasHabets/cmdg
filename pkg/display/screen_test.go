@@ -98,3 +98,50 @@ func TestFixedANSIWidthRight(t *testing.T) {
 		}
 	}
 }
+
+func TestScreenIgnoresOffscreenWrites(t *testing.T) {
+	s := NewScreen2(10, 2)
+
+	s.Printlnf(-1, "bad")
+	s.Printlnf(2, "bad")
+	s.Printf(-1, 0, "bad")
+	s.Printf(2, 0, "bad")
+
+	for n, line := range s.buffer {
+		if line != "" {
+			t.Fatalf("line %d was changed to %q", n, line)
+		}
+	}
+}
+
+func TestScreenClampsNegativePrintfColumn(t *testing.T) {
+	s := NewScreen2(10, 1)
+	s.Printf(0, -5, "ok")
+
+	if got, want := s.buffer[0], "ok"; got != want {
+		t.Fatalf("Printf at negative column got %q, want %q", got, want)
+	}
+}
+
+func TestSetCursorRejectsOffscreenRow(t *testing.T) {
+	s := NewScreen2(10, 1)
+	s.SetCursor(-1, 0)
+	if s.cursor != nil {
+		t.Fatalf("SetCursor with negative row set cursor to %+v", s.cursor)
+	}
+	s.SetCursor(1, 0)
+	if s.cursor != nil {
+		t.Fatalf("SetCursor with offscreen row set cursor to %+v", s.cursor)
+	}
+}
+
+func TestSetCursorClampsNegativeColumn(t *testing.T) {
+	s := NewScreen2(10, 1)
+	s.SetCursor(0, -5)
+	if s.cursor == nil {
+		t.Fatal("SetCursor did not set cursor")
+	}
+	if got, want := s.cursor.x, 0; got != want {
+		t.Fatalf("cursor x got %d, want %d", got, want)
+	}
+}

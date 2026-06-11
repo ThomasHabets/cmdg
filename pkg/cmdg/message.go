@@ -839,7 +839,6 @@ func makeBodyAlt(ctx context.Context, part *gmail.MessagePart, preferHTML bool) 
 			}
 		}
 
-		log.Debugf("Alt mimetype: %q", p.MimeType)
 		switch p.MimeType {
 		case wantT:
 			if len(strings.Trim(dec, "\n\r \t")) > 0 {
