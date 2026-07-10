@@ -6,7 +6,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/net v0.55.0
 	golang.org/x/oauth2 v0.34.0
 	golang.org/x/sys v0.45.0
