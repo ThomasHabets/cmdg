@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -126,7 +126,7 @@ func NewFake(client *http.Client) (*CmdG, error) {
 	return conn, conn.setupClients()
 }
 func readConf(fn string) (Config, error) {
-	f, err := ioutil.ReadFile(fn)
+	f, err := os.ReadFile(fn)
 	if err != nil {
 		return Config{}, err
 	}
@@ -351,7 +351,7 @@ func ParseUserMessage(in string) (mail.Header, *Part, error) {
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "message to send is malformed")
 	}
-	b, err := ioutil.ReadAll(m.Body)
+	b, err := io.ReadAll(m.Body)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to read user message")
 	}
@@ -540,7 +540,7 @@ func (c *CmdG) GetFile(ctx context.Context, fn string) ([]byte, error) {
 				defer func() {
 					_ = r.Body.Close()
 				}()
-				return ioutil.ReadAll(r.Body)
+				return io.ReadAll(r.Body)
 			}
 		}
 		token = l.NextPageToken

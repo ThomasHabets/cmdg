@@ -30,7 +30,7 @@ const (
 )
 
 func getInput(ctx context.Context, prefill string, keys *input.Input) (string, error) {
-	tmpf, err := ioutil.TempFile("", "cmdg-")
+	tmpf, err := os.CreateTemp("", "cmdg-")
 	if err != nil {
 		return "", errors.Wrap(err, "creating tempfile")
 	}

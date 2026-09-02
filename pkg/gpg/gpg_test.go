@@ -3,7 +3,6 @@ package gpg
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -27,7 +26,7 @@ func TestMain(m *testing.M) {
 		gpg = gpg2
 	}
 
-	dir, err := ioutil.TempDir("", "gpg-test")
+	dir, err := os.MkdirTemp("", "gpg-test")
 	if err != nil {
 		log.Fatalf("Failed to create tempdir: %v", err)
 	}
@@ -87,11 +86,11 @@ func TestNoGPG(t *testing.T) {
 }
 
 func TestVerify(t *testing.T) {
-	data, err := ioutil.ReadFile("test/detached.txt")
+	data, err := os.ReadFile("test/detached.txt")
 	if err != nil {
 		t.Fatalf("Failed to read detached data: %v", err)
 	}
-	sig, err := ioutil.ReadFile("test/detached.txt.asc")
+	sig, err := os.ReadFile("test/detached.txt.asc")
 	if err != nil {
 		t.Fatalf("Failed to read detached sig: %v", err)
 	}
@@ -153,7 +152,7 @@ func TestVerify(t *testing.T) {
 }
 
 func TestVerifyInline(t *testing.T) {
-	bdata, err := ioutil.ReadFile("test/inline.txt.asc")
+	bdata, err := os.ReadFile("test/inline.txt.asc")
 	if err != nil {
 		t.Fatalf("Failed to read inline msg: %v", err)
 	}

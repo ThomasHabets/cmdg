@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -27,7 +26,7 @@ func (msg *Message) trySMIMESigned(ctx context.Context) error {
 	}
 
 	// TODO: create a FIFO instead?
-	f, err := ioutil.TempFile("", "")
+	f, err := os.CreateTemp("", "")
 	if err != nil {
 		return errors.Wrapf(err, "creating temp file for smime check")
 	}
@@ -49,7 +48,7 @@ func (msg *Message) trySMIMESigned(ctx context.Context) error {
 		return fmt.Errorf("signature verification failed: %q", ebuf.String())
 	}
 	log.Infof("Signature verification succeeded!")
-	b, err := ioutil.ReadFile(f.Name())
+	b, err := os.ReadFile(f.Name())
 	if err != nil {
 		return errors.Wrapf(err, "failed to read signer's cert from %q", f.Name())
 	}

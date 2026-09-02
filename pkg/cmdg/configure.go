@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -184,5 +183,5 @@ func Configure(fn string) error {
 	if err := os.MkdirAll(path.Dir(fn), 0700); err != nil {
 		return errors.Wrapf(err, "creating config directory %q", path.Dir(fn))
 	}
-	return ioutil.WriteFile(fn, b, 0600)
+	return os.WriteFile(fn, b, 0600)
 }

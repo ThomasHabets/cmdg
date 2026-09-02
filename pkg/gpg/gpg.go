@@ -6,7 +6,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -89,7 +88,7 @@ func (gpg *GPG) Decrypt(ctx context.Context, dec string) (string, *Status, error
 
 // Verify verifies a message.
 func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
-	dir, err := ioutil.TempDir("", "gpg-signature")
+	dir, err := os.MkdirTemp("", "gpg-signature")
 	if err != nil {
 		return nil, err
 	}
@@ -103,10 +102,10 @@ func (gpg *GPG) Verify(ctx context.Context, data, sig string) (*Status, error) {
 	log.Debugf("Contents: %q", data)
 	dataFN := path.Join(dir, "data")
 	sigFN := path.Join(dir, "data.gpg")
-	if err := ioutil.WriteFile(dataFN, []byte(data), 0600); err != nil {
+	if err := os.WriteFile(dataFN, []byte(data), 0600); err != nil {
 		return nil, err
 	}
-	if err := ioutil.WriteFile(sigFN, []byte(sig), 0600); err != nil {
+	if err := os.WriteFile(sigFN, []byte(sig), 0600); err != nil {
 		return nil, err
 	}
 

@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
@@ -1093,7 +1092,7 @@ func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 			if err != nil {
 				return errors.Wrap(err, "creating utf8reading for mime part")
 			}
-			t, err := ioutil.ReadAll(dec)
+			t, err := io.ReadAll(dec)
 			if err != nil {
 				return errors.Wrap(err, "utf8reading mime part")
 			}
@@ -1123,7 +1122,7 @@ func (msg *Message) tryGPGEncrypted(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		t, err := ioutil.ReadAll(r)
+		t, err := io.ReadAll(r)
 		if err != nil {
 			return err
 		}
