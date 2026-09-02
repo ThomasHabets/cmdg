@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/mail"
 	"os"
 	"os/exec"
@@ -68,7 +67,7 @@ func getInput(ctx context.Context, prefill string, keys *input.Input) (string, e
 	}
 
 	// Extract content.
-	b, err := ioutil.ReadFile(tmpf.Name())
+	b, err := os.ReadFile(tmpf.Name())
 	if err != nil {
 		return "", errors.Wrapf(err, "reading compose tempfile %q", tmpf.Name())
 	}
@@ -250,7 +249,7 @@ func compose(ctx context.Context, conn *cmdg.CmdG, headOps []headOp, keys *input
 					}
 					switch a {
 					case "y":
-						f, err := ioutil.TempFile(".", "cmdg-draft-*.txt")
+						f, err := os.CreateTemp(".", "cmdg-draft-*.txt")
 						if err != nil {
 							return errors.Wrapf(err, "couldn't open local file")
 						}
@@ -313,7 +312,7 @@ func chooseFile(ctx context.Context, keys *input.Input) (*file, error) {
 	startDir := "."
 	for {
 		log.Infof("Choosing file in %q", startDir)
-		fis, err := ioutil.ReadDir(startDir)
+		fis, err := os.ReadDir(startDir)
 		if err != nil {
 			return nil, errors.Wrapf(err, "listing directory %q", startDir)
 		}
@@ -326,7 +325,7 @@ func chooseFile(ctx context.Context, keys *input.Input) (*file, error) {
 		}
 		for n, f := range fis {
 			label := f.Name()
-			if f.Mode().IsDir() {
+			if f.Type().IsDir() {
 				label += "/"
 			}
 			opts = append(opts, &dialog.Option{
@@ -342,8 +341,8 @@ func chooseFile(ctx context.Context, keys *input.Input) (*file, error) {
 			if opts[j].KeyInt < 0 {
 				return false
 			}
-			di := fis[opts[i].KeyInt].Mode().IsDir()
-			dj := fis[opts[j].KeyInt].Mode().IsDir()
+			di := fis[opts[i].KeyInt].Type().IsDir()
+			dj := fis[opts[j].KeyInt].Type().IsDir()
 			if di && !dj {
 				return true
 			}
@@ -362,14 +361,14 @@ func chooseFile(ctx context.Context, keys *input.Input) (*file, error) {
 		if o.KeyInt < 0 {
 			startDir = path.Clean(path.Join(startDir, ".."))
 			continue
-		} else if fis[o.KeyInt].Mode().IsDir() {
+		} else if fis[o.KeyInt].Type().IsDir() {
 			startDir = path.Clean(path.Join(startDir, fis[o.KeyInt].Name()))
 			continue
 		}
 		// File chosen.
 		full := path.Join(startDir, fis[o.KeyInt].Name())
 		// TODO: attach a ReadCloser?
-		b, err := ioutil.ReadFile(full)
+		b, err := os.ReadFile(full)
 		if err != nil {
 			return nil, err
 		}

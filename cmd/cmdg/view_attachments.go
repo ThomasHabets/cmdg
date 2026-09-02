@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -97,7 +96,7 @@ func saveFile(ctx context.Context, data []byte, fn string) error {
 }
 
 func openFile(ctx context.Context, data []byte, ext string) error {
-	f, err := ioutil.TempFile("", "cmdg-attachment-*"+ext)
+	f, err := os.CreateTemp("", "cmdg-attachment-*"+ext)
 	if err != nil {
 		return err
 	}

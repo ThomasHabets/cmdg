@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +24,7 @@ type mockGmailHandler struct {
 func (h *mockGmailHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("MOCK RECEIVED: %s %s\n", r.Method, r.URL.Path)
 	if r.Method == "POST" && strings.Contains(r.URL.Path, "/messages/send") {
-		content, _ := ioutil.ReadAll(r.Body)
+		content, _ := io.ReadAll(r.Body)
 		var d struct {
 			Raw string `json:"raw"`
 		}

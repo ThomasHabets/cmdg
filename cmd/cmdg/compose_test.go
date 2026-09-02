@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -41,7 +41,7 @@ func (fs *fakeSend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fs.bad(w, "failed to parse form: %v", err)
 		return
 	}
-	content, err := ioutil.ReadAll(r.Body)
+	content, err := io.ReadAll(r.Body)
 	if err != nil {
 		fs.bad(w, "failed to read body: %v", err)
 		return
