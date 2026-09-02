@@ -1,6 +1,6 @@
 module github.com/ThomasHabets/cmdg
 
-go 1.25.0
+go 1.27.0
 
 require (
 	github.com/mattn/go-runewidth v0.0.16
