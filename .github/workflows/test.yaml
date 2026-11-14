@@ -33,8 +33,9 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: stable
+          go-version-file: 'go.mod'
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13.2
+          version: latest
+          install-mode: goinstall
